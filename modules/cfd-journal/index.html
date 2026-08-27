@@ -1,0 +1,2111 @@
+<!DOCTYPE html>
+<!--
+SUPABASE INVESTMENT TRACKER — CFD MODULE
+GitHub Pages placement: /cfd/index.html
+Unified home route: ../index.html
+
+Deployment model:
+- Keep this file standalone inside the cfd folder.
+- Do not merge its JavaScript with ETF or cash-savings modules.
+- The future root /index.html should link to ./cfd/.
+- One shared Supabase project can later serve all modules using CFD-prefixed tables.
+- Current persistence remains browser-local until the Supabase data adapter is added.
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>CFD Module | Supabase Investment Tracker</title>
+<style>
+:root{
+  --bg:#07101f; --bg2:#0a1426; --panel:#101b30; --panel2:#13223b; --panel3:#0c172a;
+  --line:#263a5f; --line2:#36527f; --text:#f3f6fc; --muted:#92a4c3; --soft:#c5d2e8;
+  --accent:#69a7ff; --accent2:#4b87db; --green:#42d392; --red:#ff6b7a; --amber:#ffc857;
+  --shadow:0 20px 55px rgba(0,0,0,.28); --radius:16px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:radial-gradient(circle at 15% -20%,#143661 0,transparent 34%),linear-gradient(145deg,var(--bg),var(--bg2));color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;min-height:100vh}
+button,input,select,textarea{font:inherit}
+button{cursor:pointer}
+.app{max-width:1560px;margin:0 auto;padding:22px}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:18px}
+.brand h1{margin:0;font-size:28px;letter-spacing:-.03em}.brand p{margin:6px 0 0;color:var(--muted);font-size:13px}
+.top-actions,.inline-actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.btn{border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:10px;padding:10px 13px;font-weight:700;font-size:13px;transition:.18s ease}.btn:hover{border-color:var(--line2);transform:translateY(-1px)}
+.btn.primary{background:linear-gradient(180deg,#7bb4ff,#5f9cea);border-color:#80b7ff;color:#07101f}.btn.success{background:rgba(66,211,146,.13);border-color:rgba(66,211,146,.45);color:#89edbd}.btn.danger{background:rgba(255,107,122,.11);border-color:rgba(255,107,122,.38);color:#ff9aa5}.btn.ghost{background:transparent}.btn.small{padding:7px 10px;font-size:12px}.btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
+.dashboard{display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:10px;margin-bottom:16px}
+.kpi{background:linear-gradient(180deg,rgba(19,34,59,.96),rgba(14,27,48,.96));border:1px solid var(--line);border-radius:14px;padding:13px 14px;box-shadow:var(--shadow)}
+.kpi .label{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.1em}.kpi .value{font-size:22px;font-weight:850;margin-top:6px;letter-spacing:-.02em}.kpi .sub{font-size:10px;color:var(--muted);margin-top:3px}
+.layout{display:grid;grid-template-columns:370px minmax(0,1fr);gap:15px}
+.panel{background:rgba(16,27,48,.94);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+.sidebar{padding:15px;min-height:720px}.workspace{padding:18px;min-height:720px}
+.section-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:12px}.section-head h2,.section-head h3{margin:0;letter-spacing:-.02em}.section-head h2{font-size:18px}.section-head h3{font-size:15px}.section-head p{margin:4px 0 0;color:var(--muted);font-size:12px;line-height:1.5}
+.searchbar{display:grid;grid-template-columns:1fr 125px;gap:8px;margin:11px 0}.searchbar input,.searchbar select{background:var(--panel3);border:1px solid var(--line);color:var(--text);border-radius:9px;padding:9px}
+.trade-list{display:flex;flex-direction:column;gap:8px;max-height:590px;overflow:auto;padding-right:3px}
+.trade-card{background:var(--panel3);border:1px solid var(--line);border-radius:12px;padding:12px;cursor:pointer;transition:.17s}.trade-card:hover{border-color:#456999}.trade-card.selected{border-color:var(--accent);box-shadow:inset 0 0 0 1px rgba(105,167,255,.15)}
+.trade-row{display:flex;justify-content:space-between;gap:8px;align-items:center}.symbol{font-weight:850;letter-spacing:.01em}.trade-id{font-size:9px;color:var(--muted);margin-top:2px}.badge{display:inline-flex;align-items:center;justify-content:center;border-radius:999px;padding:4px 7px;font-size:9px;font-weight:900;letter-spacing:.06em}.badge.buy{background:rgba(66,211,146,.13);color:#79e5b2}.badge.sell{background:rgba(255,107,122,.13);color:#ff93a0}.badge.open{background:rgba(255,200,87,.12);color:#ffd777}.badge.closed{background:rgba(105,167,255,.12);color:#91beff}.badge.draft{background:rgba(146,164,195,.12);color:#b3c2da}
+.trade-meta{display:grid;grid-template-columns:1fr auto;gap:6px;margin-top:8px;color:var(--muted);font-size:10px}.trade-meta strong{color:var(--soft)}
+.empty{min-height:600px;border:1px dashed var(--line);border-radius:14px;display:grid;place-items:center;text-align:center;padding:24px;color:var(--muted)}.empty h2{color:var(--text);margin:0 0 8px}.empty p{max-width:520px;line-height:1.6}
+.workspace-top{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:14px}.workspace-top h2{margin:0;font-size:22px}.workspace-top p{margin:5px 0 0;color:var(--muted);font-size:12px}
+.stage-nav{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0 18px}.stage{position:relative;text-align:left;border:1px solid var(--line);background:var(--panel3);color:var(--muted);border-radius:12px;padding:12px 13px}.stage.active{border-color:var(--accent);color:var(--text);background:linear-gradient(180deg,rgba(35,67,111,.8),rgba(20,40,70,.8))}.stage.done{border-color:rgba(66,211,146,.45)}.stage .num{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:#1e3152;margin-right:6px;font-size:11px}.stage .title{font-size:12px;font-weight:850}.stage small{display:block;margin:6px 0 0 29px;font-size:9px;color:var(--muted)}.stage:disabled{opacity:.42;cursor:not-allowed;filter:saturate(.4)}
+.notice{border:1px solid rgba(105,167,255,.28);background:rgba(105,167,255,.08);border-radius:11px;padding:10px 12px;color:#cfe1ff;font-size:11px;line-height:1.5;margin-bottom:14px}.notice.warn{border-color:rgba(255,200,87,.3);background:rgba(255,200,87,.08);color:#ffe8a4}.notice.bad{border-color:rgba(255,107,122,.3);background:rgba(255,107,122,.08);color:#ffc2c8}
+.group{border:1px solid var(--line);border-radius:13px;background:rgba(12,23,42,.68);padding:14px;margin-bottom:12px}.group-title{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:11px}.group-title h3{margin:0;font-size:13px}.group-title span{color:var(--muted);font-size:10px}
+.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.grid.three{grid-template-columns:repeat(3,minmax(0,1fr))}.grid.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+.field{display:flex;flex-direction:column;gap:5px;min-width:0}.field.full{grid-column:1/-1}.field.span2{grid-column:span 2}.field label{font-size:9px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.07em}.field .help{font-size:9px;color:#7184a5;line-height:1.35}
+.field input,.field select,.field textarea{width:100%;min-width:0;border:1px solid var(--line);background:#091426;color:var(--text);border-radius:9px;padding:9px 10px;outline:none}.field textarea{resize:vertical;min-height:76px}.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--accent);box-shadow:0 0 0 2px rgba(105,167,255,.09)}.field input[readonly]{background:#0c1728;color:#9eb1ce}
+.required::after{content:" *";color:var(--red)}
+.validation{font-size:10px;margin-top:7px;color:var(--red);display:none}.validation.show{display:block}
+.calc-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}.calc{border:1px solid var(--line);background:#091426;border-radius:10px;padding:10px}.calc .k{font-size:9px;text-transform:uppercase;color:var(--muted);letter-spacing:.06em}.calc .v{font-size:15px;font-weight:850;margin-top:4px;overflow-wrap:anywhere}.calc .s{font-size:9px;color:var(--muted);margin-top:2px}
+.stage-actions{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:15px;padding-top:13px;border-top:1px solid var(--line)}
+.timeline{display:flex;flex-direction:column;gap:9px}.event{display:grid;grid-template-columns:34px 1fr auto;gap:10px;align-items:flex-start;background:#091426;border:1px solid var(--line);border-radius:11px;padding:10px}.event-index{display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:#17325a;color:#9fc5ff;font-size:11px;font-weight:900}.event h4{margin:1px 0 4px;font-size:12px}.event p{margin:2px 0;color:var(--muted);font-size:10px;line-height:1.45}.event .money{font-weight:800}.event .delete-event{border:0;background:transparent;color:#ff9ea8;font-size:13px;padding:3px}
+.summary-table{width:100%;border-collapse:collapse;font-size:11px}.summary-table th,.summary-table td{padding:8px 7px;border-bottom:1px solid var(--line);text-align:left}.summary-table th{color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.06em}.summary-table td:last-child,.summary-table th:last-child{text-align:right}
+.positive{color:var(--green)!important}.negative{color:var(--red)!important}.amber{color:var(--amber)!important}.muted{color:var(--muted)!important}.hidden{display:none!important}
+.toast{position:fixed;right:18px;bottom:18px;z-index:50;max-width:360px;background:#12233e;border:1px solid var(--line2);border-radius:11px;padding:11px 13px;box-shadow:var(--shadow);opacity:0;transform:translateY(10px);pointer-events:none;transition:.2s}.toast.show{opacity:1;transform:none}.toast strong{display:block;font-size:12px}.toast span{font-size:10px;color:var(--muted)}
+.file-input{display:none}
+
+.modal-overlay{position:fixed;inset:0;z-index:80;background:rgba(2,7,16,.78);backdrop-filter:blur(6px);display:grid;place-items:center;padding:18px}
+.modal{width:min(1120px,100%);max-height:92vh;overflow:auto;background:var(--panel);border:1px solid var(--line2);border-radius:18px;box-shadow:0 30px 90px rgba(0,0,0,.55);padding:18px}
+.modal-top{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:14px}.modal-top h2{margin:0;font-size:21px}.modal-top p{margin:5px 0 0;color:var(--muted);font-size:11px}
+.funding-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-bottom:12px}.fund-stat{background:#091426;border:1px solid var(--line);border-radius:11px;padding:11px}.fund-stat .k{color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.07em}.fund-stat .v{font-size:18px;font-weight:850;margin-top:4px}
+.funding-table-wrap{overflow:auto;border:1px solid var(--line);border-radius:11px}.funding-table{width:100%;border-collapse:collapse;min-width:850px;font-size:10px}.funding-table th,.funding-table td{padding:9px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}.funding-table th{color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-size:8px;background:#0a1628}.funding-table td.amount{text-align:right;font-weight:850}.funding-table th:last-child,.funding-table td:last-child{text-align:right}.funding-table tr:last-child td{border-bottom:0}
+.locked-note{display:none;border:1px solid rgba(66,211,146,.28);background:rgba(66,211,146,.07);border-radius:10px;padding:9px 11px;margin-bottom:12px;font-size:10px;color:#a8f1cd}.locked-note.show{display:block}
+@media(max-width:800px){.funding-summary{grid-template-columns:repeat(2,1fr)}}
+
+@media(max-width:1280px){.dashboard{grid-template-columns:repeat(4,1fr)}.grid{grid-template-columns:repeat(3,1fr)}.calc-grid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:980px){.layout{grid-template-columns:1fr}.sidebar{min-height:auto}.trade-list{max-height:350px}.grid,.grid.three{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:650px){.app{padding:11px}.topbar,.workspace-top{flex-direction:column}.dashboard{grid-template-columns:repeat(2,1fr)}.stage-nav{grid-template-columns:1fr}.grid,.grid.three,.grid.two{grid-template-columns:1fr}.field.span2{grid-column:auto}.calc-grid{grid-template-columns:repeat(2,1fr)}.searchbar{grid-template-columns:1fr}.stage-actions{align-items:stretch;flex-direction:column}.stage-actions>div{width:100%;display:flex;gap:8px}.stage-actions .btn{flex:1}}
+
+.import-preview{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:14px 0}
+.import-stat{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px}
+.import-stat .k{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em}
+.import-stat .v{font-size:20px;font-weight:800;margin-top:5px}
+.import-report{background:#0d1526;border:1px solid var(--line);border-radius:12px;padding:12px;max-height:230px;overflow:auto;font-size:11px;line-height:1.55}
+.import-report strong{color:var(--text)}
+.import-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:14px}
+.import-note{font-size:11px;color:var(--muted);line-height:1.5;margin-top:8px}
+@media(max-width:700px){.import-preview{grid-template-columns:repeat(2,minmax(0,1fr))}.import-actions .btn{flex:1}}
+
+.module-nav{
+  display:flex;align-items:stretch;gap:8px;flex-wrap:wrap;margin:0 0 16px;
+}
+.section-links{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}.section-links a{display:inline-flex;align-items:center;min-height:35px;padding:0 12px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--muted);font-size:10px;font-weight:800;text-decoration:none}.section-links a:hover{border-color:var(--accent);color:var(--text)}.section-links a.active{background:linear-gradient(180deg,rgba(35,67,111,.92),rgba(19,41,72,.92));border-color:var(--accent);color:var(--text)}
+.module-tab{
+  flex:0 1 auto;min-width:150px;border:1px solid var(--line);background:var(--panel2);
+  color:var(--muted);border-radius:12px;padding:11px 13px;text-align:left;font-weight:800;
+  display:flex;align-items:center;gap:9px;transition:.18s ease
+}
+.module-tab:hover{border-color:var(--line2);color:var(--text)}
+.module-tab.active{border-color:var(--accent);background:linear-gradient(180deg,rgba(35,67,111,.92),rgba(19,41,72,.92));color:var(--text)}
+.module-tab .step{
+  width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:#1d3152;
+  font-size:11px;color:#bcd6ff;flex:0 0 auto
+}
+.module-tab.dashboard-tab .step{background:rgba(105,167,255,.14)}
+.module-tab .tab-copy{min-width:0}
+.module-tab .tab-copy strong{display:block;font-size:12px;white-space:nowrap}
+.module-tab .tab-copy span{display:block;font-size:9px;font-weight:600;color:var(--muted);margin-top:2px}
+.module-tab .count{
+  margin-left:auto;min-width:24px;height:24px;border-radius:999px;padding:0 7px;display:grid;place-items:center;
+  border:1px solid var(--line);font-size:10px;background:#0b1729;color:var(--soft)
+}
+.dashboard-page{padding:18px;margin-bottom:16px}
+.dashboard-top{
+  display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:14px;flex-wrap:wrap
+}
+.dashboard-top h2{margin:0;font-size:22px}
+.dashboard-top p{margin:5px 0 0;color:var(--muted);font-size:11px;line-height:1.5;max-width:720px}
+.dashboard-grid{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px;margin-bottom:14px
+}
+.dashboard-section{
+  border:1px solid var(--line);background:rgba(12,23,42,.66);border-radius:14px;padding:14px;margin-top:12px
+}
+.dashboard-section h3{margin:0;font-size:14px}
+.dashboard-section .section-note{color:var(--muted);font-size:10px;margin-top:4px;line-height:1.45}
+.dashboard-two{display:grid;grid-template-columns:1.35fr .65fr;gap:12px}
+.dashboard-three{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.analysis-card{border:1px solid var(--line);background:#091426;border-radius:11px;padding:12px}
+.analysis-card .k{font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+.analysis-card .v{font-size:18px;font-weight:850;margin-top:5px}
+.analysis-card .s{font-size:9px;color:var(--muted);margin-top:3px;line-height:1.4}
+.month-bars{display:flex;flex-direction:column;gap:7px;margin-top:12px}
+.month-bar-row{display:grid;grid-template-columns:72px 1fr 90px;gap:9px;align-items:center;font-size:10px}
+.month-bar-track{height:10px;border-radius:999px;background:#0a1729;border:1px solid var(--line);overflow:hidden;display:flex;align-items:stretch}
+.month-bar-fill{height:100%;min-width:2px;border-radius:999px}
+.month-bar-fill.pos{background:rgba(66,211,146,.75)}
+.month-bar-fill.neg{background:rgba(255,107,122,.75)}
+.month-bar-value{text-align:right;font-weight:800}
+.table-wrap{overflow-x:auto;margin-top:10px}
+.dashboard-table{width:100%;border-collapse:collapse;font-size:10px;min-width:690px}
+.dashboard-table th,.dashboard-table td{padding:8px 7px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+.dashboard-table th:first-child,.dashboard-table td:first-child{text-align:left}
+.dashboard-table th{color:var(--muted);font-size:8px;text-transform:uppercase;letter-spacing:.06em}
+.folder-head{
+  border:1px solid var(--line);background:#0b1729;border-radius:11px;padding:11px 12px;margin-bottom:10px
+}
+.folder-head .eyebrow{font-size:9px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted)}
+.folder-head h2{font-size:17px;margin:3px 0 3px}
+.folder-head p{font-size:10px;color:var(--muted);margin:0;line-height:1.45}
+.layout.new-mode{grid-template-columns:minmax(0,1fr)}
+.layout.new-mode .sidebar{display:none}
+.workspace.new-entry{padding:20px}
+.workspace.new-entry .group{padding:16px}
+.workspace.new-entry .grid{gap:12px}
+.folder-empty{padding:32px 12px;text-align:center;color:var(--muted);font-size:11px;line-height:1.55}
+.workflow-banner{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px
+}
+.workflow-banner .wf{
+  border:1px solid var(--line);border-radius:11px;background:#0b1729;padding:10px 11px
+}
+.workflow-banner .wf strong{font-size:11px;display:block}
+.workflow-banner .wf span{font-size:9px;color:var(--muted);display:block;margin-top:3px;line-height:1.35}
+.workflow-banner .wf.current{border-color:var(--accent)}
+@media(max-width:980px){
+  .dashboard-two,.dashboard-three{grid-template-columns:1fr}
+}
+@media(max-width:720px){
+  .module-tab{min-width:calc(50% - 4px);flex:1}
+  .month-bar-row{grid-template-columns:58px 1fr 72px}
+  .workflow-banner{grid-template-columns:1fr}
+}
+
+
+.attachment-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.attachment-card{border:1px solid var(--line);background:#091426;border-radius:13px;padding:13px;min-width:0}
+.attachment-card h4{margin:0;font-size:12px}
+.attachment-card .attachment-purpose{font-size:9px;color:var(--muted);line-height:1.45;margin:4px 0 10px}
+.attachment-preview{min-height:112px;border:1px dashed var(--line2);border-radius:10px;background:#07111f;display:grid;place-items:center;overflow:hidden;margin-bottom:10px;position:relative}
+.attachment-preview img{width:100%;max-height:230px;object-fit:contain;display:block;background:#050c17}
+.attachment-placeholder{text-align:center;padding:18px;color:var(--muted);font-size:10px;line-height:1.5}
+.attachment-placeholder .icon{font-size:25px;display:block;margin-bottom:6px}
+.attachment-meta{min-height:31px;font-size:9px;color:var(--muted);line-height:1.45;overflow-wrap:anywhere}
+.attachment-meta strong{color:var(--text)}
+.attachment-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}
+.attachment-actions .btn{padding:8px 10px;font-size:10px}
+.attachment-lock{font-size:9px;color:var(--amber);margin-top:7px;line-height:1.4}
+.evidence-toolbar{display:flex;align-items:end;gap:10px;flex-wrap:wrap;margin-top:11px;margin-bottom:12px}
+.evidence-toolbar .field{min-width:190px;max-width:260px}
+.storage-note{font-size:9px;color:var(--muted);line-height:1.5;margin-top:8px}
+.file-pill{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:999px;padding:4px 7px;background:#0a1729;font-size:8px;color:var(--soft)}
+@media(max-width:760px){.attachment-grid{grid-template-columns:1fr}}
+
+
+.hub-link{text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
+.module-tag{display:inline-flex;align-items:center;gap:6px;margin-top:7px;font-size:9px;color:var(--muted)}
+.module-tag span{border:1px solid var(--line);background:#091426;border-radius:999px;padding:3px 7px}
+@media(max-width:650px){.top-actions .hub-link{width:100%}}
+
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <h1>CFD Investment Module</h1>
+      <p>A stage-organised CFD journal: enter a trade once, manage only open trades, archive closed trades, and analyse performance monthly.</p>
+      <div class="module-tag"><span>Module: CFD</span><span>GitHub-ready v6.1</span><span>Schema v3</span></div>
+    </div>
+    <div class="top-actions">
+      <a class="btn hub-link" id="hubLink" href="https://mduduzijunior.github.io/unifier-interface/index.html" title="Return to the unified investment tracker">← Investment Tracker</a>
+      <button class="btn success" id="fundsBtn">Deposits &amp; Withdrawals</button>
+      <button class="btn" id="importBtn">Import JSON</button>
+      <input class="file-input" id="importFile" type="file" accept="application/json,.json" />
+      <button class="btn" id="exportBtn">Export</button>
+      
+    </div>
+  </header>
+
+  <nav class="section-links" aria-label="Investment tracker sections">
+    <a href="https://mduduzijunior.github.io/unifier-interface/index.html">Unified Dashboard</a>
+    <a href="https://mduduzijunior.github.io/etf-portfolio/index.html">ETF Portfolio</a>
+    <a class="active" href="https://mduduzijunior.github.io/cfd-journal/index.html" aria-current="page">CFD Journal</a>
+    <a href="https://mduduzijunior.github.io/cash-savings/index.html">Cash Savings</a>
+  </nav>
+
+  <nav class="module-nav" aria-label="CFD module navigation">
+    <button class="module-tab dashboard-tab active" type="button" data-view="DASHBOARD">
+      <span class="step">▦</span><span class="tab-copy"><strong>CFD Dashboard</strong><span>Performance & monthly analysis</span></span>
+    </button>
+    <button class="module-tab" type="button" data-view="NEW">
+      <span class="step">1</span><span class="tab-copy"><strong>New Trade</strong><span>Enter one new position</span></span><span class="count" id="draftCount">0</span>
+    </button>
+    <button class="module-tab" type="button" data-view="OPEN">
+      <span class="step">2</span><span class="tab-copy"><strong>Waiting for Management</strong><span>Entered & currently open</span></span><span class="count" id="openFolderCount">0</span>
+    </button>
+    <button class="module-tab" type="button" data-view="CLOSED">
+      <span class="step">3</span><span class="tab-copy"><strong>Closed Trades</strong><span>Completed & archived</span></span><span class="count" id="closedFolderCount">0</span>
+    </button>
+  </nav>
+
+  <section id="dashboardShell" class="panel dashboard-page">
+    <div class="dashboard-top">
+      <div>
+        <h2>CFD Performance Dashboard</h2>
+        <p>Trading performance is separated from deposits and withdrawals. ROI is calculated from realised closed-trade P/L against contributed capital, while open-trade P/L is excluded until a result is recorded.</p>
+      </div>
+      <div class="inline-actions">
+        <button class="btn success" id="dashboardFundingBtn" type="button">Deposits &amp; Withdrawals</button>
+        <button class="btn primary" id="dashboardNewBtn" type="button">+ New Trade</button>
+      </div>
+    </div>
+
+    <div class="dashboard-grid">
+      <article class="kpi"><div class="label">Realised Equity Estimate</div><div class="value" id="dEquity">$0.00</div><div class="sub">Net funding + realised P/L; excludes open P/L</div></article>
+      <article class="kpi"><div class="label">Trading ROI</div><div class="value" id="dROI">—</div><div class="sub" id="dROISub">Closed-trade P/L ÷ contributed capital</div></article>
+      <article class="kpi"><div class="label">Net Trading P/L</div><div class="value" id="dNet">$0.00</div><div class="sub">Closed trades after costs</div></article>
+      <article class="kpi"><div class="label">Win Rate</div><div class="value" id="dWinRate">0.0%</div><div class="sub">Winning closed trades</div></article>
+      <article class="kpi"><div class="label">Profit Factor</div><div class="value" id="dPF">—</div><div class="sub">Gross wins ÷ gross losses</div></article>
+      <article class="kpi"><div class="label">Average R</div><div class="value" id="dAvgR">—</div><div class="sub">Average realised R-multiple</div></article>
+      <article class="kpi"><div class="label">Expectancy</div><div class="value" id="dExpectancy">$0.00</div><div class="sub">Average net P/L per closed trade</div></article>
+      <article class="kpi"><div class="label">Max Drawdown</div><div class="value" id="dMaxDD">$0.00</div><div class="sub">Realised trading equity drawdown</div></article>
+      <article class="kpi"><div class="label">Open Trades</div><div class="value" id="dOpen">0</div><div class="sub">Waiting for management</div></article>
+      <article class="kpi"><div class="label">Closed Trades</div><div class="value" id="dClosed">0</div><div class="sub">Completed records</div></article>
+      <article class="kpi"><div class="label">Deposits</div><div class="value positive" id="dDeposits">$0.00</div><div class="sub">External capital contributed</div></article>
+      <article class="kpi"><div class="label">Withdrawals</div><div class="value negative" id="dWithdrawals">$0.00</div><div class="sub">Capital removed</div></article>
+    </div>
+
+    <div class="dashboard-two">
+      <section class="dashboard-section">
+        <h3>Monthly Performance</h3>
+        <div class="section-note">Last 12 months with recorded closed trades or funding movements. Monthly ROI uses capital available at the start of the month plus deposits made during that month.</div>
+        <div id="monthlyBars" class="month-bars"></div>
+        <div class="table-wrap">
+          <table class="dashboard-table">
+            <thead><tr><th>Month</th><th>Trades</th><th>W</th><th>L</th><th>Win Rate</th><th>Net P/L</th><th>Monthly ROI</th><th>Avg R</th><th>Profit Factor</th><th>Net Funding</th><th>End Realised Equity</th></tr></thead>
+            <tbody id="monthlyBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="dashboard-section">
+        <h3>Monthly Broker Evidence</h3>
+        <div class="section-note">Attach the broker documents that support each month’s statistics. Select a month, then store the actual broker trade-history PDF and a screenshot of the broker analytics/statistics screen.</div>
+
+        <div class="evidence-toolbar">
+          <div class="field">
+            <label>Evidence Month</label>
+            <input id="evidenceMonth" type="month" />
+          </div>
+          <div class="file-pill" id="monthlyEvidenceStatus">Select a month to view evidence</div>
+        </div>
+
+        <div class="attachment-grid">
+          <article class="attachment-card">
+            <h4>Broker Trade-History PDF</h4>
+            <div class="attachment-purpose">Monthly statement or transaction-history PDF showing the actual trades recorded by the broker.</div>
+            <div class="attachment-preview" id="monthlyPdfPreview"><div class="attachment-placeholder"><span class="icon">PDF</span>No PDF attached for this month.</div></div>
+            <div class="attachment-meta" id="monthlyPdfMeta">No file attached.</div>
+            <input id="monthlyPdfInput" type="file" accept="application/pdf,.pdf" hidden />
+            <div class="attachment-actions">
+              <button class="btn primary" id="uploadMonthlyPdfBtn" type="button">Attach / Replace PDF</button>
+              <button class="btn" id="viewMonthlyPdfBtn" type="button" disabled>View PDF</button>
+              <button class="btn danger" id="removeMonthlyPdfBtn" type="button" disabled>Remove</button>
+            </div>
+          </article>
+
+          <article class="attachment-card">
+            <h4>Broker Analytics Screenshot</h4>
+            <div class="attachment-purpose">Screenshot of the broker’s monthly analytics, performance statistics, win rate, P/L, or related analysis.</div>
+            <div class="attachment-preview" id="monthlyAnalyticsPreview"><div class="attachment-placeholder"><span class="icon">▦</span>No analytics screenshot attached for this month.</div></div>
+            <div class="attachment-meta" id="monthlyAnalyticsMeta">No file attached.</div>
+            <input id="monthlyAnalyticsInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif,.png,.jpg,.jpeg,.webp,.gif" hidden />
+            <div class="attachment-actions">
+              <button class="btn primary" id="uploadMonthlyAnalyticsBtn" type="button">Attach / Replace Screenshot</button>
+              <button class="btn" id="viewMonthlyAnalyticsBtn" type="button" disabled>View Image</button>
+              <button class="btn danger" id="removeMonthlyAnalyticsBtn" type="button" disabled>Remove</button>
+            </div>
+          </article>
+        </div>
+        <div class="storage-note">Evidence files are stored locally in this browser using its file database. They are kept separate from trading calculations so screenshots and PDFs do not distort or overload the trade ledger.</div>
+      </section>
+
+      <section class="dashboard-section">
+        <h3>Risk & Trade Quality</h3>
+        <div class="section-note">Evidence from the entry plan and completed trade results.</div>
+        <div class="dashboard-three" style="grid-template-columns:1fr 1fr;margin-top:10px">
+          <div class="analysis-card"><div class="k">Average Planned R:R</div><div class="v" id="dPlannedRR">—</div><div class="s">Initial reward relative to planned risk</div></div>
+          <div class="analysis-card"><div class="k">Average MAE</div><div class="v" id="dMAE">—</div><div class="s">Adverse excursion in R</div></div>
+          <div class="analysis-card"><div class="k">Average MFE</div><div class="v" id="dMFE">—</div><div class="s">Favourable excursion in R</div></div>
+          <div class="analysis-card"><div class="k">Plan Followed Fully</div><div class="v" id="dPlanFollow">—</div><div class="s">Closed trades marked “Yes — fully”</div></div>
+          <div class="analysis-card"><div class="k">Best Trade</div><div class="v positive" id="dBest">$0.00</div><div class="s" id="dBestSub">—</div></div>
+          <div class="analysis-card"><div class="k">Worst Trade</div><div class="v negative" id="dWorst">$0.00</div><div class="s" id="dWorstSub">—</div></div>
+        </div>
+      </section>
+    </div>
+
+    <div class="dashboard-two">
+      <section class="dashboard-section">
+        <h3>Performance by Instrument</h3>
+        <div class="section-note">Ranked by win rate from highest to lowest. Net P/L breaks ties.</div>
+        <div class="table-wrap">
+          <table class="dashboard-table">
+            <thead><tr><th>Instrument</th><th>Trades</th><th>Win Rate</th><th>Net P/L</th><th>Avg P/L</th><th>Avg R</th></tr></thead>
+            <tbody id="instrumentBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="dashboard-section">
+        <h3>Performance by Strategy</h3>
+        <div class="section-note">Untitled setups are grouped as “Unclassified”.</div>
+        <div class="table-wrap">
+          <table class="dashboard-table">
+            <thead><tr><th>Strategy</th><th>Trades</th><th>Win Rate</th><th>Net P/L</th><th>Avg R</th></tr></thead>
+            <tbody id="strategyBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </section>
+
+  <div class="layout hidden" id="tradeShell">
+    <aside class="panel sidebar">
+      <div class="folder-head">
+        <div class="eyebrow" id="folderEyebrow">Stage 2</div>
+        <h2 id="folderTitle">Waiting for Management</h2>
+        <p id="folderDescription">Only entered/open trades belong here.</p>
+      </div>
+      <div class="searchbar" style="grid-template-columns:1fr">
+        <input id="searchInput" placeholder="Search instrument, strategy, broker or trade ID..." />
+      </div>
+      <div class="section-head" style="margin-top:12px">
+        <div><h3 id="journalHeading">Open Trades</h3><p id="journalCount">0 trades</p></div>
+      </div>
+      <div class="trade-list" id="tradeList"></div>
+    </aside>
+<main class="panel workspace">
+      <div id="emptyState" class="empty">
+        <div>
+          <h2 id="emptyTitle">No trade selected</h2>
+          <p id="emptyText">Create a trade to begin. The tracker uses three permanent layers: <strong>Entry</strong>, <strong>Management</strong>, and <strong>Result</strong>.</p>
+          <button class="btn primary" id="emptyNew">+ New Trade</button>
+        </div>
+      </div>
+
+      <div id="tradeWorkspace" class="hidden">
+        <div class="workspace-top">
+          <div>
+            <div class="inline-actions" style="margin-bottom:5px"><span id="tradeStatusBadge" class="badge draft">DRAFT</span><span id="tradeDirectionBadge" class="badge buy">BUY</span></div>
+            <h2 id="tradeTitle">New CFD Trade</h2>
+            <p id="tradeSubtitle">Trade ID</p>
+          </div>
+          <div class="top-actions">
+            <button class="btn danger" id="deleteTradeBtn">Delete Trade</button>
+          </div>
+        </div>
+
+        
+        <div class="workflow-banner">
+          <div class="wf" id="wfEntry"><strong>1 · Entry</strong><span>Create one trade record. Once opened, this baseline locks permanently.</span></div>
+          <div class="wf" id="wfManage"><strong>2 · Waiting for Management</strong><span>Open trades live here until their final result is recorded.</span></div>
+          <div class="wf" id="wfClosed"><strong>3 · Closed</strong><span>Completed trades move here automatically and become read-only.</span></div>
+        </div>
+
+<nav class="stage-nav">
+          <button class="stage active" data-stage="1"><span class="num">1</span><span class="title">ENTRY</span><small>Original plan & execution</small></button>
+          <button class="stage" data-stage="2"><span class="num">2</span><span class="title">MANAGEMENT</span><small>Adjustments & partials</small></button>
+          <button class="stage" data-stage="3"><span class="num">3</span><span class="title">RESULT</span><small>Outcome, MAE/MFE & review</small></button>
+        </nav>
+
+        <!-- STAGE 1 -->
+        <section id="stage1">
+          <div class="notice">The original entry layer is preserved as the baseline for later analysis. Management changes are stored separately and never overwrite this plan.</div>
+          <div id="entryLockedNote" class="locked-note">Entry is locked because this trade has already been opened. This protects the original plan. Use Management for every later change.</div>
+
+          <div class="group">
+            <div class="group-title"><h3>Trade Identification</h3><span>What, when, where</span></div>
+            <div class="grid">
+              <div class="field"><label class="required">Trade Date</label><input id="entryDate" type="date" /></div>
+              <div class="field"><label class="required">Trade Time</label><input id="entryTime" type="time" /></div>
+              <div class="field"><label>Trade ID</label><input id="tradeId" readonly /></div>
+              <div class="field"><label class="required">Instrument</label><input id="instrument" placeholder="EURUSD, US500, XAUUSD..." /></div>
+              <div class="field"><label>Asset Type</label><select id="assetType"><option>Forex</option><option>Index CFD</option><option>Commodity CFD</option><option>Stock CFD</option><option>Crypto CFD</option><option>Other CFD</option></select></div>
+              <div class="field"><label class="required">Direction</label><select id="direction"><option value="">Unknown / unavailable</option><option>BUY</option><option>SELL</option></select></div>
+              <div class="field"><label>Broker</label><input id="broker" placeholder="e.g. Capital.com" /></div>
+              <div class="field"><label>Account / Portfolio</label><input id="accountName" placeholder="e.g. CFD $100 Validation" /></div>
+              <div class="field"><label>Trading Session</label><select id="session"><option>Asian</option><option>London</option><option>New York</option><option>London / New York Overlap</option><option>Other</option></select></div>
+              <div class="field"><label>Strategy / Setup</label><input id="strategy" placeholder="Demand rejection, breakout, pullback..." /></div>
+              <div class="field"><label>Higher-Timeframe Bias</label><select id="htfBias"><option>Bullish</option><option>Bearish</option><option>Neutral</option></select></div>
+              <div class="field"><label>Entry Timeframe</label><input id="entryTimeframe" placeholder="e.g. 5m / 15m / 1h" /></div>
+            </div>
+          </div>
+
+          <div class="group">
+            <div class="group-title"><h3>Execution & Risk</h3><span>Prices and position sizing</span></div>
+            <div class="grid">
+              <div class="field"><label class="required">Planned Entry Price</label><input id="plannedEntry" type="number" step="any" placeholder="0.00000" /></div>
+              <div class="field"><label>Actual Entry Price</label><input id="actualEntry" type="number" step="any" placeholder="Defaults to planned entry" /></div>
+              <div class="field"><label class="required">Initial Stop Loss</label><input id="initialSL" type="number" step="any" /></div>
+              <div class="field"><label class="required">Initial Take Profit</label><input id="initialTP" type="number" step="any" /></div>
+              <div class="field"><label>Account Equity Before</label><input id="equityBefore" type="number" step="0.01" min="0" placeholder="100.00" /></div>
+              <div class="field"><label>Planned Risk %</label><input id="plannedRiskPct" type="number" step="0.01" min="0" placeholder="1.00" /><div class="help">Used to calculate a suggested size.</div></div>
+              <div class="field"><label>Position Size</label><input id="positionSize" type="number" step="any" min="0" placeholder="1" /></div>
+              <div class="field"><label>Value per 1.0 Price Move / Size Unit</label><input id="valuePerUnit" type="number" step="any" min="0" value="1" /><div class="help">Makes risk/P&amp;L calculations work across CFDs.</div></div>
+              <div class="field"><label>Pip / Point Size</label><input id="pipSize" type="number" step="any" min="0" placeholder="0.0001" /><div class="help">Optional; enables pip/point distance.</div></div>
+              <div class="field"><label>Leverage</label><input id="leverage" type="number" step="any" min="0" placeholder="30" /></div>
+              <div class="field"><label>Entry Spread Cost</label><input id="spreadCost" type="number" step="0.01" min="0" value="0" /></div>
+              <div class="field"><label>Entry Commission</label><input id="entryCommission" type="number" step="0.01" min="0" value="0" /></div>
+            </div>
+            <div id="entryValidation" class="validation"></div>
+          </div>
+
+          <div class="group">
+            <div class="group-title"><h3>Automatic Trade Plan</h3><span>Calculated from the original setup</span></div>
+            <div class="calc-grid">
+              <div class="calc"><div class="k">SL Distance</div><div class="v" id="cSLDistance">—</div><div class="s" id="cSLPips">—</div></div>
+              <div class="calc"><div class="k">TP Distance</div><div class="v" id="cTPDistance">—</div><div class="s" id="cTPPips">—</div></div>
+              <div class="calc"><div class="k">Risk : Reward</div><div class="v" id="cRR">—</div><div class="s">Planned R:R</div></div>
+              <div class="calc"><div class="k">Planned Risk</div><div class="v" id="cRiskMoney">—</div><div class="s" id="cRiskActualPct">—</div></div>
+              <div class="calc"><div class="k">Potential Profit</div><div class="v positive" id="cRewardMoney">—</div><div class="s">Before exit costs</div></div>
+              <div class="calc"><div class="k">Suggested Size</div><div class="v" id="cSuggestedSize">—</div><div class="s">From equity × risk %</div></div>
+            </div>
+          </div>
+
+          <div class="group">
+            <div class="group-title"><h3>Trade Thesis & Pre-Trade Checklist</h3><span>Why this trade exists</span></div>
+            <div class="grid two">
+              <div class="field"><label>Entry Trigger</label><input id="entryTrigger" placeholder="Rejection, BOS, retest, candle close..." /></div>
+              <div class="field"><label>Key Level / Zone</label><input id="keyLevel" placeholder="e.g. demand 1.16400–1.16500" /></div>
+              <div class="field"><label>Market Condition</label><select id="marketCondition"><option>Trending</option><option>Range</option><option>Breakout</option><option>Reversal</option><option>High Volatility</option><option>Low Volatility</option><option>Unclear</option></select></div>
+              <div class="field"><label>News / Event Risk</label><input id="newsRisk" placeholder="CPI, NFP, FOMC, earnings, none..." /></div>
+              <div class="field full"><label>Trade Thesis</label><textarea id="tradeThesis" placeholder="What must be true for this trade to make sense? What invalidates the idea?"></textarea></div>
+              <div class="field full"><label>Pre-Trade Notes</label><textarea id="preTradeNotes" placeholder="Context, confluences, execution notes, screenshot references..."></textarea></div>
+            </div>
+          </div>
+
+          <div class="group">
+            <div class="group-title"><h3>Pre-Entry Trade Screenshot</h3><span>Visual evidence before entry</span></div>
+            <div class="attachment-card">
+              <h4>Screenshot Before the Trade Was Entered</h4>
+              <div class="attachment-purpose">Attach the chart exactly as it looked before entry. This becomes part of the original entry evidence and is locked once the trade is opened.</div>
+              <div class="attachment-preview" id="entryScreenshotPreview"><div class="attachment-placeholder"><span class="icon">▧</span>No pre-entry screenshot attached.</div></div>
+              <div class="attachment-meta" id="entryScreenshotMeta">No file attached.</div>
+              <input id="entryScreenshotInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif,.png,.jpg,.jpeg,.webp,.gif" hidden />
+              <div class="attachment-actions">
+                <button class="btn primary" id="uploadEntryScreenshotBtn" type="button">Attach / Replace Screenshot</button>
+                <button class="btn" id="viewEntryScreenshotBtn" type="button" disabled>View Image</button>
+                <button class="btn danger" id="removeEntryScreenshotBtn" type="button" disabled>Remove</button>
+              </div>
+              <div class="attachment-lock" id="entryScreenshotLock"></div>
+            </div>
+          </div>
+
+          <div class="stage-actions">
+            <span class="muted" style="font-size:10px">Required fields are marked with *</span>
+            <div class="inline-actions"><button class="btn" id="saveDraftBtn">Save Draft</button><button class="btn primary" id="openTradeBtn">Save Entry & Open Trade</button></div>
+          </div>
+        </section>
+
+        <!-- STAGE 2 -->
+        <section id="stage2" class="hidden">
+          <div id="managementNotice" class="notice warn">Only an OPEN trade can be managed. Every adjustment is appended to this trade ID; no new or duplicate trade is created. The original SL, TP, and position remain preserved.</div>
+
+          <div class="group">
+            <div class="group-title"><h3>Current Trade State</h3><span>Derived from entry + latest adjustment</span></div>
+            <div class="calc-grid">
+              <div class="calc"><div class="k">Current SL</div><div class="v" id="mCurrentSL">—</div><div class="s">Latest effective stop</div></div>
+              <div class="calc"><div class="k">Current TP</div><div class="v" id="mCurrentTP">—</div><div class="s">Latest effective target</div></div>
+              <div class="calc"><div class="k">Remaining Size</div><div class="v" id="mCurrentSize">—</div><div class="s">After partials/additions</div></div>
+              <div class="calc"><div class="k">Partial Realised P/L</div><div class="v" id="mPartialPnL">—</div><div class="s">Management events</div></div>
+              <div class="calc"><div class="k">Current Risk</div><div class="v" id="mCurrentRisk">—</div><div class="s">From current SL</div></div>
+              <div class="calc"><div class="k">Current R:R</div><div class="v" id="mCurrentRR">—</div><div class="s">From current price plan</div></div>
+            </div>
+          </div>
+
+          <div class="group">
+            <div class="group-title"><h3>Add Trade Adjustment</h3><span>One event at a time</span></div>
+            <div class="grid">
+              <div class="field"><label class="required">Date</label><input id="adjustDate" type="date" /></div>
+              <div class="field"><label class="required">Time</label><input id="adjustTime" type="time" /></div>
+              <div class="field"><label>Current Market Price</label><input id="adjustMarketPrice" type="number" step="any" /></div>
+              <div class="field"><label class="required">Adjustment Type</label><select id="adjustType"><option>Move Stop Loss</option><option>Move Take Profit</option><option>Move SL to Breakeven</option><option>Trailing Stop Update</option><option>Partial Close</option><option>Add to Position</option><option>Reduce Position</option><option>Manual Risk Reduction</option><option>Other</option></select></div>
+              <div class="field"><label>Previous SL</label><input id="previousSL" readonly /></div>
+              <div class="field"><label>New SL</label><input id="newSL" type="number" step="any" /></div>
+              <div class="field"><label>Previous TP</label><input id="previousTP" readonly /></div>
+              <div class="field"><label>New TP</label><input id="newTP" type="number" step="any" /></div>
+              <div class="field"><label>Position Before</label><input id="positionBefore" readonly /></div>
+              <div class="field"><label>Position After</label><input id="positionAfter" type="number" step="any" min="0" /></div>
+              <div class="field"><label>Partial Close Exit Price</label><input id="partialExitPrice" type="number" step="any" /></div>
+              <div class="field"><label>Partial Realised P/L</label><input id="partialRealizedPnl" type="number" step="0.01" placeholder="Can be auto-calculated" /></div>
+              <div class="field span2"><label>Reason</label><input id="adjustReason" placeholder="Protect profit, structure invalidated, scale out..." /></div>
+              <div class="field span2"><label>Management Notes</label><input id="adjustNotes" placeholder="What changed and why?" /></div>
+            </div>
+            <div id="adjustValidation" class="validation"></div>
+            <div class="stage-actions"><span class="muted" style="font-size:10px">Use partial P/L from your broker when available.</span><div><button class="btn primary" id="addAdjustmentBtn">Add Adjustment</button></div></div>
+          </div>
+
+          <div class="group">
+            <div class="group-title"><h3>Management Timeline</h3><span id="eventCount">0 events</span></div>
+            <div class="timeline" id="managementTimeline"></div>
+          </div>
+
+          <div class="stage-actions">
+            <div><button class="btn" data-go="1">← Entry</button></div>
+            <div><button class="btn primary" data-go="3">Continue to Result →</button></div>
+          </div>
+        </section>
+
+        <!-- STAGE 3 -->
+        <section id="stage3" class="hidden">
+          <div class="notice">Close the trade here after the final position is finished. The tracker combines partial realised P/L with the final leg and subtracts trading costs.</div>
+
+          <div class="group">
+            <div class="group-title"><h3>Exit & Financial Result</h3><span>Final close</span></div>
+            <div class="grid">
+              <div class="field"><label class="required">Exit Date</label><input id="exitDate" type="date" /></div>
+              <div class="field"><label class="required">Exit Time</label><input id="exitTime" type="time" /></div>
+              <div class="field"><label class="required">Final Exit Price</label><input id="finalExitPrice" type="number" step="any" /></div>
+              <div class="field"><label>Exit Reason</label><select id="exitReason"><option>Take Profit</option><option>Stop Loss</option><option>Manual Close</option><option>Trailing Stop</option><option>Risk Reduction / Invalidated</option><option>Time Exit</option><option>Other</option></select></div>
+              <div class="field"><label>Final Closed Size</label><input id="finalClosedSize" type="number" step="any" min="0" /></div>
+              <div class="field"><label>Final Leg Gross P/L</label><input id="finalLegGrossPnl" type="number" step="0.01" placeholder="Auto-calculated; can override" /></div>
+              <div class="field"><label>Exit Commission</label><input id="exitCommission" type="number" step="0.01" min="0" value="0" /></div>
+              <div class="field"><label>Swap / Financing</label><input id="swapFinancing" type="number" step="0.01" value="0" /><div class="help">Enter a cost as positive. Enter a credit as negative.</div></div>
+              <div class="field"><label>Other Costs</label><input id="otherCosts" type="number" step="0.01" min="0" value="0" /></div>
+              <div class="field"><label>Account Equity After</label><input id="equityAfter" type="number" step="0.01" min="0" /></div>
+              <div class="field"><label>Lowest Price During Trade</label><input id="lowestPrice" type="number" step="any" /></div>
+              <div class="field"><label>Highest Price During Trade</label><input id="highestPrice" type="number" step="any" /></div>
+            </div>
+            <div id="resultValidation" class="validation"></div>
+          </div>
+
+          <div class="group">
+            <div class="group-title"><h3>MAE / MFE & Outcome Analysis</h3><span>Calculated from entry and price extremes</span></div>
+            <div class="calc-grid">
+              <div class="calc"><div class="k">Net P/L</div><div class="v" id="rNetPnl">—</div><div class="s">All legs − all costs</div></div>
+              <div class="calc"><div class="k">R-Multiple</div><div class="v" id="rMultiple">—</div><div class="s">Net P/L ÷ initial risk</div></div>
+              <div class="calc"><div class="k">Return on Equity</div><div class="v" id="rReturnPct">—</div><div class="s">Net P/L ÷ starting equity</div></div>
+              <div class="calc"><div class="k">MAE</div><div class="v" id="rMAE">—</div><div class="s" id="rMAESub">Maximum adverse excursion</div></div>
+              <div class="calc"><div class="k">MFE</div><div class="v" id="rMFE">—</div><div class="s" id="rMFESub">Maximum favourable excursion</div></div>
+              <div class="calc"><div class="k">Holding Time</div><div class="v" id="rHolding">—</div><div class="s">Entry → final exit</div></div>
+            </div>
+          </div>
+
+          <div class="group">
+            <div class="group-title"><h3>Post-Trade Review</h3><span>Build evidence for strategy improvement</span></div>
+            <div class="grid two">
+              <div class="field"><label>Execution Quality</label><select id="executionQuality"><option value="">Select</option><option>Excellent</option><option>Good</option><option>Average</option><option>Poor</option><option>Very Poor</option></select></div>
+              <div class="field"><label>Plan Followed?</label><select id="planFollowed"><option value="">Select</option><option>Yes — fully</option><option>Mostly</option><option>Partly</option><option>No</option></select></div>
+              <div class="field"><label>Primary Mistake</label><input id="primaryMistake" placeholder="None, early SL move, FOMO, late entry..." /></div>
+              <div class="field"><label>Primary Strength</label><input id="primaryStrength" placeholder="Patience, entry quality, risk discipline..." /></div>
+              <div class="field full"><label>Lessons / Review Notes</label><textarea id="reviewNotes" placeholder="What should be repeated? What should change next time?"></textarea></div>
+            </div>
+          </div>
+
+          <div class="group">
+            <div class="group-title"><h3>Result Screenshot</h3><span>Visual evidence at the end</span></div>
+            <div class="attachment-card">
+              <h4>Screenshot When the Trade Ended</h4>
+              <div class="attachment-purpose">Attach the final chart or broker trade view showing how the trade looked at exit. Once the trade is closed, the screenshot becomes read-only evidence.</div>
+              <div class="attachment-preview" id="resultScreenshotPreview"><div class="attachment-placeholder"><span class="icon">▧</span>No result screenshot attached.</div></div>
+              <div class="attachment-meta" id="resultScreenshotMeta">No file attached.</div>
+              <input id="resultScreenshotInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif,.png,.jpg,.jpeg,.webp,.gif" hidden />
+              <div class="attachment-actions">
+                <button class="btn primary" id="uploadResultScreenshotBtn" type="button">Attach / Replace Screenshot</button>
+                <button class="btn" id="viewResultScreenshotBtn" type="button" disabled>View Image</button>
+                <button class="btn danger" id="removeResultScreenshotBtn" type="button" disabled>Remove</button>
+              </div>
+              <div class="attachment-lock" id="resultScreenshotLock"></div>
+            </div>
+          </div>
+
+          <div class="group">
+            <div class="group-title"><h3>Trade Summary</h3><span>Plan vs actual</span></div>
+            <table class="summary-table"><thead><tr><th>Measure</th><th>Value</th></tr></thead><tbody id="tradeSummaryBody"></tbody></table>
+          </div>
+
+          <div class="stage-actions">
+            <div><button class="btn" data-go="2">← Management</button></div>
+            <div><button class="btn success" id="closeTradeBtn">Save Result & Close Trade</button></div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+</div>
+
+
+<div id="fundsModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="fundsTitle">
+  <div class="modal">
+    <div class="modal-top">
+      <div><h2 id="fundsTitle">Deposits &amp; Withdrawals</h2><p>A separate funding ledger. Deposits and withdrawals affect account cash flow, not trading profit or loss.</p></div>
+      <button class="btn" id="closeFundsBtn">Close</button>
+    </div>
+    <div class="funding-summary">
+      <div class="fund-stat"><div class="k">Total Deposited</div><div class="v positive" id="fDeposits">$0.00</div></div>
+      <div class="fund-stat"><div class="k">Total Withdrawn</div><div class="v negative" id="fWithdrawals">$0.00</div></div>
+      <div class="fund-stat"><div class="k">Net Funding</div><div class="v" id="fNetFunding">$0.00</div></div>
+      <div class="fund-stat"><div class="k">Funding + Realised Trading P/L</div><div class="v" id="fEstimatedValue">$0.00</div></div>
+    </div>
+
+    <div class="group">
+      <div class="group-title"><h3>Record Cash Movement</h3><span>One ledger entry per actual movement</span></div>
+      <div class="grid">
+        <div class="field"><label class="required">Date</label><input id="fundDate" type="date" /></div>
+        <div class="field"><label class="required">Time</label><input id="fundTime" type="time" /></div>
+        <div class="field"><label class="required">Type</label><select id="fundType"><option>Deposit</option><option>Withdrawal</option></select></div>
+        <div class="field"><label class="required">Amount (USD)</label><input id="fundAmount" type="number" step="0.01" min="0" placeholder="100.00" /></div>
+        <div class="field"><label>Broker / Account</label><input id="fundAccount" placeholder="e.g. Capital.com · CFD $100" /></div>
+        <div class="field"><label>Method</label><select id="fundMethod"><option>Bank Transfer</option><option>Card</option><option>Mobile Money</option><option>Cash</option><option>Internal Transfer</option><option>Other</option></select></div>
+        <div class="field"><label>Reference</label><input id="fundReference" placeholder="Transaction/reference number" /></div>
+        <div class="field"><label>Notes</label><input id="fundNotes" placeholder="Reason or funding note" /></div>
+      </div>
+      <div id="fundValidation" class="validation"></div>
+      <div class="stage-actions"><span class="muted" style="font-size:10px">Funding is intentionally kept separate from trade P/L.</span><div><button class="btn primary" id="addFundBtn">Add Ledger Entry</button></div></div>
+    </div>
+
+    <div class="group">
+      <div class="group-title"><h3>Funding Ledger</h3><span id="fundCount">0 entries</span></div>
+      <div class="funding-table-wrap"><table class="funding-table"><thead><tr><th>Date / Time</th><th>Type</th><th>Account</th><th>Method</th><th>Reference / Notes</th><th>Amount</th><th></th></tr></thead><tbody id="fundingBody"></tbody></table></div>
+    </div>
+  </div>
+</div>
+
+
+<div id="importModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="importTitle">
+  <div class="modal">
+    <div class="modal-top">
+      <div>
+        <h2 id="importTitle">Import CFD JSON</h2>
+        <p id="importFileLabel">Review and validate the file before changing the journal.</p>
+      </div>
+      <button class="btn" id="cancelImportTop">Close</button>
+    </div>
+
+    <div class="import-preview">
+      <div class="import-stat"><div class="k">Valid Trades</div><div class="v" id="ipTrades">0</div></div>
+      <div class="import-stat"><div class="k">Open / Closed</div><div class="v" id="ipStatus">0 / 0</div></div>
+      <div class="import-stat"><div class="k">Funding Rows</div><div class="v" id="ipFunding">0</div></div>
+      <div class="import-stat"><div class="k">Matches / Duplicates</div><div class="v" id="ipDuplicates">0</div></div>
+    </div>
+
+    <div id="importValidation" class="validation"></div>
+    <div class="import-report" id="importReport">Choose a CFD Trade Tracker JSON file.</div>
+
+    <div class="import-note">
+      <strong>Safe Merge</strong> is recommended. It identifies the same trade using Trade ID, broker Position ID,
+      or ledger transaction ID, preserves existing management/review work, and adds only new records.
+      <strong>Replace All</strong> replaces the trade journal with the validated import. Existing funding is replaced
+      only if the JSON actually contains a <code>funding</code> array.
+    </div>
+
+    <div class="import-actions">
+      <button class="btn" id="cancelImportBtn">Cancel</button>
+      <button class="btn danger" id="replaceImportBtn">Replace All</button>
+      <button class="btn primary" id="mergeImportBtn">Safe Merge</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"><strong></strong><span></span></div>
+
+<script>
+(() => {
+'use strict';
+/*
+  GITHUB / UNIFIED-APP INTEGRATION CONTRACT
+  -----------------------------------------
+  Expected repository location:
+      /index.html          -> unified investment-tracker home (added later)
+      /cfd/index.html      -> this module
+      /etf/index.html      -> ETF module
+      /cash-savings/index.html -> cash-savings module
+
+  This CFD module remains standalone. The unified app should LINK to it instead
+  of copying its internal JavaScript into the root page.
+
+  The browser-storage keys below intentionally remain identical to V6 so
+  existing CFD data is preserved when this GitHub-ready file replaces V6.
+*/
+const ACTIVE_USER_KEY = 'aurum_imperium_active_user_v1';
+const LEGACY_CLAIM_KEY = 'aurum_imperium_legacy_data_claimed_v1';
+const ACTIVE_USERNAME = localStorage.getItem(ACTIVE_USER_KEY) || '';
+const USER_SCOPE = encodeURIComponent(ACTIVE_USERNAME.trim().toLowerCase()) || 'no-active-user';
+const scopedStorageKey = key => `${key}::user:${USER_SCOPE}`;
+const CFD_BASE_KEYS = Object.freeze({
+  trades:'supabase_investment_tracker_cfd_v2',
+  funding:'supabase_investment_tracker_cfd_funding_v1',
+  evidenceDb:'cfd_trade_tracker_evidence_v1'
+});
+const CFD_CLAIM_OWNER=localStorage.getItem(LEGACY_CLAIM_KEY);
+if(ACTIVE_USERNAME&&(!CFD_CLAIM_OWNER||CFD_CLAIM_OWNER.toLowerCase()===ACTIVE_USERNAME.toLowerCase())){
+  let claimed=false;
+  [CFD_BASE_KEYS.trades,CFD_BASE_KEYS.funding].forEach(base=>{const target=scopedStorageKey(base),candidates=[base,`${base}::user:no-active-user`,`${base}::no-active-user`],source=candidates.find(key=>localStorage.getItem(key)!=null);if(source&&localStorage.getItem(target)==null){localStorage.setItem(target,localStorage.getItem(source));localStorage.removeItem(source);claimed=true}});
+  if(claimed)localStorage.setItem(LEGACY_CLAIM_KEY,ACTIVE_USERNAME);
+}
+const MODULE_CONFIG = Object.freeze({
+  id: 'cfd',
+  name: 'CFD Investment Module',
+  version: '6.1.0',
+  schemaVersion: 3,
+  route: 'https://mduduzijunior.github.io/cfd-journal/index.html',
+  hubPath: 'https://mduduzijunior.github.io/unifier-interface/index.html',
+  storage: Object.freeze({
+    trades: scopedStorageKey(CFD_BASE_KEYS.trades),
+    funding: scopedStorageKey(CFD_BASE_KEYS.funding),
+    evidenceDb: scopedStorageKey(CFD_BASE_KEYS.evidenceDb)
+  }),
+  futureSupabaseNamespace: 'cfd',
+  futureTables: Object.freeze([
+    'cfd_trades',
+    'cfd_trade_management',
+    'cfd_trade_results',
+    'cfd_funding',
+    'cfd_evidence_metadata'
+  ])
+});
+
+const STORAGE_KEY = MODULE_CONFIG.storage.trades;
+const FUNDING_KEY = MODULE_CONFIG.storage.funding;
+const SCHEMA_VERSION = MODULE_CONFIG.schemaVersion;
+let trades = loadStore();
+let funding = loadFundingStore();
+let currentId = null;
+let currentStage = 1;
+let pendingImport = null;
+let currentView = 'DASHBOARD';
+
+const PUBLIC_MODULE_DESCRIPTOR = Object.freeze({
+  id: MODULE_CONFIG.id,
+  name: MODULE_CONFIG.name,
+  version: MODULE_CONFIG.version,
+  schemaVersion: MODULE_CONFIG.schemaVersion,
+  route: MODULE_CONFIG.route,
+  capabilities: Object.freeze([
+    'dashboard',
+    'trade-entry',
+    'trade-management',
+    'closed-trades',
+    'deposits-withdrawals',
+    'monthly-analysis',
+    'json-import-export',
+    'trade-evidence',
+    'monthly-broker-evidence'
+  ])
+});
+
+// Future unified pages can inspect this descriptor when the CFD page is embedded
+// or use the MODULE_READY message when it is loaded in a same-origin iframe.
+window.SUPABASE_INVESTMENT_TRACKER_MODULE = PUBLIC_MODULE_DESCRIPTOR;
+
+function announceModuleReady(){
+  const detail={...PUBLIC_MODULE_DESCRIPTOR};
+  window.dispatchEvent(new CustomEvent('investment-tracker:module-ready',{detail}));
+  if(window.parent!==window && /^https?:$/.test(location.protocol)){
+    try{
+      window.parent.postMessage(
+        {type:'SUPABASE_INVESTMENT_TRACKER_MODULE_READY',module:detail},
+        location.origin
+      );
+    }catch(err){ console.warn('Module-ready message unavailable:',err); }
+  }
+}
+
+function resolveHubLink(){
+  const link=$('hubLink');
+  if(!link) return;
+  // Relative routing is GitHub Pages project-safe:
+  // /repository/cfd/index.html -> /repository/index.html
+  link.setAttribute('href',MODULE_CONFIG.hubPath);
+}
+
+
+let attachmentDBPromise=null;
+const ATTACHMENT_DB=MODULE_CONFIG.storage.evidenceDb;
+const ATTACHMENT_STORE='attachments';
+const ATTACHMENT_MAX_BYTES=20*1024*1024;
+const attachmentObjectUrls=new Map();
+
+function openAttachmentDB(){
+  if(attachmentDBPromise) return attachmentDBPromise;
+  attachmentDBPromise=new Promise((resolve,reject)=>{
+    if(!('indexedDB' in window)){ reject(new Error('This browser does not support local evidence-file storage.')); return; }
+    const req=indexedDB.open(ATTACHMENT_DB,1);
+    req.onupgradeneeded=()=>{
+      const db=req.result;
+      if(!db.objectStoreNames.contains(ATTACHMENT_STORE)){
+        const store=db.createObjectStore(ATTACHMENT_STORE,{keyPath:'key'});
+        store.createIndex('owner','ownerKey',{unique:false});
+      }
+    };
+    req.onsuccess=()=>resolve(req.result);
+    req.onerror=()=>reject(req.error||new Error('Could not open evidence storage.'));
+  });
+  return attachmentDBPromise;
+}
+function attachmentKey(ownerType,ownerId,kind){ return `${ownerType}:${ownerId}:${kind}`; }
+function attachmentOwnerKey(ownerType,ownerId){ return `${ownerType}:${ownerId}`; }
+async function getAttachment(ownerType,ownerId,kind){
+  if(!ownerId) return null;
+  const db=await openAttachmentDB();
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(ATTACHMENT_STORE,'readonly');
+    const req=tx.objectStore(ATTACHMENT_STORE).get(attachmentKey(ownerType,ownerId,kind));
+    req.onsuccess=()=>resolve(req.result||null);
+    req.onerror=()=>reject(req.error);
+  });
+}
+async function putAttachment(ownerType,ownerId,kind,file){
+  if(!ownerId) throw new Error('No record is selected for this attachment.');
+  if(!(file instanceof Blob)) throw new Error('No file selected.');
+  if(file.size>ATTACHMENT_MAX_BYTES) throw new Error('File is too large. Maximum size is 20 MB per attachment.');
+  const db=await openAttachmentDB();
+  const rec={
+    key:attachmentKey(ownerType,ownerId,kind),
+    ownerKey:attachmentOwnerKey(ownerType,ownerId),
+    ownerType,ownerId,kind,
+    name:file.name||'attachment',
+    type:file.type||'application/octet-stream',
+    size:file.size,
+    updatedAt:new Date().toISOString(),
+    blob:file
+  };
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(ATTACHMENT_STORE,'readwrite');
+    tx.objectStore(ATTACHMENT_STORE).put(rec);
+    tx.oncomplete=()=>resolve(rec);
+    tx.onerror=()=>reject(tx.error||new Error('Could not store attachment.'));
+  });
+}
+async function deleteAttachment(ownerType,ownerId,kind){
+  if(!ownerId) return;
+  const db=await openAttachmentDB();
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(ATTACHMENT_STORE,'readwrite');
+    tx.objectStore(ATTACHMENT_STORE).delete(attachmentKey(ownerType,ownerId,kind));
+    tx.oncomplete=()=>resolve();
+    tx.onerror=()=>reject(tx.error);
+  });
+}
+async function deleteAttachmentsForOwner(ownerType,ownerId){
+  if(!ownerId) return;
+  try{
+    const db=await openAttachmentDB();
+    await new Promise((resolve,reject)=>{
+      const tx=db.transaction(ATTACHMENT_STORE,'readwrite');
+      const store=tx.objectStore(ATTACHMENT_STORE);
+      const idx=store.index('owner');
+      const req=idx.openCursor(IDBKeyRange.only(attachmentOwnerKey(ownerType,ownerId)));
+      req.onsuccess=()=>{
+        const cur=req.result;
+        if(cur){ cur.delete(); cur.continue(); }
+      };
+      tx.oncomplete=resolve;
+      tx.onerror=()=>reject(tx.error);
+    });
+  }catch(err){ console.warn('Attachment cleanup failed:',err); }
+}
+function prettyBytes(bytes){
+  const n=Number(bytes)||0;
+  if(n<1024) return `${n} B`;
+  if(n<1024*1024) return `${(n/1024).toFixed(1)} KB`;
+  return `${(n/(1024*1024)).toFixed(1)} MB`;
+}
+function revokeSlotUrl(slotId){
+  const u=attachmentObjectUrls.get(slotId);
+  if(u){ URL.revokeObjectURL(u); attachmentObjectUrls.delete(slotId); }
+}
+function attachmentPlaceholder(icon,text){ return `<div class="attachment-placeholder"><span class="icon">${icon}</span>${escapeHTML(text)}</div>`; }
+async function renderAttachmentSlot({ownerType,ownerId,kind,previewId,metaId,viewBtnId,removeBtnId,editable,image=false,emptyText='No file attached.'}){
+  const preview=$(previewId), meta=$(metaId), viewBtn=$(viewBtnId), removeBtn=$(removeBtnId);
+  if(!preview||!meta||!viewBtn||!removeBtn) return;
+  revokeSlotUrl(previewId);
+
+  if(!ownerId){
+    preview.innerHTML=attachmentPlaceholder(image?'▧':'PDF',emptyText);
+    meta.textContent='No record selected.';
+    viewBtn.disabled=true; removeBtn.disabled=true;
+    return;
+  }
+
+  try{
+    const rec=await getAttachment(ownerType,ownerId,kind);
+    if(!rec){
+      preview.innerHTML=attachmentPlaceholder(image?'▧':'PDF',emptyText);
+      meta.textContent='No file attached.';
+      viewBtn.disabled=true; removeBtn.disabled=true;
+      return;
+    }
+
+    const url=URL.createObjectURL(rec.blob);
+    attachmentObjectUrls.set(previewId,url);
+    if(image){
+      preview.innerHTML=`<img src="${url}" alt="${escapeHTML(rec.name)}" />`;
+    }else{
+      preview.innerHTML=attachmentPlaceholder('PDF',`${rec.name}\n${prettyBytes(rec.size)}`);
+    }
+    const stamp=rec.updatedAt?new Date(rec.updatedAt).toLocaleString():'';
+    meta.innerHTML=`<strong>${escapeHTML(rec.name)}</strong><br>${prettyBytes(rec.size)}${stamp?` · saved ${escapeHTML(stamp)}`:''}`;
+    viewBtn.disabled=false;
+    removeBtn.disabled=!editable;
+  }catch(err){
+    console.error(err);
+    preview.innerHTML=attachmentPlaceholder('!', 'Evidence storage could not be read.');
+    meta.textContent=err.message||'Storage error.';
+    viewBtn.disabled=true; removeBtn.disabled=true;
+  }
+}
+async function viewAttachment(ownerType,ownerId,kind){
+  try{
+    const rec=await getAttachment(ownerType,ownerId,kind);
+    if(!rec){ toast('No attachment','Attach a file first.'); return; }
+    const url=URL.createObjectURL(rec.blob);
+    const w=window.open(url,'_blank');
+    if(!w) toast('Pop-up blocked','Allow pop-ups for this local app to view the attachment.');
+    setTimeout(()=>URL.revokeObjectURL(url),60000);
+  }catch(err){ toast('Could not open attachment',err.message||'Storage error.'); }
+}
+function evidenceMonthValue(){
+  const v=getValue('evidenceMonth');
+  return /^\d{4}-\d{2}$/.test(v)?v:'';
+}
+async function saveEvidenceFile(ownerType,ownerId,kind,file,expected){
+  if(!file) return false;
+  if(expected==='image'&&!file.type.startsWith('image/')){ toast('Wrong file type','Please choose a PNG, JPG, WEBP, or GIF screenshot.'); return false; }
+  if(expected==='pdf'&&file.type!=='application/pdf'&&!/\.pdf$/i.test(file.name)){ toast('Wrong file type','Please choose a PDF file.'); return false; }
+  try{
+    await putAttachment(ownerType,ownerId,kind,file);
+    toast('Evidence saved',`${file.name} attached successfully.`);
+    return true;
+  }catch(err){
+    toast('Attachment not saved',err.message||'Storage error.');
+    return false;
+  }
+}
+async function refreshTradeEvidence(){
+  const t=currentTrade();
+  const id=t?.id||'';
+  const entryEditable=!!t&&t.status==='DRAFT';
+  const resultEditable=!!t&&t.status==='OPEN';
+
+  $('uploadEntryScreenshotBtn').disabled=!entryEditable;
+  $('entryScreenshotLock').textContent=!t?'':entryEditable?'This screenshot will lock when the trade is opened.':'Locked with the original entry record.';
+  $('uploadResultScreenshotBtn').disabled=!resultEditable;
+  $('resultScreenshotLock').textContent=!t?'':resultEditable?'Attach or replace the final screenshot before closing the trade.':t.status==='CLOSED'?'Locked with the closed-trade record.':'Open the trade before adding result evidence.';
+
+  await renderAttachmentSlot({
+    ownerType:'TRADE',ownerId:id,kind:'entryScreenshot',
+    previewId:'entryScreenshotPreview',metaId:'entryScreenshotMeta',
+    viewBtnId:'viewEntryScreenshotBtn',removeBtnId:'removeEntryScreenshotBtn',
+    editable:entryEditable,image:true,emptyText:'No pre-entry screenshot attached.'
+  });
+  await renderAttachmentSlot({
+    ownerType:'TRADE',ownerId:id,kind:'resultScreenshot',
+    previewId:'resultScreenshotPreview',metaId:'resultScreenshotMeta',
+    viewBtnId:'viewResultScreenshotBtn',removeBtnId:'removeResultScreenshotBtn',
+    editable:resultEditable,image:true,emptyText:'No result screenshot attached.'
+  });
+}
+async function refreshMonthlyEvidence(){
+  const month=evidenceMonthValue();
+  $('monthlyEvidenceStatus').textContent=month?`Evidence for ${monthLabel(month)}`:'Select a month to view evidence';
+  $('uploadMonthlyPdfBtn').disabled=!month;
+  $('uploadMonthlyAnalyticsBtn').disabled=!month;
+
+  await renderAttachmentSlot({
+    ownerType:'MONTH',ownerId:month,kind:'tradeHistoryPdf',
+    previewId:'monthlyPdfPreview',metaId:'monthlyPdfMeta',
+    viewBtnId:'viewMonthlyPdfBtn',removeBtnId:'removeMonthlyPdfBtn',
+    editable:!!month,image:false,emptyText:'No broker trade-history PDF attached for this month.'
+  });
+  await renderAttachmentSlot({
+    ownerType:'MONTH',ownerId:month,kind:'analyticsScreenshot',
+    previewId:'monthlyAnalyticsPreview',metaId:'monthlyAnalyticsMeta',
+    viewBtnId:'viewMonthlyAnalyticsBtn',removeBtnId:'removeMonthlyAnalyticsBtn',
+    editable:!!month,image:true,emptyText:'No broker analytics screenshot attached for this month.'
+  });
+}
+
+
+const $ = id => document.getElementById(id);
+const $$ = sel => [...document.querySelectorAll(sel)];
+const num = v => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+const nullableNum = v => v === '' || v == null ? null : Number(v);
+const nowParts = () => { const d = new Date(); return { date: localDate(d), time: d.toTimeString().slice(0,5) }; };
+const localDate = d => { const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${day}`; };
+const money = v => num(v).toLocaleString(undefined,{style:'currency',currency:'USD',minimumFractionDigits:2,maximumFractionDigits:2});
+const fmt = (v, dp=5) => v == null || !Number.isFinite(Number(v)) ? '—' : Number(v).toLocaleString(undefined,{maximumFractionDigits:dp});
+const pct = v => Number.isFinite(Number(v)) ? `${Number(v).toFixed(2)}%` : '—';
+const deepClone = obj => JSON.parse(JSON.stringify(obj));
+
+function uid(){ return `CFD-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2,6).toUpperCase()}`; }
+function loadStore(){
+  try{
+    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    return Array.isArray(raw) ? raw : [];
+  }catch(err){ console.warn('Unable to load local data', err); return []; }
+}
+function loadFundingStore(){
+  try{
+    const raw=JSON.parse(localStorage.getItem(FUNDING_KEY)||'[]');
+    return Array.isArray(raw)?raw:[];
+  }catch(err){ console.warn('Unable to load funding data',err); return []; }
+}
+function saveStore(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(trades));
+  renderJournal(); renderDashboard(); renderFunding();
+}
+function saveFundingStore(){
+  localStorage.setItem(FUNDING_KEY,JSON.stringify(funding));
+  renderFunding(); renderDashboard();
+}
+function toast(title, message=''){
+  const t=$('toast'); t.querySelector('strong').textContent=title; t.querySelector('span').textContent=message;
+  t.classList.add('show'); clearTimeout(toast.timer); toast.timer=setTimeout(()=>t.classList.remove('show'),2600);
+}
+function currentTrade(){ return trades.find(t=>t.id===currentId) || null; }
+function makeBlankTrade(){
+  const n=nowParts();
+  return {schemaVersion:SCHEMA_VERSION,id:uid(),status:'DRAFT',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),entry:{date:n.date,time:n.time,assetType:'Forex',direction:'BUY',session:'London',htfBias:'Neutral',marketCondition:'Trending',valuePerUnit:1,spreadCost:0,entryCommission:0},management:[],result:null};
+}
+function showDashboard(){
+  currentView='DASHBOARD';
+  $('dashboardShell').classList.remove('hidden');
+  $('tradeShell').classList.add('hidden');
+  updateModuleNav();
+  renderDashboard();
+}
+function showTradeShell(){
+  $('dashboardShell').classList.add('hidden');
+  $('tradeShell').classList.remove('hidden');
+  $('tradeShell').classList.toggle('new-mode',currentView==='NEW');
+  $('tradeShell').querySelector('.workspace').classList.toggle('new-entry',currentView==='NEW');
+  updateModuleNav();
+}
+function updateModuleNav(){
+  $$('[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===currentView));
+  const drafts=trades.filter(t=>t.status==='DRAFT').length;
+  const open=trades.filter(t=>t.status==='OPEN').length;
+  const closed=trades.filter(t=>t.status==='CLOSED').length;
+  $('draftCount').textContent=drafts;
+  $('openFolderCount').textContent=open;
+  $('closedFolderCount').textContent=closed;
+  if($('folderTitle')){
+    if(currentView==='OPEN'){
+      $('folderEyebrow').textContent='Stage 2';
+      $('folderTitle').textContent='Waiting for Management';
+      $('folderDescription').textContent='Every entered/open trade appears here exactly once until it is closed.';
+      $('journalHeading').textContent='Open Trades';
+    }else if(currentView==='CLOSED'){
+      $('folderEyebrow').textContent='Stage 3';
+      $('folderTitle').textContent='Closed Trades';
+      $('folderDescription').textContent='Completed trades are archived here and are read-only.';
+      $('journalHeading').textContent='Closed Archive';
+    }
+  }
+}
+function setEmptyState(title,text){
+  $('emptyTitle').textContent=title;
+  $('emptyText').innerHTML=text;
+}
+function setView(view){
+  if(view==='DASHBOARD'){ showDashboard(); return; }
+  if(view==='NEW'){ createTrade(); return; }
+
+  currentView=view;
+  showTradeShell();
+  renderJournal();
+
+  const wantedStatus=view==='OPEN'?'OPEN':'CLOSED';
+  const selected=currentTrade();
+  if(selected && selected.status===wantedStatus){
+    currentStage=wantedStatus==='OPEN'?2:3;
+    loadTradeIntoUI();
+    switchStage(currentStage,false);
+    return;
+  }
+
+  const first=trades.find(t=>t.status===wantedStatus);
+  if(first){
+    currentId=first.id;
+    currentStage=wantedStatus==='OPEN'?2:3;
+    loadTradeIntoUI();
+    switchStage(currentStage,false);
+  }else{
+    currentId=null;
+    closeWorkspace();
+    if(view==='OPEN') setEmptyState('No trades waiting for management','Open a trade from <strong>New Trade</strong>. Once the entry is saved, it will move here automatically.');
+    else setEmptyState('No closed trades yet','After an open trade receives its final result, it will move into this archive automatically.');
+  }
+}
+function createTrade(){
+  currentView='NEW';
+  showTradeShell();
+
+  const active=currentTrade();
+  if(active && active.status==='DRAFT'){
+    currentStage=1; openWorkspace(); loadTradeIntoUI();
+    toast('Draft already active','Finish, open, or delete the current draft before creating another trade.');
+    return;
+  }
+
+  const existingDraft=trades.find(t=>t.status==='DRAFT');
+  if(existingDraft){
+    currentId=existingDraft.id; currentStage=1; openWorkspace(); loadTradeIntoUI();
+    toast('Existing draft selected','Only one unfinished new-trade record is kept at a time to prevent duplication.');
+    return;
+  }
+
+  const trade=makeBlankTrade();
+  trades.unshift(trade);
+  currentId=trade.id;
+  currentStage=1;
+  saveStore();
+  openWorkspace();
+  loadTradeIntoUI();
+  toast('New trade ready','Complete the entry once. Saving it as OPEN will move it to Waiting for Management.');
+}
+function openWorkspace(){ $('emptyState').classList.add('hidden'); $('tradeWorkspace').classList.remove('hidden'); }
+function closeWorkspace(){ $('tradeWorkspace').classList.add('hidden'); $('emptyState').classList.remove('hidden'); }
+function setValue(id, value){ $(id).value = value ?? ''; }
+function getValue(id){ return $(id).value; }
+function getNumber(id){ return nullableNum($(id).value); }
+
+function collectEntry(){
+  return {
+    date:getValue('entryDate'), time:getValue('entryTime'), instrument:getValue('instrument').trim().toUpperCase(), assetType:getValue('assetType'), direction:getValue('direction'), broker:getValue('broker').trim(), accountName:getValue('accountName').trim(), session:getValue('session'), strategy:getValue('strategy').trim(), htfBias:getValue('htfBias'), entryTimeframe:getValue('entryTimeframe').trim(),
+    plannedEntry:getNumber('plannedEntry'), actualEntry:getNumber('actualEntry'), initialSL:getNumber('initialSL'), initialTP:getNumber('initialTP'), equityBefore:getNumber('equityBefore'), plannedRiskPct:getNumber('plannedRiskPct'), positionSize:getNumber('positionSize'), valuePerUnit:getNumber('valuePerUnit'), pipSize:getNumber('pipSize'), leverage:getNumber('leverage'), spreadCost:getNumber('spreadCost') ?? 0, entryCommission:getNumber('entryCommission') ?? 0,
+    entryTrigger:getValue('entryTrigger').trim(), keyLevel:getValue('keyLevel').trim(), marketCondition:getValue('marketCondition'), newsRisk:getValue('newsRisk').trim(), tradeThesis:getValue('tradeThesis').trim(), preTradeNotes:getValue('preTradeNotes').trim()
+  };
+}
+function entryFingerprint(e){ return [e.instrument,e.direction,e.date,e.time,effectiveEntry(e)].map(v=>String(v??'').trim().toUpperCase()).join('|'); }
+function findDuplicateTrade(entry,currentTradeId){
+  const fp=entryFingerprint(entry);
+  return trades.find(x=>x.id!==currentTradeId && x.status!=='DRAFT' && entryFingerprint(x.entry||{})===fp) || null;
+}
+function saveEntryToModel(status){
+  const t=currentTrade(); if(!t) return false;
+  if(t.status!=='DRAFT'){ toast('Entry is locked','This trade is already entered. Use Management for later changes.'); return false; }
+  const entry=collectEntry();
+  if(status==='OPEN'){
+    const errors=validateEntry(entry);
+    const duplicate=findDuplicateTrade(entry,t.id);
+    if(duplicate) errors.push(`Possible duplicate of ${duplicate.id}. The same instrument, direction, date/time and entry price already exists.`);
+    if(errors.length){ showValidation('entryValidation', errors); toast('Entry needs attention',errors[0]); return false; }
+  }
+  hideValidation('entryValidation'); t.entry=entry; t.status=status; t.updatedAt=new Date().toISOString(); saveStore(); updateWorkspaceHeader(); updateStages(); return true;
+}
+function validateEntry(e){
+  const errors=[];
+  if(!e.date) errors.push('Trade date is required.'); if(!e.time) errors.push('Trade time is required.'); if(!e.instrument) errors.push('Instrument is required.'); if(!['BUY','SELL'].includes(e.direction)) errors.push('Direction must be BUY or SELL.');
+  if(!(e.plannedEntry>0)) errors.push('Planned entry price must be greater than zero.'); if(!(e.initialSL>0)) errors.push('Initial stop loss is required.'); if(!(e.initialTP>0)) errors.push('Initial take profit is required.');
+  if(e.direction==='BUY' && e.plannedEntry>0){ if(!(e.initialSL<e.plannedEntry)) errors.push('For a BUY, stop loss should be below entry.'); if(!(e.initialTP>e.plannedEntry)) errors.push('For a BUY, take profit should be above entry.'); }
+  if(e.direction==='SELL' && e.plannedEntry>0){ if(!(e.initialSL>e.plannedEntry)) errors.push('For a SELL, stop loss should be above entry.'); if(!(e.initialTP<e.plannedEntry)) errors.push('For a SELL, take profit should be below entry.'); }
+  if(e.positionSize != null && e.positionSize<0) errors.push('Position size cannot be negative.'); if(!(e.valuePerUnit>0)) errors.push('Value per price move is required and must be greater than zero.');
+  return errors;
+}
+function showValidation(id, errors){ const el=$(id); el.innerHTML=errors.map(x=>`• ${escapeHTML(x)}`).join('<br>'); el.classList.add('show'); }
+function hideValidation(id){ const el=$(id); el.classList.remove('show'); el.textContent=''; }
+
+function effectiveEntry(e){ return e.actualEntry || e.plannedEntry || 0; }
+function knownValuePerUnit(e){ const v=Number(e?.valuePerUnit); return Number.isFinite(v)&&v>0?v:null; }
+function moneyOrDash(v){ return v==null||!Number.isFinite(Number(v))?'—':money(v); }
+function initialRiskMoney(e){
+  const ep=effectiveEntry(e), vpu=knownValuePerUnit(e), size=Number(e?.positionSize);
+  return ep&&e.initialSL!=null&&Number.isFinite(size)&&size>0&&vpu!=null ? Math.abs(ep-e.initialSL)*size*vpu : null;
+}
+function plannedRewardMoney(e){
+  const ep=effectiveEntry(e), vpu=knownValuePerUnit(e), size=Number(e?.positionSize);
+  return ep&&e.initialTP!=null&&Number.isFinite(size)&&size>0&&vpu!=null ? Math.abs(e.initialTP-ep)*size*vpu : null;
+}
+function plannedRR(e){
+  const ep=effectiveEntry(e), risk=Math.abs(ep-num(e.initialSL)), reward=Math.abs(num(e.initialTP)-ep);
+  return ep&&e.initialSL!=null&&e.initialTP!=null&&risk>0 ? reward/risk : null;
+}
+function currentState(t){
+  const e=t.entry||{}; let sl=e.initialSL, tp=e.initialTP, size=num(e.positionSize), partial=0;
+  (t.management||[]).forEach(a=>{ if(a.newSL!=null) sl=a.newSL; if(a.newTP!=null) tp=a.newTP; if(a.positionAfter!=null) size=num(a.positionAfter); partial += num(a.partialRealizedPnl); });
+  return {sl,tp,size,partialRealizedPnl:partial};
+}
+function signedPnl(direction, entry, exit, size, valuePerUnit){
+  const vpu=Number(valuePerUnit), qty=Number(size);
+  if(!['BUY','SELL'].includes(direction)||!entry||exit==null||!Number.isFinite(qty)||qty<0||!Number.isFinite(vpu)||vpu<=0) return null;
+  const movement = direction==='SELL' ? entry-exit : exit-entry;
+  return movement*qty*vpu;
+}
+
+function calculateEntryPreview(){
+  const e=collectEntry(), ep=effectiveEntry(e), sl=e.initialSL, tp=e.initialTP, size=num(e.positionSize), vpu=knownValuePerUnit(e), eq=num(e.equityBefore), pip=e.pipSize;
+  const slDist=(ep&&sl!=null)?Math.abs(ep-sl):null, tpDist=(ep&&tp!=null)?Math.abs(tp-ep):null;
+  const risk=slDist!=null&&vpu!=null&&size>0?slDist*size*vpu:null, reward=tpDist!=null&&vpu!=null&&size>0?tpDist*size*vpu:null, rr=slDist>0?tpDist/slDist:null;
+  $('cSLDistance').textContent=slDist==null?'—':fmt(slDist,8); $('cTPDistance').textContent=tpDist==null?'—':fmt(tpDist,8); $('cRR').textContent=rr==null?'—':`1 : ${rr.toFixed(2)}`;
+  $('cRiskMoney').textContent=risk==null?'—':money(risk); $('cRewardMoney').textContent=reward==null?'—':money(reward); $('cRiskActualPct').textContent=eq>0&&risk!=null?`${(risk/eq*100).toFixed(2)}% of equity`:'—';
+  $('cSLPips').textContent=pip>0&&slDist!=null?`${(slDist/pip).toFixed(1)} pips / points`:'Pip / point size not set'; $('cTPPips').textContent=pip>0&&tpDist!=null?`${(tpDist/pip).toFixed(1)} pips / points`:'Pip / point size not set';
+  const riskBudget=eq*num(e.plannedRiskPct)/100; const suggested=(slDist>0&&vpu>0&&riskBudget>0)?riskBudget/(slDist*vpu):null; $('cSuggestedSize').textContent=suggested==null?'—':fmt(suggested,6);
+  const errors=validateEntry(e); if(errors.length) showValidation('entryValidation',errors); else hideValidation('entryValidation');
+}
+
+function collectAdjustment(){
+  return { id:`ADJ-${Date.now().toString(36).toUpperCase()}`, date:getValue('adjustDate'), time:getValue('adjustTime'), marketPrice:getNumber('adjustMarketPrice'), type:getValue('adjustType'), previousSL:getNumber('previousSL'), newSL:getNumber('newSL'), previousTP:getNumber('previousTP'), newTP:getNumber('newTP'), positionBefore:getNumber('positionBefore'), positionAfter:getNumber('positionAfter'), partialExitPrice:getNumber('partialExitPrice'), partialRealizedPnl:getNumber('partialRealizedPnl'), reason:getValue('adjustReason').trim(), notes:getValue('adjustNotes').trim(), createdAt:new Date().toISOString() };
+}
+function validateAdjustment(a,t){
+  const errors=[]; if(t.status!=='OPEN') errors.push(t.status==='DRAFT'?'Open the trade from the Entry stage before adding management events.':'Closed trades are read-only and cannot receive new management events.'); if(!a.date) errors.push('Adjustment date is required.'); if(!a.time) errors.push('Adjustment time is required.');
+  if(a.positionAfter!=null && a.positionAfter<0) errors.push('Position after adjustment cannot be negative.');
+  if(a.type==='Partial Close' && a.positionAfter!=null && a.positionBefore!=null && a.positionAfter>=a.positionBefore) errors.push('For a partial close, position after should be smaller than position before.');
+  if(a.type==='Add to Position' && a.positionAfter!=null && a.positionBefore!=null && a.positionAfter<=a.positionBefore) errors.push('For an addition, position after should be larger than position before.');
+  return errors;
+}
+function autoPartialPnl(){
+  const t=currentTrade(); if(!t) return; const type=getValue('adjustType');
+  if(!['Partial Close','Reduce Position'].includes(type)) return;
+  const before=num(getNumber('positionBefore')), after=num(getNumber('positionAfter')), exit=getNumber('partialExitPrice'), e=t.entry||{};
+  const closed=Math.max(0,before-after); if(closed>0 && exit!=null){ const p=signedPnl(e.direction,effectiveEntry(e),exit,closed,e.valuePerUnit); if(p!=null) $('partialRealizedPnl').value=p.toFixed(2); }
+}
+function adjustmentFingerprint(a){
+  return [a.date,a.time,a.type,a.marketPrice,a.newSL,a.newTP,a.positionAfter,a.partialExitPrice,a.partialRealizedPnl].map(v=>String(v??'')).join('|');
+}
+function addAdjustment(){
+  const t=currentTrade(); if(!t) return;
+  if(t.status!=='OPEN'){ toast('Management unavailable',t.status==='DRAFT'?'Save Entry & Open Trade first.':'This trade is closed and read-only.'); return; }
+  const a=collectAdjustment();
+  if(a.partialRealizedPnl==null && a.partialExitPrice!=null && a.positionBefore!=null && a.positionAfter!=null){ const closed=Math.max(0,a.positionBefore-a.positionAfter); a.partialRealizedPnl=signedPnl(t.entry.direction,effectiveEntry(t.entry),a.partialExitPrice,closed,t.entry.valuePerUnit); }
+  const errors=validateAdjustment(a,t);
+  if((t.management||[]).some(x=>adjustmentFingerprint(x)===adjustmentFingerprint(a))) errors.push('This exact management adjustment is already recorded for this trade.');
+  if(errors.length){ showValidation('adjustValidation',errors); toast('Adjustment needs attention',errors[0]); return; }
+  hideValidation('adjustValidation'); t.management=t.management||[]; t.management.push(a); t.updatedAt=new Date().toISOString(); saveStore(); renderManagement(); clearAdjustmentInputs(); toast('Adjustment added',`${a.type} was added to the permanent management timeline.`);
+}
+function deleteAdjustment(id){
+  const t=currentTrade(); if(!t || t.status!=='OPEN') return; if(!confirm('Delete this management event?')) return;
+  t.management=(t.management||[]).filter(a=>a.id!==id); t.updatedAt=new Date().toISOString(); saveStore(); renderManagement(); toast('Adjustment deleted');
+}
+function clearAdjustmentInputs(){
+  const n=nowParts(); setValue('adjustDate',n.date); setValue('adjustTime',n.time); ['adjustMarketPrice','newSL','newTP','positionAfter','partialExitPrice','partialRealizedPnl','adjustReason','adjustNotes'].forEach(id=>setValue(id,'')); prepareAdjustmentDefaults();
+}
+function prepareAdjustmentDefaults(){
+  const t=currentTrade(); if(!t) return; const s=currentState(t); setValue('previousSL',s.sl); setValue('previousTP',s.tp); setValue('positionBefore',s.size); if(getValue('adjustType')==='Move SL to Breakeven') setValue('newSL',effectiveEntry(t.entry));
+}
+function renderManagement(){
+  const t=currentTrade(); if(!t) return; const s=currentState(t), e=t.entry||{}, ep=effectiveEntry(e), vpu=num(e.valuePerUnit||1);
+  $('mCurrentSL').textContent=fmt(s.sl,8); $('mCurrentTP').textContent=fmt(s.tp,8); $('mCurrentSize').textContent=fmt(s.size,6); $('mPartialPnL').textContent=money(s.partialRealizedPnl);
+  const risk=(s.sl!=null&&ep)?Math.abs(ep-s.sl)*s.size*vpu:0, reward=(s.tp!=null&&ep)?Math.abs(s.tp-ep)*s.size*vpu:0; $('mCurrentRisk').textContent=money(risk); $('mCurrentRR').textContent=risk>0?`1 : ${(reward/risk).toFixed(2)}`:'—';
+  const timeline=$('managementTimeline'); const arr=t.management||[]; $('eventCount').textContent=`${arr.length} event${arr.length===1?'':'s'}`;
+  if(!arr.length){ timeline.innerHTML='<div class="muted" style="font-size:11px;padding:10px 2px">No management adjustments yet. The original entry remains the active trade state.</div>'; }
+  else timeline.innerHTML=arr.map((a,i)=>`<div class="event"><div class="event-index">${i+1}</div><div><h4>${escapeHTML(a.type)}</h4><p>${escapeHTML(a.date||'')} ${escapeHTML(a.time||'')} · market ${fmt(a.marketPrice,8)}</p><p>SL ${fmt(a.previousSL,8)} → <strong>${fmt(a.newSL ?? a.previousSL,8)}</strong> · TP ${fmt(a.previousTP,8)} → <strong>${fmt(a.newTP ?? a.previousTP,8)}</strong></p><p>Position ${fmt(a.positionBefore,6)} → <strong>${fmt(a.positionAfter ?? a.positionBefore,6)}</strong> · partial P/L <span class="money ${num(a.partialRealizedPnl)>=0?'positive':'negative'}">${money(a.partialRealizedPnl)}</span></p>${a.reason?`<p>Reason: ${escapeHTML(a.reason)}</p>`:''}${a.notes?`<p>Notes: ${escapeHTML(a.notes)}</p>`:''}</div><button class="delete-event" data-delete-adj="${a.id}" title="Delete adjustment" ${t.status==='CLOSED'?'disabled':''}>✕</button></div>`).join('');
+  $$('[data-delete-adj]').forEach(b=>b.addEventListener('click',()=>deleteAdjustment(b.dataset.deleteAdj)));
+  prepareAdjustmentDefaults();
+}
+
+function collectResult(){
+  return {exitDate:getValue('exitDate'), exitTime:getValue('exitTime'), finalExitPrice:getNumber('finalExitPrice'), exitReason:getValue('exitReason'), finalClosedSize:getNumber('finalClosedSize'), finalLegGrossPnl:getNumber('finalLegGrossPnl'), exitCommission:getNumber('exitCommission')??0, swapFinancing:getNumber('swapFinancing')??0, otherCosts:getNumber('otherCosts')??0, equityAfter:getNumber('equityAfter'), lowestPrice:getNumber('lowestPrice'), highestPrice:getNumber('highestPrice'), executionQuality:getValue('executionQuality'), planFollowed:getValue('planFollowed'), primaryMistake:getValue('primaryMistake').trim(), primaryStrength:getValue('primaryStrength').trim(), reviewNotes:getValue('reviewNotes').trim()};
+}
+function resultMetrics(t, r=collectResult()){
+  const e=t.entry||{}, s=currentState(t), ep=effectiveEntry(e), finalSize=r.finalClosedSize==null?s.size:r.finalClosedSize;
+  const autoFinalCalc = r.finalExitPrice!=null ? signedPnl(e.direction,ep,r.finalExitPrice,finalSize,e.valuePerUnit) : null;
+  const autoFinal = autoFinalCalc==null ? 0 : autoFinalCalc;
+  const finalGross = r.finalLegGrossPnl==null ? autoFinal : r.finalLegGrossPnl;
+  const partial=s.partialRealizedPnl; const costs=num(e.spreadCost)+num(e.entryCommission)+num(r.exitCommission)+num(r.swapFinancing)+num(r.otherCosts);
+  const net=partial+finalGross-costs, initRisk=initialRiskMoney(e), rMult=initRisk!=null&&initRisk>0?net/initRisk:null, ret=num(e.equityBefore)>0?net/num(e.equityBefore)*100:null;
+  let maeDist=null,mfeDist=null;
+  if(ep){ if(e.direction==='BUY'){ if(r.lowestPrice!=null) maeDist=Math.max(0,ep-r.lowestPrice); if(r.highestPrice!=null) mfeDist=Math.max(0,r.highestPrice-ep); } else { if(r.highestPrice!=null) maeDist=Math.max(0,r.highestPrice-ep); if(r.lowestPrice!=null) mfeDist=Math.max(0,ep-r.lowestPrice); } }
+  const vpu=knownValuePerUnit(e);
+  const maeMoney=maeDist==null||vpu==null?null:maeDist*num(e.positionSize)*vpu, mfeMoney=mfeDist==null||vpu==null?null:mfeDist*num(e.positionSize)*vpu;
+  const maeR=initRisk>0&&maeMoney!=null?maeMoney/initRisk:null, mfeR=initRisk>0&&mfeMoney!=null?mfeMoney/initRisk:null;
+  const start=e.date&&e.time?new Date(`${e.date}T${e.time}`):null, end=r.exitDate&&r.exitTime?new Date(`${r.exitDate}T${r.exitTime}`):null; const hold=start&&end&&!isNaN(start)&&!isNaN(end)?Math.max(0,end-start):null;
+  return {finalGross,partial,costs,net,initRisk,rMult,ret,maeDist,mfeDist,maeMoney,mfeMoney,maeR,mfeR,hold,finalSize};
+}
+function formatDuration(ms){ if(ms==null) return '—'; const mins=Math.floor(ms/60000), d=Math.floor(mins/1440), h=Math.floor((mins%1440)/60), m=mins%60; return `${d?d+'d ':''}${h}h ${m}m`; }
+function validateResult(r,t){ const errors=[]; if(t.status!=='OPEN') errors.push(t.status==='DRAFT'?'Open the trade before closing it.':'This trade is already closed.'); if(!r.exitDate) errors.push('Exit date is required.'); if(!r.exitTime) errors.push('Exit time is required.'); if(!(r.finalExitPrice>0)) errors.push('Final exit price is required.'); if(r.finalClosedSize!=null && r.finalClosedSize<0) errors.push('Final closed size cannot be negative.'); return errors; }
+function calculateResultPreview(){
+  const t=currentTrade(); if(!t) return; const r=collectResult(), m=resultMetrics(t,r);
+  $('rNetPnl').textContent=money(m.net); $('rNetPnl').className=`v ${m.net>0?'positive':m.net<0?'negative':''}`; $('rMultiple').textContent=m.rMult==null?'—':`${m.rMult.toFixed(2)}R`; $('rReturnPct').textContent=m.ret==null?'—':pct(m.ret); $('rHolding').textContent=formatDuration(m.hold);
+  $('rMAE').textContent=m.maeDist==null?'—':fmt(m.maeDist,8); $('rMAESub').textContent=m.maeMoney==null?'Maximum adverse excursion':`${money(m.maeMoney)} · ${m.maeR.toFixed(2)}R`;
+  $('rMFE').textContent=m.mfeDist==null?'—':fmt(m.mfeDist,8); $('rMFESub').textContent=m.mfeMoney==null?'Maximum favourable excursion':`${money(m.mfeMoney)} · ${m.mfeR.toFixed(2)}R`;
+  renderTradeSummary(t,r,m);
+}
+function renderTradeSummary(t,r,m){
+  const e=t.entry||{}, rr=plannedRR(e); const outcome=m.net>0?'WIN':m.net<0?'LOSS':'BREAKEVEN'; const cls=m.net>0?'positive':m.net<0?'negative':'amber';
+  const rows=[['Outcome',`<span class="${cls}"><strong>${outcome}</strong></span>`],['Instrument / Direction',`${escapeHTML(e.instrument||'—')} · ${escapeHTML(e.direction||'—')}`],['Initial R:R',rr==null?'—':`1 : ${rr.toFixed(2)}`],['Initial planned risk',moneyOrDash(initialRiskMoney(e))],['Partial realised P/L',money(m.partial)],['Final leg gross P/L',money(m.finalGross)],['Total costs',money(m.costs)],['Net P/L',`<span class="${cls}"><strong>${money(m.net)}</strong></span>`],['R-Multiple',m.rMult==null?'—':`${m.rMult.toFixed(2)}R`],['MAE / MFE',`${m.maeR==null?'—':m.maeR.toFixed(2)+'R'} / ${m.mfeR==null?'—':m.mfeR.toFixed(2)+'R'}`],['Holding time',formatDuration(m.hold)]];
+  $('tradeSummaryBody').innerHTML=rows.map(([a,b])=>`<tr><td>${a}</td><td>${b}</td></tr>`).join('');
+}
+function autoFinalLegPnl(){
+  const t=currentTrade(); if(!t) return; const s=currentState(t), exit=getNumber('finalExitPrice'); let size=getNumber('finalClosedSize'); if(size==null){ size=s.size; setValue('finalClosedSize',size); }
+  if(exit!=null && size!=null){ const p=signedPnl(t.entry.direction,effectiveEntry(t.entry),exit,size,t.entry.valuePerUnit); if(p!=null) setValue('finalLegGrossPnl',p.toFixed(2)); }
+  calculateResultPreview();
+}
+function closeTrade(){
+  const t=currentTrade(); if(!t) return; if(t.status!=='OPEN'){ toast('Cannot close trade',t.status==='DRAFT'?'Open the trade first.':'This trade is already closed.'); return; } const r=collectResult(); const errors=validateResult(r,t); if(errors.length){ showValidation('resultValidation',errors); toast('Result needs attention',errors[0]); return; }
+  hideValidation('resultValidation'); const m=resultMetrics(t,r); if(r.finalLegGrossPnl==null) r.finalLegGrossPnl=m.finalGross; t.result=r; t.status='CLOSED'; t.updatedAt=new Date().toISOString(); currentView='CLOSED'; currentStage=3; saveStore(); showTradeShell(); loadTradeIntoUI(); switchStage(3,false); renderJournal(); refreshTradeEvidence(); toast('Trade moved to Closed Trades',`Net result: ${money(m.net)} · ${m.rMult==null?'R unavailable':m.rMult.toFixed(2)+'R'}`);
+}
+
+function fundingUid(){ return `FUND-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2,5).toUpperCase()}`; }
+function fundingTotals(){
+  const deposits=funding.filter(x=>x.type==='Deposit').reduce((s,x)=>s+num(x.amount),0);
+  const withdrawals=funding.filter(x=>x.type==='Withdrawal').reduce((s,x)=>s+num(x.amount),0);
+  return {deposits,withdrawals,net:deposits-withdrawals};
+}
+function realisedTradingNet(){ return trades.filter(t=>t.status==='CLOSED'&&t.result).reduce((s,t)=>s+resultMetrics(t,t.result).net,0); }
+function openFunding(){ const n=nowParts(); setValue('fundDate',n.date); setValue('fundTime',n.time); $('fundsModal').classList.remove('hidden'); renderFunding(); setTimeout(()=>$('fundAmount').focus(),0); }
+function closeFunding(){ $('fundsModal').classList.add('hidden'); hideValidation('fundValidation'); }
+function addFunding(){
+  const item={id:fundingUid(),date:getValue('fundDate'),time:getValue('fundTime'),type:getValue('fundType'),amount:getNumber('fundAmount'),account:getValue('fundAccount').trim(),method:getValue('fundMethod'),reference:getValue('fundReference').trim(),notes:getValue('fundNotes').trim(),createdAt:new Date().toISOString()};
+  const errors=[]; if(!item.date) errors.push('Date is required.'); if(!item.time) errors.push('Time is required.'); if(!(item.amount>0)) errors.push('Amount must be greater than zero.');
+  const fp=[item.date,item.time,item.type,item.amount,item.account,item.reference].map(v=>String(v??'').trim().toUpperCase()).join('|');
+  if(funding.some(x=>[x.date,x.time,x.type,x.amount,x.account,x.reference].map(v=>String(v??'').trim().toUpperCase()).join('|')===fp)) errors.push('This funding movement appears to be an exact duplicate.');
+  if(errors.length){ showValidation('fundValidation',errors); toast('Funding entry needs attention',errors[0]); return; }
+  hideValidation('fundValidation'); funding.unshift(item); saveFundingStore(); ['fundAmount','fundReference','fundNotes'].forEach(id=>setValue(id,'')); toast(`${item.type} recorded`,`${money(item.amount)} added to the funding ledger.`);
+}
+function deleteFunding(id){ const item=funding.find(x=>x.id===id); if(!item) return; if(!confirm(`Delete this ${item.type.toLowerCase()} of ${money(item.amount)}?`)) return; funding=funding.filter(x=>x.id!==id); saveFundingStore(); toast('Funding entry deleted'); }
+function renderFunding(){
+  if(!$('fundingBody')) return; const totals=fundingTotals(), realised=realisedTradingNet();
+  $('fDeposits').textContent=money(totals.deposits); $('fWithdrawals').textContent=money(totals.withdrawals); $('fNetFunding').textContent=money(totals.net); $('fNetFunding').className=`v ${totals.net>0?'positive':totals.net<0?'negative':''}`;
+  $('fEstimatedValue').textContent=money(totals.net+realised); $('fEstimatedValue').className=`v ${totals.net+realised>0?'positive':totals.net+realised<0?'negative':''}`; $('fundCount').textContent=`${funding.length} entr${funding.length===1?'y':'ies'}`;
+  const body=$('fundingBody'); if(!funding.length){ body.innerHTML='<tr><td colspan="7" class="muted" style="text-align:center;padding:22px">No deposits or withdrawals recorded yet.</td></tr>'; return; }
+  body.innerHTML=funding.map(x=>`<tr><td>${escapeHTML(x.date||'')} ${escapeHTML(x.time||'')}</td><td><span class="badge ${x.type==='Deposit'?'open':'closed'}">${escapeHTML(x.type)}</span></td><td>${escapeHTML(x.account||'—')}</td><td>${escapeHTML(x.method||'—')}</td><td>${escapeHTML(x.reference||'—')}${x.notes?`<div class="muted" style="margin-top:3px">${escapeHTML(x.notes)}</div>`:''}</td><td class="amount ${x.type==='Deposit'?'positive':'negative'}">${x.type==='Deposit'?'+':'−'}${money(x.amount)}</td><td><button class="delete-event" data-delete-fund="${x.id}" title="Delete funding entry">✕</button></td></tr>`).join('');
+  $$('[data-delete-fund]').forEach(b=>b.addEventListener('click',()=>deleteFunding(b.dataset.deleteFund)));
+}
+
+function tradeCloseDate(t){
+  return cleanString(t?.result?.exitDate || t?.source?.date || t?.source?.ledgerDate || t?.entry?.date);
+}
+function monthKey(dateString){
+  const s=cleanString(dateString);
+  return /^\d{4}-\d{2}/.test(s)?s.slice(0,7):'';
+}
+function monthLabel(key){
+  if(!/^\d{4}-\d{2}$/.test(key)) return key||'Unknown';
+  const [y,m]=key.split('-').map(Number);
+  return new Date(Date.UTC(y,m-1,1)).toLocaleDateString(undefined,{month:'short',year:'numeric',timeZone:'UTC'});
+}
+function maxTradingDrawdown(closedTrades){
+  const ordered=[...closedTrades].sort((a,b)=>tradeCloseDate(a).localeCompare(tradeCloseDate(b)));
+  let equity=0,peak=0,maxDD=0;
+  ordered.forEach(t=>{
+    equity+=resultMetrics(t,t.result).net;
+    peak=Math.max(peak,equity);
+    maxDD=Math.max(maxDD,peak-equity);
+  });
+  return maxDD;
+}
+function capitalBaseForROI(ft){
+  if(ft.deposits>0) return {value:ft.deposits,label:'Net P/L ÷ total deposits'};
+  const first=trades.map(t=>num(t.entry?.equityBefore)).find(v=>v>0);
+  return first>0?{value:first,label:'Net P/L ÷ first recorded equity'}:{value:0,label:'Add a deposit or starting equity to calculate ROI'};
+}
+function monthlyPerformanceRows(closed){
+  const monthSet=new Set();
+  closed.forEach(t=>{const k=monthKey(tradeCloseDate(t)); if(k) monthSet.add(k);});
+  funding.forEach(x=>{const k=monthKey(x.date); if(k) monthSet.add(k);});
+  const months=[...monthSet].sort();
+  let cumulativeFunding=0,cumulativePL=0;
+  const rows=[];
+
+  months.forEach(key=>{
+    const monthTrades=closed.filter(t=>monthKey(tradeCloseDate(t))===key);
+    const ms=monthTrades.map(t=>resultMetrics(t,t.result));
+    const net=ms.reduce((a,m)=>a+m.net,0);
+    const wins=ms.filter(m=>m.net>0).length, losses=ms.filter(m=>m.net<0).length;
+    const rs=ms.filter(m=>m.rMult!=null).map(m=>m.rMult);
+    const grossWins=ms.filter(m=>m.net>0).reduce((a,m)=>a+m.net,0);
+    const grossLoss=Math.abs(ms.filter(m=>m.net<0).reduce((a,m)=>a+m.net,0));
+
+    const f=funding.filter(x=>monthKey(x.date)===key);
+    const deposits=f.filter(x=>x.type==='Deposit').reduce((a,x)=>a+num(x.amount),0);
+    const withdrawals=f.filter(x=>x.type==='Withdrawal').reduce((a,x)=>a+num(x.amount),0);
+    const netFunding=deposits-withdrawals;
+
+    const startEquity=cumulativeFunding+cumulativePL;
+    const roiBase=startEquity+deposits;
+    const monthlyROI=roiBase>0?net/roiBase*100:null;
+
+    cumulativeFunding+=netFunding;
+    cumulativePL+=net;
+
+    rows.push({
+      key,label:monthLabel(key),trades:monthTrades.length,wins,losses,
+      winRate:monthTrades.length?wins/monthTrades.length*100:null,
+      net,roi:monthlyROI,
+      avgR:rs.length?rs.reduce((a,b)=>a+b,0)/rs.length:null,
+      pf:grossLoss>0?grossWins/grossLoss:(grossWins>0?Infinity:null),
+      netFunding,endEquity:cumulativeFunding+cumulativePL
+    });
+  });
+  return rows;
+}
+function groupedPerformance(closed,selector){
+  const map=new Map();
+  closed.forEach(t=>{
+    const key=selector(t)||'Unclassified';
+    const m=resultMetrics(t,t.result);
+    if(!map.has(key)) map.set(key,[]);
+    map.get(key).push(m);
+  });
+  return [...map.entries()].map(([name,ms])=>{
+    const wins=ms.filter(m=>m.net>0).length;
+    const net=ms.reduce((a,m)=>a+m.net,0);
+    const rs=ms.filter(m=>m.rMult!=null).map(m=>m.rMult);
+    return {
+      name,trades:ms.length,winRate:ms.length?wins/ms.length*100:0,
+      net,avg:ms.length?net/ms.length:0,
+      avgR:rs.length?rs.reduce((a,b)=>a+b,0)/rs.length:null
+    };
+  }).sort((a,b)=>{
+    if(b.winRate !== a.winRate) return b.winRate - a.winRate;
+    if(b.net !== a.net) return b.net - a.net;
+    return a.name.localeCompare(b.name);
+  });
+}
+function renderDashboard(){
+  const closed=trades.filter(t=>t.status==='CLOSED'&&t.result);
+  const open=trades.filter(t=>t.status==='OPEN');
+  const metrics=closed.map(t=>resultMetrics(t,t.result));
+  const wins=metrics.filter(m=>m.net>0), losses=metrics.filter(m=>m.net<0);
+  const net=metrics.reduce((s,m)=>s+m.net,0);
+  const rs=metrics.filter(m=>m.rMult!=null).map(m=>m.rMult);
+  const grossWins=wins.reduce((s,m)=>s+m.net,0);
+  const grossLoss=Math.abs(losses.reduce((s,m)=>s+m.net,0));
+  const ft=fundingTotals();
+  const realisedEquity=ft.net+net;
+  const capital=capitalBaseForROI(ft);
+  const roi=capital.value>0?net/capital.value*100:null;
+  const maxDD=maxTradingDrawdown(closed);
+
+  $('dEquity').textContent=money(realisedEquity);
+  $('dEquity').className=`value ${realisedEquity>0?'positive':realisedEquity<0?'negative':''}`;
+  $('dROI').textContent=roi==null?'—':pct(roi);
+  $('dROI').className=`value ${roi>0?'positive':roi<0?'negative':''}`;
+  $('dROISub').textContent=capital.label;
+  $('dNet').textContent=money(net);
+  $('dNet').className=`value ${net>0?'positive':net<0?'negative':''}`;
+  $('dWinRate').textContent=closed.length?`${(wins.length/closed.length*100).toFixed(1)}%`:'0.0%';
+  $('dPF').textContent=grossLoss>0?(grossWins/grossLoss).toFixed(2):(grossWins>0?'∞':'—');
+  $('dAvgR').textContent=rs.length?`${(rs.reduce((a,b)=>a+b,0)/rs.length).toFixed(2)}R`:'—';
+  $('dExpectancy').textContent=closed.length?money(net/closed.length):'$0.00';
+  $('dMaxDD').textContent=money(maxDD);
+  $('dOpen').textContent=open.length;
+  $('dClosed').textContent=closed.length;
+  $('dDeposits').textContent=money(ft.deposits);
+  $('dWithdrawals').textContent=money(ft.withdrawals);
+
+  const plannedRRs=closed.map(t=>plannedRR(t.entry||{})).filter(v=>v!=null&&Number.isFinite(v));
+  const maes=metrics.map(m=>m.maeR).filter(v=>v!=null&&Number.isFinite(v));
+  const mfes=metrics.map(m=>m.mfeR).filter(v=>v!=null&&Number.isFinite(v));
+  const planRecorded=closed.filter(t=>cleanString(t.result?.planFollowed));
+  const fullyFollowed=planRecorded.filter(t=>cleanString(t.result?.planFollowed).startsWith('Yes')).length;
+  $('dPlannedRR').textContent=plannedRRs.length?`1 : ${(plannedRRs.reduce((a,b)=>a+b,0)/plannedRRs.length).toFixed(2)}`:'—';
+  $('dMAE').textContent=maes.length?`${(maes.reduce((a,b)=>a+b,0)/maes.length).toFixed(2)}R`:'—';
+  $('dMFE').textContent=mfes.length?`${(mfes.reduce((a,b)=>a+b,0)/mfes.length).toFixed(2)}R`:'—';
+  $('dPlanFollow').textContent=planRecorded.length?`${(fullyFollowed/planRecorded.length*100).toFixed(1)}%`:'—';
+
+  const ranked=closed.map(t=>({t,m:resultMetrics(t,t.result)})).sort((a,b)=>b.m.net-a.m.net);
+  const best=ranked[0], worst=ranked[ranked.length-1];
+  $('dBest').textContent=best?money(best.m.net):'$0.00';
+  $('dBestSub').textContent=best?`${best.t.entry?.instrument||'Unknown'} · ${tradeCloseDate(best.t)||'No date'}`:'—';
+  $('dWorst').textContent=worst?money(worst.m.net):'$0.00';
+  $('dWorstSub').textContent=worst?`${worst.t.entry?.instrument||'Unknown'} · ${tradeCloseDate(worst.t)||'No date'}`:'—';
+
+  const monthly=monthlyPerformanceRows(closed).slice(-12);
+  const body=$('monthlyBody');
+  if(!monthly.length){
+    body.innerHTML='<tr><td colspan="11" class="muted" style="text-align:center;padding:20px">Monthly analysis will appear after you record funding or close trades.</td></tr>';
+    $('monthlyBars').innerHTML='<div class="folder-empty">No monthly performance data yet.</div>';
+  }else{
+    body.innerHTML=monthly.slice().reverse().map(r=>`<tr>
+      <td>${escapeHTML(r.label)}</td>
+      <td>${r.trades}</td><td>${r.wins}</td><td>${r.losses}</td>
+      <td>${r.winRate==null?'—':r.winRate.toFixed(1)+'%'}</td>
+      <td class="${r.net>0?'positive':r.net<0?'negative':''}">${money(r.net)}</td>
+      <td class="${r.roi>0?'positive':r.roi<0?'negative':''}">${r.roi==null?'—':r.roi.toFixed(2)+'%'}</td>
+      <td>${r.avgR==null?'—':r.avgR.toFixed(2)+'R'}</td>
+      <td>${r.pf==null?'—':r.pf===Infinity?'∞':r.pf.toFixed(2)}</td>
+      <td class="${r.netFunding>0?'positive':r.netFunding<0?'negative':''}">${money(r.netFunding)}</td>
+      <td>${money(r.endEquity)}</td>
+    </tr>`).join('');
+
+    const maxAbs=Math.max(...monthly.map(r=>Math.abs(r.net)),1);
+    $('monthlyBars').innerHTML=monthly.map(r=>{
+      const width=Math.max(1,Math.abs(r.net)/maxAbs*100);
+      return `<div class="month-bar-row">
+        <span>${escapeHTML(r.label.replace(' ',' '))}</span>
+        <div class="month-bar-track"><div class="month-bar-fill ${r.net>=0?'pos':'neg'}" style="width:${width}%"></div></div>
+        <span class="month-bar-value ${r.net>0?'positive':r.net<0?'negative':''}">${money(r.net)}</span>
+      </div>`;
+    }).join('');
+  }
+
+  const inst=groupedPerformance(closed,t=>cleanString(t.entry?.instrument).toUpperCase()||'Unknown');
+  $('instrumentBody').innerHTML=inst.length?inst.map(r=>`<tr><td>${escapeHTML(r.name)}</td><td>${r.trades}</td><td>${r.winRate.toFixed(1)}%</td><td class="${r.net>0?'positive':r.net<0?'negative':''}">${money(r.net)}</td><td>${money(r.avg)}</td><td>${r.avgR==null?'—':r.avgR.toFixed(2)+'R'}</td></tr>`).join(''):'<tr><td colspan="6" class="muted" style="text-align:center;padding:18px">No closed trades yet.</td></tr>';
+
+  const strat=groupedPerformance(closed,t=>cleanString(t.entry?.strategy)||'Unclassified');
+  $('strategyBody').innerHTML=strat.length?strat.map(r=>`<tr><td>${escapeHTML(r.name)}</td><td>${r.trades}</td><td>${r.winRate.toFixed(1)}%</td><td class="${r.net>0?'positive':r.net<0?'negative':''}">${money(r.net)}</td><td>${r.avgR==null?'—':r.avgR.toFixed(2)+'R'}</td></tr>`).join(''):'<tr><td colspan="5" class="muted" style="text-align:center;padding:18px">No strategy performance data yet.</td></tr>';
+
+  updateModuleNav();
+  if($('evidenceMonth')&&!getValue('evidenceMonth')){
+    const now=nowParts().date.slice(0,7);
+    setValue('evidenceMonth',now);
+  }
+  refreshMonthlyEvidence();
+}
+function tradeNet(t){ return t.status==='CLOSED'&&t.result?resultMetrics(t,t.result).net:null; }
+function renderJournal(){
+  updateModuleNav();
+  if(currentView==='DASHBOARD'||currentView==='NEW') return;
+
+  const q=getValue('searchInput')?.trim().toLowerCase()||'';
+  const status=currentView==='OPEN'?'OPEN':'CLOSED';
+  let list=trades.filter(t=>t.status===status);
+
+  list.sort((a,b)=>{
+    const da=status==='CLOSED'?tradeCloseDate(a):(a.entry?.date||'');
+    const db=status==='CLOSED'?tradeCloseDate(b):(b.entry?.date||'');
+    return String(db).localeCompare(String(da));
+  });
+
+  if(q) list=list.filter(t=>[t.id,t.entry?.instrument,t.entry?.strategy,t.entry?.broker,t.entry?.accountName].some(v=>String(v||'').toLowerCase().includes(q)));
+
+  $('journalCount').textContent=`${list.length} shown · ${trades.filter(t=>t.status===status).length} in folder`;
+  const el=$('tradeList');
+
+  if(!list.length){
+    el.innerHTML=`<div class="folder-empty">${status==='OPEN'
+      ?'No entered trades are waiting for management.'
+      :'No completed trades are in the closed archive.'}</div>`;
+    return;
+  }
+
+  el.innerHTML=list.map(t=>{
+    const e=t.entry||{}, net=tradeNet(t), cls=t.id===currentId?'selected':'';
+    const stageText=status==='OPEN'
+      ?`${(t.management||[]).length} management event${(t.management||[]).length===1?'':'s'}`
+      :`${tradeCloseDate(t)||'No close date'}`;
+    return `<div class="trade-card ${cls}" data-trade-id="${t.id}">
+      <div class="trade-row">
+        <div><div class="symbol">${escapeHTML(e.instrument||'Untitled Trade')}</div><div class="trade-id">${escapeHTML(t.id)}</div></div>
+        <div class="inline-actions">
+          <span class="badge ${e.direction==='SELL'?'sell':e.direction==='BUY'?'buy':''}">${escapeHTML(e.direction||'UNKNOWN')}</span>
+          <span class="badge ${status.toLowerCase()}">${status==='OPEN'?'MANAGE':'CLOSED'}</span>
+        </div>
+      </div>
+      <div class="trade-meta">
+        <span>${escapeHTML(e.date||'No entry date')} · ${escapeHTML(e.strategy||'No strategy')}</span>
+        <span>${e.plannedEntry?fmt(e.plannedEntry,6):'—'}</span>
+        <span>${escapeHTML(stageText)}</span>
+        <span class="${net==null?'muted':net>=0?'positive':'negative'}">${net==null?'Open':money(net)}</span>
+      </div>
+    </div>`;
+  }).join('');
+
+  $$('[data-trade-id]').forEach(card=>card.addEventListener('click',()=>selectTrade(card.dataset.tradeId)));
+}
+function selectTrade(id){
+  const t=trades.find(x=>x.id===id);
+  if(!t) return;
+  currentId=id;
+  if(t.status==='DRAFT'){ currentView='NEW'; currentStage=1; }
+  else if(t.status==='OPEN'){ currentView='OPEN'; currentStage=2; }
+  else { currentView='CLOSED'; currentStage=3; }
+  showTradeShell();
+  openWorkspace();
+  loadTradeIntoUI();
+  switchStage(currentStage,false);
+}
+function updateWorkspaceHeader(){
+  const t=currentTrade(); if(!t) return; const e=t.entry||{}; $('tradeTitle').textContent=e.instrument?`${e.instrument} CFD Trade`:'New CFD Trade'; $('tradeSubtitle').textContent=`${t.id} · ${e.date||'No date'} ${e.time||''}`;
+  const sb=$('tradeStatusBadge'); sb.textContent=t.status; sb.className=`badge ${t.status.toLowerCase()}`; const db=$('tradeDirectionBadge'); db.textContent=e.direction||'UNKNOWN'; db.className=`badge ${e.direction==='SELL'?'sell':e.direction==='BUY'?'buy':''}`;
+}
+function updateStages(){
+  const t=currentTrade(); if(!t) return;
+  $$('.stage').forEach(b=>b.classList.remove('done'));
+  if(t.status==='OPEN'||t.status==='CLOSED') $$('.stage')[0].classList.add('done');
+  if((t.management||[]).length||t.status==='CLOSED') $$('.stage')[1].classList.add('done');
+  if(t.status==='CLOSED') $$('.stage')[2].classList.add('done');
+
+  ['wfEntry','wfManage','wfClosed'].forEach(id=>$(id)?.classList.remove('current'));
+  if(t.status==='DRAFT') $('wfEntry')?.classList.add('current');
+  else if(t.status==='OPEN') $('wfManage')?.classList.add('current');
+  else $('wfClosed')?.classList.add('current');
+}
+function loadTradeIntoUI(){
+  const t=currentTrade(); if(!t){closeWorkspace();return;} if(t.status==='OPEN'&&currentView==='OPEN') currentStage=2; if(t.status==='CLOSED'&&currentView==='CLOSED') currentStage=3; if(t.status==='DRAFT') currentStage=1; openWorkspace(); const e=t.entry||{};
+  const map={entryDate:e.date,entryTime:e.time,tradeId:t.id,instrument:e.instrument,assetType:e.assetType||'Forex',direction:e.direction??'',broker:e.broker,accountName:e.accountName,session:e.session||'London',strategy:e.strategy,htfBias:e.htfBias||'Neutral',entryTimeframe:e.entryTimeframe,plannedEntry:e.plannedEntry,actualEntry:e.actualEntry,initialSL:e.initialSL,initialTP:e.initialTP,equityBefore:e.equityBefore,plannedRiskPct:e.plannedRiskPct,positionSize:e.positionSize,valuePerUnit:e.valuePerUnit,pipSize:e.pipSize,leverage:e.leverage,spreadCost:e.spreadCost??0,entryCommission:e.entryCommission??0,entryTrigger:e.entryTrigger,keyLevel:e.keyLevel,marketCondition:e.marketCondition||'Trending',newsRisk:e.newsRisk,tradeThesis:e.tradeThesis,preTradeNotes:e.preTradeNotes}; Object.entries(map).forEach(([id,v])=>setValue(id,v));
+  const n=nowParts(); setValue('adjustDate',n.date); setValue('adjustTime',n.time); const r=t.result||{}; const rmap={exitDate:r.exitDate||n.date,exitTime:r.exitTime||n.time,finalExitPrice:r.finalExitPrice,exitReason:r.exitReason||'Take Profit',finalClosedSize:r.finalClosedSize,finalLegGrossPnl:r.finalLegGrossPnl,exitCommission:r.exitCommission??0,swapFinancing:r.swapFinancing??0,otherCosts:r.otherCosts??0,equityAfter:r.equityAfter,lowestPrice:r.lowestPrice,highestPrice:r.highestPrice,executionQuality:r.executionQuality,planFollowed:r.planFollowed,primaryMistake:r.primaryMistake,primaryStrength:r.primaryStrength,reviewNotes:r.reviewNotes}; Object.entries(rmap).forEach(([id,v])=>setValue(id,v));
+  updateWorkspaceHeader(); updateStages(); calculateEntryPreview(); renderManagement(); calculateResultPreview(); switchStage(currentStage,false); renderJournal();
+  applyTradeLocks(t);
+  refreshTradeEvidence();
+}
+function setSectionDisabled(sectionId,disabled){
+  $$(`#${sectionId} input, #${sectionId} select, #${sectionId} textarea`).forEach(el=>{
+    if(el.id==='tradeId'||el.type==='file') return;
+    el.disabled=disabled;
+  });
+}
+function applyTradeLocks(t){
+  const entryLocked=t.status!=='DRAFT', managementLocked=t.status!=='OPEN', resultLocked=t.status!=='OPEN';
+  setSectionDisabled('stage1',entryLocked); setSectionDisabled('stage2',managementLocked); setSectionDisabled('stage3',resultLocked);
+  $('entryLockedNote').classList.toggle('show',entryLocked); $('saveDraftBtn').disabled=entryLocked; $('openTradeBtn').disabled=entryLocked; $('addAdjustmentBtn').disabled=managementLocked; $('closeTradeBtn').disabled=resultLocked;
+  const stages=$$('.stage'); if(stages[1]) stages[1].disabled=t.status==='DRAFT'; if(stages[2]) stages[2].disabled=t.status==='DRAFT';
+  if(t.status==='CLOSED'){ setSectionDisabled('stage2',true); setSectionDisabled('stage3',true); }
+}
+function switchStage(n,scroll=true){
+  const t=currentTrade(); if(!t) return;
+  if(t.status==='DRAFT' && n>1){ toast('Complete Entry first','Only an entered/open trade can move into Management or Result.'); n=1; }
+  currentStage=n; [1,2,3].forEach(i=>{$(`stage${i}`).classList.toggle('hidden',i!==n)}); $$('.stage').forEach((b,i)=>b.classList.toggle('active',i===n-1));
+  if(n===2) renderManagement(); if(n===3){ if(!t.result){ const st=currentState(t); if(getValue('finalClosedSize')==='') setValue('finalClosedSize',st.size); } calculateResultPreview(); } applyTradeLocks(t); if(scroll) window.scrollTo({top:0,behavior:'smooth'});
+}
+function deleteCurrentTrade(){
+  const t=currentTrade(); if(!t) return;
+  if(!confirm(`Delete ${t.entry?.instrument||t.id}? This cannot be undone.`)) return;
+  trades=trades.filter(x=>x.id!==t.id); currentId=null; saveStore();
+  deleteAttachmentsForOwner('TRADE',t.id);
+  if(currentView==='NEW') createTrade(); else setView(currentView);
+  toast('Trade deleted');
+}
+function escapeHTML(s){ return String(s??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
+
+async function attachmentManifest(){
+  try{
+    const db=await openAttachmentDB();
+    const rows=await new Promise((resolve,reject)=>{
+      const tx=db.transaction(ATTACHMENT_STORE,'readonly');
+      const req=tx.objectStore(ATTACHMENT_STORE).getAll();
+      req.onsuccess=()=>resolve(req.result||[]);
+      req.onerror=()=>reject(req.error);
+    });
+    return rows.map(r=>({ownerType:r.ownerType,ownerId:r.ownerId,kind:r.kind,name:r.name,type:r.type,size:r.size,updatedAt:r.updatedAt}));
+  }catch(err){ return []; }
+}
+async function exportData(){
+  const attachments=await attachmentManifest();
+  const payload={
+    schemaVersion:SCHEMA_VERSION,
+    exportedAt:new Date().toISOString(),
+    app:MODULE_CONFIG.name,
+    module:PUBLIC_MODULE_DESCRIPTOR,
+    trades,funding,
+    attachmentManifest:attachments,
+    attachmentNote:'Attachment file metadata is listed here; the actual local screenshot/PDF blobs remain in this browser evidence store.'
+  };
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`cfd-trade-tracker-${localDate(new Date())}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),300);
+  toast('Export created',`${trades.length} trades · ${funding.length} funding entries · ${attachments.length} evidence-file references.`);
+}
+
+function cleanString(v){ return v==null?'':String(v).trim(); }
+function toNullableNumber(v){
+  if(v===''||v==null) return null;
+  const n=Number(v); return Number.isFinite(n)?n:null;
+}
+function validStatus(v,result){
+  const x=cleanString(v).toUpperCase();
+  if(['DRAFT','OPEN','CLOSED'].includes(x)) return x;
+  return result?'CLOSED':'OPEN';
+}
+function normalizedDirection(v,source){
+  const d=cleanString(v).toUpperCase();
+  if(d==='BUY'||d==='LONG') return 'BUY';
+  if(d==='SELL'||d==='SHORT') return 'SELL';
+  const raw=cleanString(source?.directionRaw).toUpperCase();
+  if(raw==='LONG') return 'BUY';
+  if(raw==='SHORT') return 'SELL';
+  return '';
+}
+function normalizeManagementRow(raw,tradeId,index){
+  if(!raw||typeof raw!=='object') return null;
+  return {
+    id:cleanString(raw.id)||`IMP-MGT-${tradeId}-${index+1}`,
+    date:cleanString(raw.date), time:cleanString(raw.time),
+    type:cleanString(raw.type)||'Imported Adjustment',
+    marketPrice:toNullableNumber(raw.marketPrice),
+    previousSL:toNullableNumber(raw.previousSL), newSL:toNullableNumber(raw.newSL),
+    previousTP:toNullableNumber(raw.previousTP), newTP:toNullableNumber(raw.newTP),
+    positionBefore:toNullableNumber(raw.positionBefore), positionAfter:toNullableNumber(raw.positionAfter),
+    partialExitPrice:toNullableNumber(raw.partialExitPrice),
+    partialRealizedPnl:toNullableNumber(raw.partialRealizedPnl),
+    reason:cleanString(raw.reason), notes:cleanString(raw.notes), imported:true
+  };
+}
+function normalizeTradeRecord(raw,index){
+  if(!raw||typeof raw!=='object'||Array.isArray(raw)) return {error:`Record ${index+1} is not a trade object.`};
+
+  const source=(raw.source&&typeof raw.source==='object'&&!Array.isArray(raw.source))?deepClone(raw.source):{};
+  const e=(raw.entry&&typeof raw.entry==='object')?raw.entry:{};
+  const rr=(raw.result&&typeof raw.result==='object')?raw.result:null;
+  const id=cleanString(raw.id)||cleanString(source.positionId)||(source.ledgerTransactionId?`CAP-TXN-${source.ledgerTransactionId}`:uid());
+
+  const entry={
+    date:cleanString(e.date), time:cleanString(e.time),
+    instrument:cleanString(e.instrument).toUpperCase(),
+    assetType:cleanString(e.assetType)||'Other CFD',
+    direction:normalizedDirection(e.direction,source),
+    broker:cleanString(e.broker)||cleanString(source.broker),
+    accountName:cleanString(e.accountName),
+    session:cleanString(e.session), strategy:cleanString(e.strategy),
+    htfBias:cleanString(e.htfBias), entryTimeframe:cleanString(e.entryTimeframe),
+
+    plannedEntry:toNullableNumber(e.plannedEntry),
+    actualEntry:toNullableNumber(e.actualEntry ?? source.openPrice),
+    initialSL:toNullableNumber(e.initialSL ?? source.reportedStopLoss),
+    initialTP:toNullableNumber(e.initialTP ?? source.reportedTakeProfit),
+    equityBefore:toNullableNumber(e.equityBefore),
+    plannedRiskPct:toNullableNumber(e.plannedRiskPct),
+    positionSize:toNullableNumber(e.positionSize ?? source.quantity),
+    valuePerUnit:toNullableNumber(e.valuePerUnit ?? source.conversionRate ?? source.fxRate),
+    pipSize:toNullableNumber(e.pipSize),
+    leverage:toNullableNumber(e.leverage),
+    spreadCost:toNullableNumber(e.spreadCost)??0,
+    entryCommission:toNullableNumber(e.entryCommission)??0,
+
+    entryTrigger:cleanString(e.entryTrigger),
+    keyLevel:cleanString(e.keyLevel),
+    marketCondition:cleanString(e.marketCondition),
+    newsRisk:cleanString(e.newsRisk),
+    tradeThesis:cleanString(e.tradeThesis),
+    preTradeNotes:cleanString(e.preTradeNotes)
+  };
+
+  const result=rr?{
+    exitDate:cleanString(rr.exitDate), exitTime:cleanString(rr.exitTime),
+    finalExitPrice:toNullableNumber(rr.finalExitPrice ?? source.closePrice),
+    exitReason:cleanString(rr.exitReason),
+    finalClosedSize:toNullableNumber(rr.finalClosedSize ?? source.quantity),
+    finalLegGrossPnl:toNullableNumber(rr.finalLegGrossPnl ?? source.realisedPnl ?? source.ledgerAmount),
+    exitCommission:toNullableNumber(rr.exitCommission)??0,
+    swapFinancing:toNullableNumber(rr.swapFinancing)??0,
+    otherCosts:toNullableNumber(rr.otherCosts)??0,
+    equityAfter:toNullableNumber(rr.equityAfter ?? source.balanceAfter),
+    lowestPrice:toNullableNumber(rr.lowestPrice),
+    highestPrice:toNullableNumber(rr.highestPrice),
+    executionQuality:cleanString(rr.executionQuality),
+    planFollowed:cleanString(rr.planFollowed),
+    primaryMistake:cleanString(rr.primaryMistake),
+    primaryStrength:cleanString(rr.primaryStrength),
+    reviewNotes:cleanString(rr.reviewNotes)
+  }:null;
+
+  const management=Array.isArray(raw.management)
+    ? raw.management.map((x,i)=>normalizeManagementRow(x,id,i)).filter(Boolean)
+    : [];
+
+  const trade={
+    schemaVersion:SCHEMA_VERSION,
+    id,
+    status:validStatus(raw.status,result),
+    createdAt:cleanString(raw.createdAt)||new Date().toISOString(),
+    updatedAt:cleanString(raw.updatedAt)||cleanString(raw.createdAt)||new Date().toISOString(),
+    entry, management, result, source
+  };
+
+  const warnings=[];
+  if(!entry.instrument) warnings.push(`${id}: instrument is missing.`);
+  if(!entry.direction) warnings.push(`${id}: direction is unavailable and is retained as UNKNOWN rather than guessed.`);
+  if(!entry.date&&trade.status!=='DRAFT') warnings.push(`${id}: original entry date is unavailable in the source statement.`);
+  if(trade.status==='OPEN'&&entry.actualEntry==null&&entry.plannedEntry==null) warnings.push(`${id}: open trade has no entry price.`);
+  if(trade.status==='CLOSED'&&result&&result.finalLegGrossPnl==null) warnings.push(`${id}: closed trade has no realised P/L.`);
+  return {trade,warnings};
+}
+function normalizeFundingRecord(raw,index){
+  if(!raw||typeof raw!=='object') return null;
+  const text=cleanString(raw.type);
+  const type=/withdraw/i.test(text)?'Withdrawal':/deposit/i.test(text)?'Deposit':'';
+  const amount=Math.abs(num(raw.amount));
+  if(!type||!(amount>0)) return null;
+  return {
+    id:cleanString(raw.id)||`IMP-FUND-${index+1}-${Date.now().toString(36)}`,
+    date:cleanString(raw.date), time:cleanString(raw.time), type, amount,
+    account:cleanString(raw.account),
+    method:cleanString(raw.method)||'Imported',
+    reference:cleanString(raw.reference),
+    notes:cleanString(raw.notes),
+    createdAt:cleanString(raw.createdAt)||new Date().toISOString()
+  };
+}
+function tradeKeys(t){
+  const src=t?.source||{};
+  return [
+    t?.id?`ID:${t.id}`:'',
+    src.positionId?`POS:${src.positionId}`:'',
+    src.ledgerTransactionId?`LEDGER:${src.ledgerTransactionId}`:''
+  ].filter(Boolean);
+}
+function sameTradeIdentity(a,b){
+  const ka=new Set(tradeKeys(a));
+  return tradeKeys(b).some(k=>ka.has(k));
+}
+function isMeaningful(v){ return !(v==null||v===''||(Array.isArray(v)&&!v.length)); }
+function mergeObjectsPreserveExisting(existing={},incoming={}){
+  const out={...incoming,...existing};
+  Object.keys(incoming).forEach(k=>{
+    if(!isMeaningful(existing[k])&&isMeaningful(incoming[k])) out[k]=incoming[k];
+  });
+  return out;
+}
+function mergeManagement(existing=[],incoming=[]){
+  const out=existing.map(deepClone);
+  incoming.forEach(a=>{
+    const duplicate=out.some(x=>
+      (x.id&&a.id&&x.id===a.id) ||
+      adjustmentFingerprint(x)===adjustmentFingerprint(a)
+    );
+    if(!duplicate) out.push(deepClone(a));
+  });
+  return out;
+}
+function mergeTradeRecord(existing,incoming){
+  const status=
+    existing.status==='CLOSED'||incoming.status==='CLOSED'?'CLOSED':
+    existing.status==='OPEN'||incoming.status==='OPEN'?'OPEN':'DRAFT';
+
+  return {
+    ...incoming,
+    ...existing,
+    schemaVersion:SCHEMA_VERSION,
+    id:existing.id||incoming.id,
+    status,
+    createdAt:existing.createdAt||incoming.createdAt,
+    updatedAt:new Date().toISOString(),
+    entry:mergeObjectsPreserveExisting(existing.entry||{},incoming.entry||{}),
+    management:mergeManagement(existing.management||[],incoming.management||[]),
+    result:(existing.result||incoming.result)
+      ? mergeObjectsPreserveExisting(existing.result||{},incoming.result||{})
+      : null,
+    source:{...(existing.source||{}),...(incoming.source||{})}
+  };
+}
+function mergeTradeCollections(existing,incoming){
+  const out=existing.map(deepClone);
+  let added=0,updated=0;
+  incoming.forEach(t=>{
+    const i=out.findIndex(x=>sameTradeIdentity(x,t));
+    if(i>=0){ out[i]=mergeTradeRecord(out[i],t); updated++; }
+    else { out.push(deepClone(t)); added++; }
+  });
+  return {trades:out,added,updated};
+}
+function dedupeIncomingTrades(records){
+  const out=[]; let duplicates=0;
+  records.forEach(t=>{
+    const i=out.findIndex(x=>sameTradeIdentity(x,t));
+    if(i>=0){ out[i]=mergeTradeRecord(out[i],t); duplicates++; }
+    else out.push(t);
+  });
+  return {trades:out,duplicates};
+}
+function fundingFingerprint(x){
+  return [x.date,x.time,x.type,x.amount,x.account,x.reference]
+    .map(v=>cleanString(v).toUpperCase()).join('|');
+}
+function mergeFundingCollections(existing,incoming){
+  const out=existing.map(deepClone);
+  const seen=new Set(out.map(fundingFingerprint));
+  let added=0,duplicates=0;
+  incoming.forEach(x=>{
+    const fp=fundingFingerprint(x);
+    if(seen.has(fp)){ duplicates++; return; }
+    seen.add(fp); out.push(deepClone(x)); added++;
+  });
+  return {funding:out,added,duplicates};
+}
+function showImportPreview(plan){
+  pendingImport=plan;
+  $('importFileLabel').textContent=`${plan.fileName} · schema ${plan.schemaVersion ?? 'unspecified'}`;
+  $('ipTrades').textContent=plan.trades.length;
+  $('ipStatus').textContent=`${plan.open} / ${plan.closed}`;
+  $('ipFunding').textContent=plan.funding.length;
+  $('ipDuplicates').textContent=plan.fileDuplicates+plan.existingMatches;
+
+  if(plan.errors.length) showValidation('importValidation',plan.errors);
+  else hideValidation('importValidation');
+
+  const lines=[
+    `<strong>${plan.trades.length}</strong> valid trade records are ready to import.`,
+    `${plan.open} open · ${plan.closed} closed · ${plan.draft} draft.`,
+    `${plan.existingMatches} record${plan.existingMatches===1?'':'s'} already match the current journal by Trade ID, Position ID, or ledger transaction ID.`,
+    `${plan.fileDuplicates} duplicate source record${plan.fileDuplicates===1?'':'s'} inside the selected file were consolidated before posting.`,
+    plan.fundingProvided
+      ? `${plan.funding.length} funding row${plan.funding.length===1?'':'s'} found.`
+      : `No funding array is present, so the existing deposit/withdrawal ledger will not be changed.`,
+    plan.warnings.length
+      ? `<strong>Non-blocking source gaps:</strong><br>${plan.warnings.slice(0,25).map(escapeHTML).join('<br>')}${plan.warnings.length>25?`<br>…and ${plan.warnings.length-25} more.`:''}`
+      : `No source-gap warnings detected.`
+  ];
+
+  $('importReport').innerHTML=lines.join('<br><br>');
+  $('mergeImportBtn').disabled=!!plan.errors.length||!plan.trades.length;
+  $('replaceImportBtn').disabled=!!plan.errors.length||!plan.trades.length;
+  $('importModal').classList.remove('hidden');
+}
+function closeImportPreview(){
+  $('importModal').classList.add('hidden');
+  pendingImport=null;
+  $('importFile').value='';
+  hideValidation('importValidation');
+}
+function importData(file){
+  if(!file) return;
+  const reader=new FileReader();
+
+  reader.onerror=()=>{
+    alert('Import failed: the selected file could not be read.');
+    $('importFile').value='';
+  };
+
+  reader.onload=()=>{
+    try{
+      const parsed=JSON.parse(String(reader.result||'').replace(/^\uFEFF/,''));
+      const rawTrades=Array.isArray(parsed)
+        ? parsed
+        : Array.isArray(parsed?.trades)
+          ? parsed.trades
+          : null;
+
+      if(!rawTrades) throw new Error('Expected a top-level "trades" array (schemaVersion 3 CFD JSON).');
+
+      const normalized=[],warnings=[],errors=[];
+      rawTrades.forEach((raw,i)=>{
+        const n=normalizeTradeRecord(raw,i);
+        if(n.error) errors.push(n.error);
+        else{
+          normalized.push(n.trade);
+          warnings.push(...n.warnings);
+        }
+      });
+
+      const deduped=dedupeIncomingTrades(normalized);
+      const rawFunding=Array.isArray(parsed?.funding)?parsed.funding:[];
+      const fundingRows=rawFunding.map((x,i)=>normalizeFundingRecord(x,i)).filter(Boolean);
+      const existingMatches=deduped.trades.filter(t=>trades.some(x=>sameTradeIdentity(x,t))).length;
+
+      showImportPreview({
+        fileName:file.name,
+        schemaVersion:parsed?.schemaVersion??null,
+        trades:deduped.trades,
+        funding:fundingRows,
+        fundingProvided:Array.isArray(parsed?.funding),
+        fileDuplicates:deduped.duplicates,
+        existingMatches,
+        warnings,
+        errors,
+        open:deduped.trades.filter(t=>t.status==='OPEN').length,
+        closed:deduped.trades.filter(t=>t.status==='CLOSED').length,
+        draft:deduped.trades.filter(t=>t.status==='DRAFT').length
+      });
+    }catch(err){
+      console.error(err);
+      alert(`Import failed: ${err.message||'Invalid JSON file.'}`);
+      $('importFile').value='';
+    }
+  };
+
+  reader.readAsText(file);
+}
+function commitImport(mode){
+  if(!pendingImport) return;
+  const p=pendingImport;
+
+  if(mode==='merge'){
+    const mt=mergeTradeCollections(trades,p.trades);
+    trades=mt.trades;
+
+    let fundingMessage='funding unchanged';
+    if(p.fundingProvided){
+      const mf=mergeFundingCollections(funding,p.funding);
+      funding=mf.funding;
+      fundingMessage=`${mf.added} funding added`;
+    }
+
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(trades));
+    localStorage.setItem(FUNDING_KEY,JSON.stringify(funding));
+    currentId=null;
+    currentView='DASHBOARD';
+    showDashboard();
+    renderJournal(); renderDashboard(); renderFunding();
+    closeImportPreview();
+    toast('JSON import complete',`${mt.added} new trades · ${mt.updated} matched/updated · ${fundingMessage}.`);
+    return;
+  }
+
+  if(mode==='replace'){
+    if(!confirm(`Replace the current ${trades.length}-trade journal with ${p.trades.length} validated imported trades? Export a backup first if you need the current journal.`)) return;
+
+    trades=p.trades.map(deepClone);
+    if(p.fundingProvided) funding=p.funding.map(deepClone);
+
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(trades));
+    localStorage.setItem(FUNDING_KEY,JSON.stringify(funding));
+    currentId=null;
+    currentView='DASHBOARD';
+    showDashboard();
+    renderJournal(); renderDashboard(); renderFunding();
+    closeImportPreview();
+    toast('Journal replaced',`${trades.length} validated trades loaded${p.fundingProvided?` · ${funding.length} funding rows loaded`:''}.`);
+  }
+}
+
+// Listeners
+$$('[data-view]').forEach(b=>b.addEventListener('click',()=>setView(b.dataset.view)));
+$('dashboardFundingBtn').addEventListener('click',openFunding);
+
+$('uploadEntryScreenshotBtn').addEventListener('click',()=>{ if(currentTrade()?.status==='DRAFT') $('entryScreenshotInput').click(); });
+$('entryScreenshotInput').addEventListener('change',async e=>{
+  const t=currentTrade(),file=e.target.files?.[0]; e.target.value='';
+  if(!t||t.status!=='DRAFT') return;
+  if(await saveEvidenceFile('TRADE',t.id,'entryScreenshot',file,'image')) refreshTradeEvidence();
+});
+$('viewEntryScreenshotBtn').addEventListener('click',()=>{ const t=currentTrade(); if(t) viewAttachment('TRADE',t.id,'entryScreenshot'); });
+$('removeEntryScreenshotBtn').addEventListener('click',async()=>{
+  const t=currentTrade(); if(!t||t.status!=='DRAFT') return;
+  if(confirm('Remove the pre-entry screenshot from this draft?')){ await deleteAttachment('TRADE',t.id,'entryScreenshot'); refreshTradeEvidence(); }
+});
+
+$('uploadResultScreenshotBtn').addEventListener('click',()=>{ if(currentTrade()?.status==='OPEN') $('resultScreenshotInput').click(); });
+$('resultScreenshotInput').addEventListener('change',async e=>{
+  const t=currentTrade(),file=e.target.files?.[0]; e.target.value='';
+  if(!t||t.status!=='OPEN') return;
+  if(await saveEvidenceFile('TRADE',t.id,'resultScreenshot',file,'image')) refreshTradeEvidence();
+});
+$('viewResultScreenshotBtn').addEventListener('click',()=>{ const t=currentTrade(); if(t) viewAttachment('TRADE',t.id,'resultScreenshot'); });
+$('removeResultScreenshotBtn').addEventListener('click',async()=>{
+  const t=currentTrade(); if(!t||t.status!=='OPEN') return;
+  if(confirm('Remove the result screenshot before closing this trade?')){ await deleteAttachment('TRADE',t.id,'resultScreenshot'); refreshTradeEvidence(); }
+});
+
+$('evidenceMonth').addEventListener('change',refreshMonthlyEvidence);
+$('uploadMonthlyPdfBtn').addEventListener('click',()=>{ if(evidenceMonthValue()) $('monthlyPdfInput').click(); });
+$('monthlyPdfInput').addEventListener('change',async e=>{
+  const month=evidenceMonthValue(),file=e.target.files?.[0]; e.target.value='';
+  if(!month) return;
+  if(await saveEvidenceFile('MONTH',month,'tradeHistoryPdf',file,'pdf')) refreshMonthlyEvidence();
+});
+$('viewMonthlyPdfBtn').addEventListener('click',()=>{ const month=evidenceMonthValue(); if(month) viewAttachment('MONTH',month,'tradeHistoryPdf'); });
+$('removeMonthlyPdfBtn').addEventListener('click',async()=>{
+  const month=evidenceMonthValue(); if(!month) return;
+  if(confirm(`Remove the broker trade-history PDF for ${monthLabel(month)}?`)){ await deleteAttachment('MONTH',month,'tradeHistoryPdf'); refreshMonthlyEvidence(); }
+});
+
+$('uploadMonthlyAnalyticsBtn').addEventListener('click',()=>{ if(evidenceMonthValue()) $('monthlyAnalyticsInput').click(); });
+$('monthlyAnalyticsInput').addEventListener('change',async e=>{
+  const month=evidenceMonthValue(),file=e.target.files?.[0]; e.target.value='';
+  if(!month) return;
+  if(await saveEvidenceFile('MONTH',month,'analyticsScreenshot',file,'image')) refreshMonthlyEvidence();
+});
+$('viewMonthlyAnalyticsBtn').addEventListener('click',()=>{ const month=evidenceMonthValue(); if(month) viewAttachment('MONTH',month,'analyticsScreenshot'); });
+$('removeMonthlyAnalyticsBtn').addEventListener('click',async()=>{
+  const month=evidenceMonthValue(); if(!month) return;
+  if(confirm(`Remove the broker analytics screenshot for ${monthLabel(month)}?`)){ await deleteAttachment('MONTH',month,'analyticsScreenshot'); refreshMonthlyEvidence(); }
+});
+
+$('fundsBtn').addEventListener('click',openFunding); $('closeFundsBtn').addEventListener('click',closeFunding); $('addFundBtn').addEventListener('click',addFunding); $('fundsModal').addEventListener('click',e=>{if(e.target===$('fundsModal')) closeFunding();});
+document.addEventListener('keydown',e=>{if(e.key!=='Escape') return; if(!$('importModal').classList.contains('hidden')) closeImportPreview(); else if(!$('fundsModal').classList.contains('hidden')) closeFunding();});
+$('emptyNew').addEventListener('click',createTrade); $('dashboardNewBtn').addEventListener('click',createTrade);
+$('deleteTradeBtn').addEventListener('click',deleteCurrentTrade); $('exportBtn').addEventListener('click',exportData); $('importBtn').addEventListener('click',()=>{ $('importFile').value=''; $('importFile').click(); }); $('importFile').addEventListener('change',e=>{if(e.target.files&&e.target.files[0]) importData(e.target.files[0]);}); $('cancelImportTop').addEventListener('click',closeImportPreview); $('cancelImportBtn').addEventListener('click',closeImportPreview); $('mergeImportBtn').addEventListener('click',()=>commitImport('merge')); $('replaceImportBtn').addEventListener('click',()=>commitImport('replace')); $('importModal').addEventListener('click',e=>{if(e.target===$('importModal')) closeImportPreview();});
+$('searchInput').addEventListener('input',renderJournal);
+$$('.stage').forEach(b=>b.addEventListener('click',()=>switchStage(Number(b.dataset.stage)))); $$('[data-go]').forEach(b=>b.addEventListener('click',()=>switchStage(Number(b.dataset.go))));
+$('saveDraftBtn').addEventListener('click',()=>{ if(saveEntryToModel('DRAFT')) toast('Draft saved','The trade remains editable and has not been marked open.'); });
+$('openTradeBtn').addEventListener('click',()=>{ if(saveEntryToModel('OPEN')){ currentView='OPEN'; currentStage=2; showTradeShell(); loadTradeIntoUI(); switchStage(2,false); renderJournal(); refreshTradeEvidence(); toast('Trade moved to Waiting for Management','The original entry and its pre-entry screenshot are locked. All later changes must be recorded as management events.'); } });
+$('addAdjustmentBtn').addEventListener('click',addAdjustment); $('closeTradeBtn').addEventListener('click',closeTrade);
+$('adjustType').addEventListener('change',()=>{prepareAdjustmentDefaults();autoPartialPnl();}); ['positionAfter','partialExitPrice'].forEach(id=>$(id).addEventListener('input',autoPartialPnl));
+['plannedEntry','actualEntry','initialSL','initialTP','equityBefore','plannedRiskPct','positionSize','valuePerUnit','pipSize','direction'].forEach(id=>$(id).addEventListener('input',calculateEntryPreview)); $('direction').addEventListener('change',calculateEntryPreview);
+['finalExitPrice','finalClosedSize'].forEach(id=>$(id).addEventListener('input',autoFinalLegPnl)); ['finalLegGrossPnl','exitCommission','swapFinancing','otherCosts','equityAfter','lowestPrice','highestPrice','exitDate','exitTime'].forEach(id=>$(id).addEventListener('input',calculateResultPreview));
+
+renderJournal(); renderDashboard(); renderFunding();
+currentView='DASHBOARD'; currentId=null; showDashboard(); closeWorkspace();
+resolveHubLink();
+announceModuleReady();
+})();
+</script>
+</body>
+</html>

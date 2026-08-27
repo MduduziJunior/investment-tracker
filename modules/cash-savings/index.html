@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="ProfitPilot Investment Tracker emergency cash savings module">
+  <meta name="theme-color" content="#071126">
+  <title>Cash Savings | ProfitPilot Investment Tracker</title>
+  <style>
+    :root{--navy:#0b1630;--panel:#111f3f;--blue:#3b82f6;--green:#22c55e;--red:#ef4444;--text:#edf4ff;--muted:#9eb0cc;--line:#293958;--bg:#071126}
+    *{box-sizing:border-box} body{margin:0;font-family:Inter,Segoe UI,Arial,sans-serif;background:linear-gradient(135deg,#071126,#0d1c38);color:var(--text);min-height:100vh}
+    .wrap{max-width:1180px;margin:auto;padding:24px 20px 60px}.module-nav{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:22px}.module-nav a{color:var(--muted);text-decoration:none;background:rgba(17,31,63,.72);border:1px solid var(--line);border-radius:9px;padding:9px 12px;font-size:13px}.module-nav a:hover,.module-nav a.active{color:white;border-color:var(--blue);background:#172a52}.top{display:flex;justify-content:space-between;align-items:end;gap:20px;margin-bottom:24px}
+    h1{margin:0;font-size:30px}.sub{color:var(--muted);margin:7px 0 0}.currency{background:var(--panel);border:1px solid var(--line);color:var(--text);padding:10px 12px;border-radius:10px}
+    .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px}.card,.box{background:rgba(17,31,63,.92);border:1px solid var(--line);border-radius:16px;padding:20px;box-shadow:0 15px 35px rgba(0,0,0,.2)}
+    .label{color:var(--muted);font-size:13px;text-transform:uppercase;letter-spacing:.08em}.value{font-size:28px;font-weight:800;margin-top:9px}.green{color:var(--green)}.red{color:#ff7070}
+    .box{margin-bottom:20px}.box h2{font-size:18px;margin:0 0 18px}.form{display:grid;grid-template-columns:1fr 1fr 1fr 1.3fr auto;gap:12px;align-items:end}
+    label{display:block;color:var(--muted);font-size:12px;margin-bottom:7px}input,select{width:100%;background:#091630;border:1px solid var(--line);border-radius:10px;color:var(--text);padding:12px;outline:none}input:focus,select:focus{border-color:var(--blue)}
+    button{border:0;border-radius:10px;padding:12px 17px;font-weight:700;cursor:pointer}.primary{background:var(--blue);color:white}.secondary{background:#253657;color:white}.danger{background:rgba(239,68,68,.14);color:#ff8484;padding:7px 10px}.edit{background:rgba(59,130,246,.16);color:#80b3ff;padding:7px 10px}
+    .table-head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:14px}.actions{display:flex;gap:8px;flex-wrap:wrap}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;min-width:760px}th,td{padding:13px 10px;border-bottom:1px solid var(--line);text-align:left}th{color:var(--muted);font-size:12px;text-transform:uppercase}td{font-size:14px}.right{text-align:right}.empty{text-align:center;color:var(--muted);padding:32px}.row-actions{display:flex;gap:7px;justify-content:flex-end}.notice{min-height:20px;margin-top:10px;font-size:13px;color:var(--muted)}.file-input{display:none}
+    @media(max-width:850px){.cards{grid-template-columns:1fr}.form{grid-template-columns:1fr 1fr}.form button{grid-column:1/-1}.top{align-items:start;flex-direction:column}}@media(max-width:520px){.form{grid-template-columns:1fr}.wrap{padding:22px 12px}h1{font-size:25px}}
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <nav class="module-nav" aria-label="Investment tracker modules">
+      <a href="https://mduduzijunior.github.io/unifier-interface/index.html">Unified Dashboard</a>
+      <a href="https://mduduzijunior.github.io/etf-portfolio/index.html">ETF Portfolio</a>
+      <a href="https://mduduzijunior.github.io/cfd-journal/index.html">CFD Journal</a>
+      <a class="active" href="https://mduduzijunior.github.io/cash-savings/index.html" aria-current="page">Cash Savings</a>
+    </nav>
+    <header class="top">
+      <div><h1>Cash Savings</h1><p class="sub">Emergency fund deposits and withdrawals</p></div>
+      <select id="currency" class="currency" aria-label="Currency"><option value="TWD">NTD (TWD)</option><option value="USD">USD</option><option value="SZL">SZL (E)</option></select>
+    </header>
+
+    <section class="cards">
+      <article class="card"><div class="label">Emergency Fund Balance</div><div class="value" id="balance">NT$0.00</div></article>
+      <article class="card"><div class="label">Total Deposited</div><div class="value green" id="deposited">NT$0.00</div></article>
+      <article class="card"><div class="label">Total Withdrawn</div><div class="value red" id="withdrawn">NT$0.00</div></article>
+    </section>
+
+    <section class="box">
+      <h2 id="formTitle">Record Monthly Transaction</h2>
+      <form id="transactionForm" class="form">
+        <div><label for="month">Month</label><input id="month" type="month" required></div>
+        <div><label for="type">Transaction Type</label><select id="type" required><option value="deposit">Deposit</option><option value="withdrawal">Withdrawal</option></select></div>
+        <div><label for="amount">Amount</label><input id="amount" type="number" min="0.01" step="0.01" placeholder="0.00" required></div>
+        <div><label for="note">Emergency Note (optional)</label><input id="note" type="text" maxlength="100" placeholder="Reason or short note"></div>
+        <button class="primary" type="submit" id="saveBtn">Add Transaction</button>
+      </form>
+      <div class="notice" id="notice" role="status"></div>
+    </section>
+
+    <section class="box">
+      <div class="table-head"><h2>Monthly Transaction History</h2><div class="actions"><button class="secondary" id="exportData">Export JSON</button><button class="secondary" id="importData">Import JSON</button><input class="file-input" id="importFile" type="file" accept="application/json,.json"><button class="secondary" id="cancelEdit" hidden>Cancel Edit</button><button class="secondary" id="clearAll">Clear All</button></div></div>
+      <div class="table-wrap"><table><thead><tr><th>Month</th><th>Type</th><th>Note</th><th class="right">Deposit</th><th class="right">Withdrawal</th><th class="right">Running Balance</th><th class="right">Actions</th></tr></thead><tbody id="history"></tbody></table></div>
+    </section>
+  </main>
+
+  <script>
+    'use strict';
+    const MODULE={id:'cash-savings',source:'cash',version:1,schema:'profitpilot-investment-tracker-v1'};
+    const ACTIVE_USER_KEY='aurum_imperium_active_user_v1';
+    const LEGACY_CLAIM_KEY='aurum_imperium_legacy_data_claimed_v1';
+    const ACTIVE_USERNAME=localStorage.getItem(ACTIVE_USER_KEY)||'';
+    const USER_SCOPE=encodeURIComponent(ACTIVE_USERNAME.trim().toLowerCase())||'no-active-user';
+    const scoped=key=>`${key}::user:${USER_SCOPE}`;
+    const BASE_STORE='profitpilot.investmentTracker.cash.v1';
+    const BASE_LEGACY_STORE='investmentTrackerEmergencySavingsV1';
+    const BASE_CURRENCY_STORE='profitpilot.investmentTracker.cash.currency.v1';
+    const STORE=scoped(BASE_STORE);
+    const LEGACY_STORE=scoped(BASE_LEGACY_STORE);
+    const CURRENCY_STORE=scoped(BASE_CURRENCY_STORE);
+    const CLAIM_OWNER=localStorage.getItem(LEGACY_CLAIM_KEY);
+    if(ACTIVE_USERNAME&&(!CLAIM_OWNER||CLAIM_OWNER.toLowerCase()===ACTIVE_USERNAME.toLowerCase())&&localStorage.getItem(STORE)==null){
+      const candidates=[BASE_STORE,BASE_LEGACY_STORE,`${BASE_STORE}::user:no-active-user`,`${BASE_STORE}::no-active-user`],source=candidates.find(key=>localStorage.getItem(key)!=null);
+      if(source){localStorage.setItem(STORE,localStorage.getItem(source));localStorage.removeItem(source);const currencySources=[BASE_CURRENCY_STORE,`${BASE_CURRENCY_STORE}::user:no-active-user`,`${BASE_CURRENCY_STORE}::no-active-user`],currencySource=currencySources.find(key=>localStorage.getItem(key)!=null);if(currencySource){localStorage.setItem(CURRENCY_STORE,localStorage.getItem(currencySource));localStorage.removeItem(currencySource)}localStorage.setItem(LEGACY_CLAIM_KEY,ACTIVE_USERNAME)}
+    }
+    const $=id=>document.getElementById(id);
+    let records=loadRecords(), editingId=null;
+    const form=$('transactionForm'), month=$('month'), type=$('type'), amount=$('amount'), note=$('note');
+    $('currency').value=localStorage.getItem(CURRENCY_STORE)||'TWD';
+    month.value=new Date().toISOString().slice(0,7);
+
+    function loadRecords(){try{const raw=localStorage.getItem(STORE)||localStorage.getItem(LEGACY_STORE);const v=JSON.parse(raw);const data=Array.isArray(v)?v:[];if(!localStorage.getItem(STORE)&&data.length)localStorage.setItem(STORE,JSON.stringify(data));return data.map(normalizeRecord).filter(Boolean)}catch{return[]}}
+    function amountNumber(value){if(typeof value==='number')return Number.isFinite(value)?value:NaN;const parsed=Number(String(value??'').replace(/,/g,'').replace(/[^0-9.+-]/g,''));return Number.isFinite(parsed)?parsed:NaN}
+    function normalizeRecord(r){const parsedAmount=amountNumber(r?.amount);if(!r||!/^\d{4}-\d{2}$/.test(String(r.month))||!['deposit','withdrawal'].includes(r.type)||!Number.isFinite(parsedAmount)||parsedAmount<=0)return null;return{id:String(r.id||makeId()),source:'cash',module:'cash-savings',month:String(r.month),date:String(r.date||r.month+'-01'),type:r.type,amount:Math.round(parsedAmount*100)/100,currency:String(r.currency||$('currency')?.value||'TWD'),note:String(r.note||'').slice(0,100),createdAt:Number(r.createdAt)||Date.now(),updatedAt:Number(r.updatedAt)||Number(r.createdAt)||Date.now()}}
+    function makeId(){return crypto.randomUUID?crypto.randomUUID():'cash-'+Date.now()+'-'+Math.random().toString(16).slice(2)}
+    function saveRecords(){localStorage.setItem(STORE,JSON.stringify(records));const detail=getSummary();window.dispatchEvent(new CustomEvent('profitpilot:cash-updated',{detail}));if(window.parent!==window)window.parent.postMessage({type:'profitpilot:module-updated',module:MODULE.id,summary:detail},location.origin)}
+    function money(value){return new Intl.NumberFormat('en-US',{style:'currency',currency:$('currency').value,minimumFractionDigits:2}).format(value)}
+    function monthName(v){if(!/^\d{4}-\d{2}$/.test(v))return v;return new Date(v+'-02T00:00:00').toLocaleDateString('en-US',{month:'long',year:'numeric'})}
+    function safe(v){const d=document.createElement('div');d.textContent=v||'—';return d.innerHTML}
+    function flash(message,error=false){$('notice').textContent=message;$('notice').style.color=error?'#ff8484':'#79e59a';setTimeout(()=>{$('notice').textContent=''},2500)}
+    function resetForm(){editingId=null;form.reset();month.value=new Date().toISOString().slice(0,7);$('formTitle').textContent='Record Monthly Transaction';$('saveBtn').textContent='Add Transaction';$('cancelEdit').hidden=true}
+
+    function getSummary(){const deposited=records.filter(r=>r.type==='deposit').reduce((s,r)=>s+r.amount,0);const withdrawn=records.filter(r=>r.type==='withdrawal').reduce((s,r)=>s+r.amount,0);return{module:MODULE.id,source:MODULE.source,currency:$('currency').value,totalDeposited:deposited,totalWithdrawn:withdrawn,balance:deposited-withdrawn,transactionCount:records.length,updatedAt:new Date().toISOString()}}
+
+    function render(){
+      const deposits=records.filter(r=>r.type==='deposit').reduce((s,r)=>s+r.amount,0);
+      const withdrawals=records.filter(r=>r.type==='withdrawal').reduce((s,r)=>s+r.amount,0);
+      $('deposited').textContent=money(deposits);$('withdrawn').textContent=money(withdrawals);$('balance').textContent=money(deposits-withdrawals);
+      const ordered=[...records].sort((a,b)=>a.month.localeCompare(b.month)||a.createdAt-b.createdAt);let running=0;
+      const rows=ordered.map(r=>{running+=r.type==='deposit'?r.amount:-r.amount;return {...r,running}}).reverse();
+      $('history').innerHTML=rows.length?rows.map(r=>`<tr><td>${monthName(r.month)}</td><td class="${r.type==='deposit'?'green':'red'}">${r.type==='deposit'?'Deposit':'Withdrawal'}</td><td>${safe(r.note)}</td><td class="right green">${r.type==='deposit'?money(r.amount):'—'}</td><td class="right red">${r.type==='withdrawal'?money(r.amount):'—'}</td><td class="right">${money(r.running)}</td><td><div class="row-actions"><button class="edit" onclick="editRecord('${r.id}')">Edit</button><button class="danger" onclick="deleteRecord('${r.id}')">Delete</button></div></td></tr>`).join(''):'<tr><td colspan="7" class="empty">No emergency-fund transactions recorded yet.</td></tr>';
+    }
+
+    form.addEventListener('submit',e=>{e.preventDefault();const value=Number(amount.value);if(!Number.isFinite(value)||value<=0)return flash('Enter an amount greater than zero.',true);const otherBalance=records.filter(r=>r.id!==editingId).reduce((s,r)=>s+(r.type==='deposit'?r.amount:-r.amount),0);if(type.value==='withdrawal'&&value>otherBalance)return flash('Withdrawal cannot exceed the available emergency balance.',true);const now=Date.now();const data={source:'cash',module:'cash-savings',month:month.value,date:month.value+'-01',type:type.value,amount:Math.round(value*100)/100,currency:$('currency').value,note:note.value.trim(),updatedAt:now};if(editingId){const i=records.findIndex(r=>r.id===editingId);if(i>=0)records[i]={...records[i],...data};flash('Transaction updated.')}else{records.push({...data,id:makeId(),createdAt:now});flash('Transaction added.')}saveRecords();resetForm();render()});
+    window.editRecord=id=>{const r=records.find(x=>x.id===id);if(!r)return;editingId=id;month.value=r.month;type.value=r.type;amount.value=r.amount;note.value=r.note||'';$('formTitle').textContent='Edit Monthly Transaction';$('saveBtn').textContent='Save Changes';$('cancelEdit').hidden=false;window.scrollTo({top:0,behavior:'smooth'})};
+    window.deleteRecord=id=>{if(!confirm('Delete this transaction?'))return;records=records.filter(r=>r.id!==id);saveRecords();if(editingId===id)resetForm();render();flash('Transaction deleted.')};
+    $('cancelEdit').addEventListener('click',resetForm);
+    $('clearAll').addEventListener('click',()=>{if(!records.length)return;if(confirm('Delete every emergency-fund transaction? This cannot be undone.')){records=[];saveRecords();resetForm();render();flash('All transactions cleared.')}});
+    $('currency').addEventListener('change',()=>{localStorage.setItem(CURRENCY_STORE,$('currency').value);render()});
+    $('exportData').addEventListener('click',()=>{const payload={schema:MODULE.schema,exportedAt:new Date().toISOString(),module:MODULE.id,currency:$('currency').value,collections:{cash:records}};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='profitpilot-cash-savings-'+new Date().toISOString().slice(0,10)+'.json';a.click();URL.revokeObjectURL(url);flash('Cash savings backup exported.')});
+    $('importData').addEventListener('click',()=>$('importFile').click());
+    $('importFile').addEventListener('change',async e=>{const file=e.target.files[0];e.target.value='';if(!file)return;try{const payload=JSON.parse(await file.text());const incoming=Array.isArray(payload)?payload:payload?.collections?.cash;if(!Array.isArray(incoming))throw Error('No cash collection');const clean=incoming.map(normalizeRecord).filter(Boolean);if(clean.length!==incoming.length)throw Error('Invalid cash records');if(!confirm(`Import ${clean.length} cash transaction(s)? Existing records with the same ID will be updated.`))return;const merged=new Map(records.map(r=>[r.id,r]));clean.forEach(r=>merged.set(r.id,r));records=[...merged.values()];if(payload.currency&&['TWD','USD','SZL'].includes(payload.currency)){$('currency').value=payload.currency;localStorage.setItem(CURRENCY_STORE,payload.currency)}saveRecords();render();flash('Cash savings data imported.')}catch{flash('Import failed. Select a valid Cash Savings JSON backup.',true)}});
+    window.ProfitPilotCashSavings=Object.freeze({module:MODULE,getRecords:()=>structuredClone(records),getSummary,exportData:()=>({schema:MODULE.schema,module:MODULE.id,currency:$('currency').value,collections:{cash:structuredClone(records)}})});
+    render();
+  </script>
+</body>
+</html>
