@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#07150f">
+  <title>Aurum Imperium | Investment Tracker</title>
+
+  <!-- GitHub path: repository/image/logo.png -->
+  <link rel="icon" type="image/png" href="image/logo.png">
+  <link rel="apple-touch-icon" href="image/logo.png">
+  <style>
+    :root {
+      --ink: #f6f1df;
+      --muted: #aab7ae;
+      --green: #0d271c;
+      --green-2: #153b2b;
+      --gold: #d8ae55;
+      --gold-2: #f1d58a;
+      --danger: #ff8077;
+      --success: #74d39a;
+      --panel: rgba(8, 25, 18, .90);
+      --line: rgba(216, 174, 85, .22);
+      --shadow: 0 24px 70px rgba(0, 0, 0, .42);
+    }
+
+    * { box-sizing: border-box; }
+    html { min-height: 100%; }
+    body {
+      min-height: 100vh;
+      margin: 0;
+      color: var(--ink);
+      background: #06110c;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    button, input { font: inherit; }
+    button, a { -webkit-tap-highlight-color: transparent; }
+    [hidden] { display: none !important; }
+
+    /* LOGIN / REGISTRATION */
+    .auth-screen {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 28px 18px;
+      position: relative;
+      isolation: isolate;
+      /* GitHub path: repository/image/background.png */
+      background-image:
+        linear-gradient(110deg, rgba(1, 10, 6, .90), rgba(4, 20, 13, .67)),
+        url("image/background.png");
+      background-size: cover;
+      background-position: center;
+      background-attachment: fixed;
+    }
+    .auth-screen::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      background: radial-gradient(circle at 50% 15%, rgba(216, 174, 85, .15), transparent 40%);
+    }
+    .auth-shell {
+      width: min(460px, 100%);
+      padding: 34px;
+      border: 1px solid rgba(216, 174, 85, .35);
+      border-radius: 24px;
+      background: rgba(5, 20, 13, .88);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(17px);
+    }
+    .brand { text-align: center; margin-bottom: 26px; }
+    .brand-logo {
+      width: 92px;
+      height: 92px;
+      object-fit: contain;
+      filter: drop-shadow(0 10px 20px rgba(0,0,0,.38));
+    }
+    .brand h1 {
+      margin: 11px 0 3px;
+      color: var(--gold-2);
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(1.65rem, 6vw, 2.15rem);
+      letter-spacing: .07em;
+    }
+    .brand p { margin: 0; color: var(--muted); font-size: .92rem; }
+    .form-container h2 { margin: 0 0 20px; font-size: 1.22rem; }
+    .field { margin-bottom: 16px; }
+    .field label { display: block; margin: 0 0 7px; color: #e9e3ce; font-size: .88rem; }
+    .field input {
+      width: 100%;
+      padding: 13px 14px;
+      color: var(--ink);
+      border: 1px solid rgba(255,255,255,.13);
+      border-radius: 11px;
+      outline: none;
+      background: rgba(255,255,255,.055);
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .field input:focus { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(216,174,85,.13); }
+    .primary-btn {
+      width: 100%;
+      padding: 13px 18px;
+      border: 0;
+      border-radius: 11px;
+      color: #172016;
+      background: linear-gradient(135deg, var(--gold-2), var(--gold));
+      font-weight: 800;
+      cursor: pointer;
+      transition: transform .2s, filter .2s;
+    }
+    .primary-btn:hover { transform: translateY(-1px); filter: brightness(1.04); }
+    .primary-btn:disabled { opacity: .6; cursor: wait; transform: none; }
+    .form-switch { margin: 18px 0 0; color: var(--muted); text-align: center; font-size: .9rem; }
+    .text-btn { padding: 0; border: 0; color: var(--gold-2); background: none; cursor: pointer; font-weight: 750; }
+    .notice { min-height: 22px; margin: 13px 0 0; font-size: .86rem; text-align: center; }
+    .notice.error { color: var(--danger); }
+    .notice.success { color: var(--success); }
+    /* UNIFIED DASHBOARD */
+    .app { min-height: 100vh; background: linear-gradient(150deg, #07150f, #0b2117 55%, #07140e); }
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 14px clamp(18px, 4vw, 52px);
+      border-bottom: 1px solid var(--line);
+      background: rgba(4, 17, 11, .88);
+      backdrop-filter: blur(16px);
+    }
+    .mini-brand { display: flex; align-items: center; gap: 11px; }
+    .mini-brand img { width: 43px; height: 43px; object-fit: contain; }
+    .mini-brand strong { display: block; color: var(--gold-2); font-family: Georgia, serif; letter-spacing: .05em; }
+    .mini-brand small { color: var(--muted); }
+    .top-actions { display: flex; align-items: center; gap: 10px; }
+    .module-nav { display: flex; align-items: center; gap: 7px; }
+    .module-nav a {
+      padding: 9px 12px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      color: var(--ink);
+      background: rgba(255,255,255,.035);
+      text-decoration: none;
+      font-size: .82rem;
+      font-weight: 750;
+      transition: border-color .2s, background .2s;
+    }
+    .module-nav a:hover, .module-nav a.active { border-color: var(--gold); background: rgba(216,174,85,.09); color: #fff; }
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 8px 11px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: .78rem;
+    }
+    .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #89948d; }
+    .status-dot.online { background: var(--success); box-shadow: 0 0 0 4px rgba(116,211,154,.11); }
+    .ghost-btn {
+      padding: 9px 12px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      color: var(--ink);
+      background: rgba(255,255,255,.035);
+      cursor: pointer;
+    }
+    .main { width: min(1280px, calc(100% - 36px)); margin: 0 auto; padding: 42px 0 70px; }
+    .hero { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 26px; }
+    .eyebrow { margin: 0 0 7px; color: var(--gold); font-size: .77rem; font-weight: 800; letter-spacing: .13em; text-transform: uppercase; }
+    .hero h2 { margin: 0; font-family: Georgia, serif; font-size: clamp(2rem, 5vw, 3.3rem); }
+    .hero p { margin: 8px 0 0; color: var(--muted); }
+    .rate-box { padding: 12px 15px; border: 1px solid var(--line); border-radius: 12px; color: var(--muted); background: rgba(255,255,255,.03); font-size: .82rem; text-align: right; }
+    .rate-box strong { display: block; margin-top: 2px; color: var(--ink); }
+    .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 28px; }
+    .metric, .module-card {
+      border: 1px solid var(--line);
+      border-radius: 17px;
+      background: linear-gradient(145deg, rgba(255,255,255,.055), rgba(255,255,255,.022));
+      box-shadow: 0 14px 34px rgba(0,0,0,.17);
+    }
+    .metric { padding: 18px; }
+    .metric span { color: var(--muted); font-size: .78rem; }
+    .metric strong { display: block; margin-top: 8px; color: var(--gold-2); font-size: clamp(1.22rem, 3vw, 1.65rem); }
+    .section-heading { display: flex; align-items: end; justify-content: space-between; gap: 20px; margin: 32px 0 15px; }
+    .section-heading h3 { margin: 0; font-size: 1.1rem; }
+    .section-heading p { margin: 0; color: var(--muted); font-size: .82rem; }
+    .modules { display: grid; grid-template-columns: repeat(3, 1fr); gap: 17px; }
+    .module-card {
+      position: relative;
+      overflow: hidden;
+      display: block;
+      padding: 22px;
+      color: var(--ink);
+      text-decoration: none;
+      cursor: pointer;
+      transition: transform .2s, border-color .2s, background .2s;
+    }
+    .module-card:hover, .module-card:focus-visible {
+      transform: translateY(-3px);
+      border-color: var(--gold);
+      background: linear-gradient(145deg, rgba(216,174,85,.11), rgba(255,255,255,.03));
+      outline: none;
+    }
+    .module-card::after { content: ""; position: absolute; width: 120px; height: 120px; right: -45px; top: -45px; border-radius: 50%; background: rgba(216,174,85,.07); }
+    .module-label { color: var(--gold); font-size: .76rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+    .module-card h4 { margin: 9px 0 5px; font-size: 1.3rem; }
+    .module-card .value { margin: 16px 0 4px; color: var(--gold-2); font-size: 1.75rem; font-weight: 800; }
+    .module-card .subvalue { min-height: 22px; color: var(--muted); font-size: .82rem; }
+    .open-module { display: inline-flex; margin-top: 20px; color: var(--gold-2); font-weight: 800; font-size: .88rem; }
+    .empty-note { margin-top: 20px; padding: 15px 17px; border: 1px dashed var(--line); border-radius: 13px; color: var(--muted); font-size: .84rem; line-height: 1.55; }
+    .footer { margin-top: 35px; color: #7e8d83; font-size: .78rem; text-align: center; }
+
+    @media (max-width: 900px) {
+      .metrics { grid-template-columns: repeat(2, 1fr); }
+      .modules { grid-template-columns: 1fr; }
+      .module-nav { display: none; }
+    }
+    @media (max-width: 620px) {
+      .auth-shell { padding: 26px 21px; }
+      .topbar { align-items: flex-start; }
+      .mini-brand small, .status-pill span { display: none; }
+      .hero { align-items: flex-start; flex-direction: column; }
+      .rate-box { width: 100%; text-align: left; }
+      .metrics { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <section id="authScreen" class="auth-screen">
+    <div class="auth-shell">
+      <div class="brand">
+        <img class="brand-logo" src="image/logo.png" alt="Aurum Imperium logo">
+        <h1>AURUM IMPERIUM</h1>
+        <p>Unified Investment Tracker</p>
+      </div>
+
+      <div id="loginForm" class="form-container">
+        <h2>Login</h2>
+        <form id="login" novalidate>
+          <div class="field">
+            <label for="loginUsername">Username</label>
+            <input type="text" id="loginUsername" name="username" autocomplete="username" required>
+          </div>
+          <div class="field">
+            <label for="loginPassword">Password</label>
+            <input type="password" id="loginPassword" name="password" autocomplete="current-password" minlength="6" required>
+          </div>
+          <button id="loginButton" class="primary-btn" type="submit">Login</button>
+        </form>
+        <div id="loginNotice" class="notice" role="status" aria-live="polite"></div>
+        <p class="form-switch">Don't have an account? <button class="text-btn" type="button" data-show="register">Register</button></p>
+      </div>
+
+      <div id="registerForm" class="form-container" hidden>
+        <h2>Register</h2>
+        <form id="register" novalidate>
+          <div class="field">
+            <label for="regUsername">Username</label>
+            <input type="text" id="regUsername" name="username" autocomplete="username" minlength="3" maxlength="32" pattern="[A-Za-z0-9._-]+" required>
+          </div>
+          <div class="field">
+            <label for="regPassword">Password</label>
+            <input type="password" id="regPassword" name="password" autocomplete="new-password" minlength="6" required>
+          </div>
+          <div class="field">
+            <label for="confirmPassword">Confirm Password</label>
+            <input type="password" id="confirmPassword" name="confirmPassword" autocomplete="new-password" minlength="6" required>
+          </div>
+          <button id="registerButton" class="primary-btn" type="submit">Register</button>
+        </form>
+        <div id="registerNotice" class="notice" role="status" aria-live="polite"></div>
+        <p class="form-switch">Already have an account? <button class="text-btn" type="button" data-show="login">Login</button></p>
+      </div>
+
+    </div>
+  </section>
+
+  <section id="app" class="app" hidden>
+    <header class="topbar">
+      <div class="mini-brand">
+        <img src="image/logo.png" alt="Aurum Imperium logo">
+        <div><strong>AURUM IMPERIUM</strong><small>Investment Tracker</small></div>
+      </div>
+      <div class="top-actions">
+        <nav class="module-nav" aria-label="Investment sections">
+          <a class="active" href="https://mduduzijunior.github.io/unifier-interface/index.html" aria-current="page">Unified Dashboard</a>
+          <a href="https://mduduzijunior.github.io/etf-portfolio/index.html">ETF Portfolio</a>
+          <a href="https://mduduzijunior.github.io/cfd-journal/index.html">CFD Journal</a>
+          <a href="https://mduduzijunior.github.io/cash-savings/index.html">Cash Savings</a>
+        </nav>
+        <div class="status-pill"><i id="cloudDot" class="status-dot"></i><span id="cloudText">Connecting</span></div>
+        <button id="refreshButton" class="ghost-btn" type="button">Refresh</button>
+        <button id="logoutButton" class="ghost-btn" type="button">Logout</button>
+      </div>
+    </header>
+
+    <main class="main">
+      <div class="hero">
+        <div>
+          <p class="eyebrow">Unified dashboard</p>
+          <h2>Welcome, <span id="displayUsername">Investor</span></h2>
+          <p>All final values are calculated and reported in New Taiwan dollars.</p>
+        </div>
+        <div class="rate-box">Exchange-rate status<strong id="rateStatus">Waiting for update</strong></div>
+      </div>
+
+      <section class="metrics" aria-label="Portfolio totals">
+        <article class="metric"><span>Total net worth</span><strong id="totalNetWorth">NT$0</strong></article>
+        <article class="metric"><span>Total contributed</span><strong id="totalContributed">NT$0</strong></article>
+        <article class="metric"><span>Total profit / loss</span><strong id="totalProfitLoss">NT$0</strong></article>
+        <article class="metric"><span>Overall ROI</span><strong id="overallRoi">0.00%</strong></article>
+      </section>
+
+      <div class="section-heading">
+        <div><h3>Investment sections</h3><p>Each section remains an independent live application.</p></div>
+      </div>
+
+      <section class="modules">
+        <a class="module-card" href="https://mduduzijunior.github.io/etf-portfolio/index.html" aria-label="Open ETF Portfolio in this window">
+          <span class="module-label">Long-term investing</span><h4>ETF Portfolio</h4>
+          <div id="etfValue" class="value">NT$0</div><div id="etfSubvalue" class="subvalue">No synchronized summary yet</div>
+          <span class="open-module">Enter ETF Portfolio →</span>
+        </a>
+        <a class="module-card" href="https://mduduzijunior.github.io/cfd-journal/index.html" aria-label="Open CFD Journal in this window">
+          <span class="module-label">Active trading</span><h4>CFD Journal</h4>
+          <div id="cfdValue" class="value">NT$0</div><div id="cfdSubvalue" class="subvalue">No synchronized summary yet</div>
+          <span class="open-module">Enter CFD Journal →</span>
+        </a>
+        <a class="module-card" href="https://mduduzijunior.github.io/cash-savings/index.html" aria-label="Open Cash Savings in this window">
+          <span class="module-label">Emergency reserve</span><h4>Cash Savings</h4>
+          <div id="cashValue" class="value">NT$0</div><div id="cashSubvalue" class="subvalue">No synchronized summary yet</div>
+          <span class="open-module">Enter Cash Savings →</span>
+        </a>
+      </section>
+
+      <div class="empty-note">
+        Live GitHub Pages connection: the dashboard reads only the logged-in username’s ETF, CFD, and Cash Savings ledgers. After adding or changing a record, return here and the figures recalculate automatically in NTD. Use Refresh at any time to force a new exchange-rate and balance update.
+      </div>
+      <p class="footer">Aurum Imperium · Unified Investment Tracker · Reporting currency: NTD (TWD)</p>
+    </main>
+  </section>
+
+  <script>
+    "use strict";
+
+    const MODULE_URLS = Object.freeze({
+      etf: "https://mduduzijunior.github.io/etf-portfolio/index.html",
+      cfd: "https://mduduzijunior.github.io/cfd-journal/index.html",
+      cash: "https://mduduzijunior.github.io/cash-savings/index.html"
+    });
+
+    const LOCAL_USERS_KEY = "aurum_imperium_test_users_v1";
+    const LOCAL_SESSION_KEY = "aurum_imperium_test_session_v1";
+    const ACTIVE_USER_KEY = "aurum_imperium_active_user_v1";
+    const LEGACY_CLAIM_KEY = "aurum_imperium_legacy_data_claimed_v1";
+    const RATE_CACHE_KEY = "aurum_imperium_twd_rates_v1";
+    const MODULE_STORAGE = Object.freeze({
+      etfTransactions: "profitpilot-etf-v1",
+      etfQuotes: "profitpilot-etf-v1-quotes",
+      etfSummary: "profitpilot-module-summary-etf-v1",
+      cfdTrades: "supabase_investment_tracker_cfd_v2",
+      cfdFunding: "supabase_investment_tracker_cfd_funding_v1",
+      cashRecords: "profitpilot.investmentTracker.cash.v1",
+      cashLegacy: "investmentTrackerEmergencySavingsV1",
+      cashCurrency: "profitpilot.investmentTracker.cash.currency.v1"
+    });
+
+    const $ = (id) => document.getElementById(id);
+    const state = { session: null, rates: null, summaries: [] };
+
+    function cleanUsername(value) {
+      return value.trim().replace(/\s+/g, "");
+    }
+
+    function getLocalUsers() {
+      try { return JSON.parse(localStorage.getItem(LOCAL_USERS_KEY) || "[]"); }
+      catch { return []; }
+    }
+
+    function saveLocalUsers(users) {
+      localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify(users));
+    }
+
+    function userScope(username = state.session?.username || localStorage.getItem(ACTIVE_USER_KEY) || "") {
+      return encodeURIComponent(String(username).trim().toLowerCase());
+    }
+
+    function moduleStorageKey(baseKey, username) {
+      const scope = userScope(username);
+      return scope ? `${baseKey}::user:${scope}` : `${baseKey}::no-active-user`;
+    }
+
+    function claimLegacyModuleData(username) {
+      const claimOwner = localStorage.getItem(LEGACY_CLAIM_KEY);
+      if (claimOwner && claimOwner.toLowerCase() !== String(username).toLowerCase()) return;
+      const keys = Object.values(MODULE_STORAGE);
+      let claimed = false;
+      keys.forEach((baseKey) => {
+        const privateKey = moduleStorageKey(baseKey, username);
+        if (localStorage.getItem(privateKey) == null) {
+          const candidates = [baseKey, `${baseKey}::user:no-active-user`, `${baseKey}::no-active-user`];
+          const sourceKey = candidates.find((key) => localStorage.getItem(key) != null);
+          if (sourceKey) {
+            localStorage.setItem(privateKey, localStorage.getItem(sourceKey));
+            localStorage.removeItem(sourceKey);
+            claimed = true;
+          }
+        }
+      });
+      const privateCashKey = moduleStorageKey(MODULE_STORAGE.cashRecords, username);
+      const legacyCash = localStorage.getItem(MODULE_STORAGE.cashLegacy);
+      if (legacyCash != null && localStorage.getItem(privateCashKey) == null) {
+        localStorage.setItem(privateCashKey, legacyCash);
+        localStorage.removeItem(MODULE_STORAGE.cashLegacy);
+        claimed = true;
+      }
+      if (claimed) localStorage.setItem(LEGACY_CLAIM_KEY, String(username));
+    }
+
+    function activateUser(username) {
+      const clean = cleanUsername(String(username || ""));
+      if (!clean) return false;
+      localStorage.setItem(ACTIVE_USER_KEY, clean);
+      claimLegacyModuleData(clean);
+      return localStorage.getItem(ACTIVE_USER_KEY) === clean;
+    }
+
+    function saveLocalSession(username) {
+      const session = { username, signedInAt: new Date().toISOString() };
+      localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(session));
+      activateUser(username);
+      return session;
+    }
+
+    function getLocalSession() {
+      try { return JSON.parse(localStorage.getItem(LOCAL_SESSION_KEY) || "null"); }
+      catch { return null; }
+    }
+
+    function setNotice(id, message = "", type = "") {
+      const element = $(id);
+      element.textContent = message;
+      element.className = `notice ${type}`.trim();
+    }
+
+    function setBusy(buttonId, busy, busyLabel, normalLabel) {
+      const button = $(buttonId);
+      button.disabled = busy;
+      button.textContent = busy ? busyLabel : normalLabel;
+    }
+
+    function showForm(name) {
+      $("loginForm").hidden = name !== "login";
+      $("registerForm").hidden = name !== "register";
+      setNotice("loginNotice");
+      setNotice("registerNotice");
+    }
+
+    function showAuth() {
+      $("authScreen").hidden = false;
+      $("app").hidden = true;
+    }
+
+    function showApp(session) {
+      state.session = session;
+      $("authScreen").hidden = true;
+      $("app").hidden = false;
+      const username = session?.username || "Investor";
+      $("displayUsername").textContent = username;
+      activateUser(username);
+      setCloudStatus(location.protocol === "https:", location.protocol === "https:" ? "GitHub session active" : "Deploy to GitHub Pages");
+      refreshDashboard();
+    }
+
+    function setCloudStatus(online, text) {
+      $("cloudDot").classList.toggle("online", online);
+      $("cloudText").textContent = text;
+    }
+
+    document.querySelectorAll("[data-show]").forEach((button) => {
+      button.addEventListener("click", () => showForm(button.dataset.show));
+    });
+
+    $("login").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const username = cleanUsername($("loginUsername").value);
+      const password = $("loginPassword").value;
+      if (!username || !password) return setNotice("loginNotice", "Enter your username and password.", "error");
+
+      setBusy("loginButton", true, "Logging in…", "Login");
+      setNotice("loginNotice", "Checking your account…");
+      try {
+        const user = getLocalUsers().find((entry) => entry.username.toLowerCase() === username.toLowerCase());
+        if (!user || user.password !== password) throw new Error("Incorrect username or password.");
+        const session = saveLocalSession(user.username);
+        setNotice("loginNotice", "Login successful.", "success");
+        showApp(session);
+      } catch (error) {
+        setNotice("loginNotice", error.message || "Login failed. Please try again.", "error");
+      } finally {
+        setBusy("loginButton", false, "Logging in…", "Login");
+      }
+    });
+
+    $("register").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const username = cleanUsername($("regUsername").value);
+      const password = $("regPassword").value;
+      const confirmation = $("confirmPassword").value;
+      if (!/^[A-Za-z0-9._-]{3,32}$/.test(username)) return setNotice("registerNotice", "Use 3–32 letters, numbers, dots, underscores, or hyphens.", "error");
+      if (password.length < 6) return setNotice("registerNotice", "Password must contain at least 6 characters.", "error");
+      if (password !== confirmation) return setNotice("registerNotice", "Passwords do not match.", "error");
+
+      setBusy("registerButton", true, "Creating account…", "Register");
+      setNotice("registerNotice", "Creating your secure account…");
+      try {
+        const users = getLocalUsers();
+        if (users.some((entry) => entry.username.toLowerCase() === username.toLowerCase())) {
+          throw new Error("That username is already registered.");
+        }
+        users.push({ username, password, createdAt: new Date().toISOString() });
+        saveLocalUsers(users);
+        const session = saveLocalSession(username);
+        setNotice("registerNotice", "Account created successfully.", "success");
+        showApp(session);
+      } catch (error) {
+        setNotice("registerNotice", error.message || "Registration failed. Please try again.", "error");
+      } finally {
+        setBusy("registerButton", false, "Creating account…", "Register");
+      }
+    });
+
+    $("logoutButton").addEventListener("click", () => {
+      localStorage.removeItem(LOCAL_SESSION_KEY);
+      localStorage.removeItem(ACTIVE_USER_KEY);
+      state.session = null;
+      showAuth();
+      showForm("login");
+    });
+
+    $("refreshButton").addEventListener("click", refreshDashboard);
+
+    document.querySelectorAll('a[href*="mduduzijunior.github.io"]').forEach((link) => {
+      link.addEventListener("click", (event) => {
+        if (!state.session?.username || !activateUser(state.session.username)) {
+          event.preventDefault();
+          setCloudStatus(false, "Login session unavailable");
+        }
+      });
+    });
+
+    function getCachedRates() {
+      try { return JSON.parse(localStorage.getItem(RATE_CACHE_KEY) || "null"); }
+      catch { return null; }
+    }
+
+    async function updateExchangeRates() {
+      const cached = getCachedRates();
+      $("rateStatus").textContent = "Updating live rates…";
+      try {
+        /* Base is TWD. API rates show how many units of each currency equal NT$1. */
+        const response = await fetch("https://open.er-api.com/v6/latest/TWD", { cache: "no-store" });
+        if (!response.ok) throw new Error("Exchange-rate service unavailable");
+        const payload = await response.json();
+        if (payload.result !== "success" || !payload.rates) throw new Error("Invalid exchange-rate response");
+        const record = { rates: payload.rates, updatedAt: payload.time_last_update_utc || new Date().toISOString(), source: "live" };
+        localStorage.setItem(RATE_CACHE_KEY, JSON.stringify(record));
+        state.rates = record;
+        $("rateStatus").textContent = `Live · ${new Date(record.updatedAt).toLocaleString()}`;
+        return record;
+      } catch (error) {
+        if (cached?.rates) {
+          state.rates = { ...cached, source: "cached" };
+          $("rateStatus").textContent = `Cached · ${new Date(cached.updatedAt).toLocaleString()}`;
+          return state.rates;
+        }
+        try {
+          const response = await fetch("https://api.exchangerate-api.com/v4/latest/TWD", { cache: "no-store" });
+          if (!response.ok) throw new Error("Backup exchange-rate service unavailable");
+          const payload = await response.json();
+          if (!payload.rates?.USD || !(payload.rates?.SZL || payload.rates?.ZAR)) throw new Error("Invalid backup rates");
+          const record = { rates: { ...payload.rates, TWD: 1, SZL: payload.rates.SZL || payload.rates.ZAR }, updatedAt: payload.date_last_updated || new Date().toISOString(), source: "live-backup" };
+          localStorage.setItem(RATE_CACHE_KEY, JSON.stringify(record));
+          state.rates = record;
+          $("rateStatus").textContent = `Live backup · ${new Date(record.updatedAt).toLocaleDateString()}`;
+          return record;
+        } catch {
+          state.rates = { rates: { TWD: 1 }, updatedAt: null, source: "unavailable" };
+          $("rateStatus").textContent = "Unavailable · TWD values only";
+          return state.rates;
+        }
+      }
+    }
+
+    function toTwd(amount, currency) {
+      const numeric = Number(amount) || 0;
+      const code = String(currency || "TWD").toUpperCase() === "NTD" ? "TWD" : String(currency || "TWD").toUpperCase();
+      if (code === "TWD") return numeric;
+      const unitsPerTwd = Number(state.rates?.rates?.[code]);
+      return unitsPerTwd > 0 ? numeric / unitsPerTwd : 0;
+    }
+
+    const twdNumber = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
+    function formatTwd(value) { return `NT$${twdNumber.format(Number(value) || 0)}`; }
+
+    function readJson(key, fallback) {
+      try {
+        const value = JSON.parse(localStorage.getItem(key));
+        return value == null ? fallback : value;
+      } catch { return fallback; }
+    }
+
+    function readModuleJson(baseKey, fallback) {
+      return readJson(moduleStorageKey(baseKey), fallback);
+    }
+
+    function parseStoredAmount(value) {
+      if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+      const cleaned = String(value ?? "").replace(/,/g, "").replace(/[^0-9.+-]/g, "");
+      const parsed = Number(cleaned);
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+
+    function calculateEtfSummary() {
+      const published = readModuleJson(MODULE_STORAGE.etfSummary, null);
+      const ledgerKey = moduleStorageKey(MODULE_STORAGE.etfTransactions);
+      const hasLedger = localStorage.getItem(ledgerKey) != null;
+      const transactions = readModuleJson(MODULE_STORAGE.etfTransactions, []);
+      const quotes = readModuleJson(MODULE_STORAGE.etfQuotes, {});
+      if (!Array.isArray(transactions)) return null;
+      if (!hasLedger && published && Number.isFinite(Number(published.netWorth))) {
+        return {
+          module: "etf", currency: published.currency || "TWD",
+          current_value: Number(published.netWorth) || 0,
+          total_contributed: Number(published.netContributions) || 0,
+          profit_loss: Number(published.totalGain) || 0,
+          detail: `${Number(published.holdingsCount) || 0} holding(s) · restored from ETF summary`
+        };
+      }
+      let deposits = 0, withdrawals = 0, impliedFunding = 0, cash = 0;
+      const holdings = {};
+      [...transactions].sort((a, b) => String(a.date || "").localeCompare(String(b.date || ""))).forEach((item) => {
+        const amount = parseStoredAmount(item.amount), quantity = parseStoredAmount(item.qty);
+        const price = parseStoredAmount(item.price), fees = parseStoredAmount(item.fees);
+        if (item.kind === "deposit") { deposits += amount; cash += amount; }
+        if (item.kind === "withdrawal") { withdrawals += amount; cash -= amount; }
+        if (item.kind === "fee") {
+          if (amount > cash) { impliedFunding += amount - cash; cash = 0; } else cash -= amount;
+        }
+        if (!item.ticker) return;
+        const holding = holdings[item.ticker] ||= { qty: 0, cost: 0, realised: 0, dividends: 0 };
+        if (item.kind === "buy") {
+          const purchaseCost = quantity * price + fees;
+          holding.qty += quantity;
+          holding.cost += purchaseCost;
+          if (purchaseCost > cash) { impliedFunding += purchaseCost - cash; cash = 0; } else cash -= purchaseCost;
+        }
+        if (item.kind === "sell") {
+          const sold = Math.min(quantity, holding.qty), average = holding.qty ? holding.cost / holding.qty : 0;
+          holding.qty -= sold; holding.cost -= sold * average; holding.realised += sold * price - sold * average - fees; cash += sold * price - fees;
+        }
+        if (item.kind === "dividend") { holding.dividends += amount; cash += amount; }
+      });
+      let market = 0, count = 0;
+      Object.entries(holdings).forEach(([ticker, holding]) => {
+        if (holding.qty <= 0) return;
+        count++;
+        const savedPrice = Number(quotes?.[ticker]?.price);
+        const price = savedPrice > 0 ? savedPrice : (holding.qty ? holding.cost / holding.qty : 0);
+        market += holding.qty * price;
+      });
+      const net = cash + market, contributed = deposits + impliedFunding - withdrawals, gain = net - contributed;
+      const fundingNote = impliedFunding > 0 ? ` · ${formatTwd(impliedFunding)} purchase funding inferred` : "";
+      return { module: "etf", currency: "TWD", current_value: net, total_contributed: contributed, profit_loss: gain, detail: `${count} holding(s) · calculated from ETF ledger${fundingNote}` };
+    }
+
+    function cfdTradeNet(trade) {
+      if (trade?.status !== "CLOSED" || !trade.result) return 0;
+      const entry = trade.entry || {}, result = trade.result || {};
+      const partial = (Array.isArray(trade.management) ? trade.management : []).reduce((sum, event) => sum + (Number(event.partialRealizedPnl) || 0), 0);
+      const finalGross = Number(result.finalLegGrossPnl) || 0;
+      const costs = (Number(entry.spreadCost) || 0) + (Number(entry.entryCommission) || 0) +
+        (Number(result.exitCommission) || 0) + (Number(result.swapFinancing) || 0) + (Number(result.otherCosts) || 0);
+      return partial + finalGross - costs;
+    }
+
+    function calculateCfdSummary() {
+      const trades = readModuleJson(MODULE_STORAGE.cfdTrades, []);
+      const funding = readModuleJson(MODULE_STORAGE.cfdFunding, []);
+      if (!Array.isArray(trades) || !Array.isArray(funding)) return null;
+      const deposits = funding.filter((item) => item.type === "Deposit").reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+      const withdrawals = funding.filter((item) => item.type === "Withdrawal").reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+      const closed = trades.filter((trade) => trade?.status === "CLOSED" && trade.result);
+      const open = trades.filter((trade) => trade?.status === "OPEN").length;
+      const profit = closed.reduce((sum, trade) => sum + cfdTradeNet(trade), 0);
+      const contribution = deposits - withdrawals;
+      return {
+        module: "cfd", currency: "USD", current_value: contribution + profit,
+        total_contributed: contribution, profit_loss: profit,
+        detail: `${open} open · ${closed.length} closed · realised P/L ${formatSourceMoney(profit, "USD")}`
+      };
+    }
+
+    function calculateCashSummary() {
+      const records = readModuleJson(MODULE_STORAGE.cashRecords, []);
+      if (!Array.isArray(records)) return null;
+      let depositedTwd = 0, withdrawnTwd = 0;
+      records.forEach((record) => {
+        const recordCurrency = record.currency || localStorage.getItem(moduleStorageKey(MODULE_STORAGE.cashCurrency)) || "TWD";
+        const converted = toTwd(parseStoredAmount(record.amount), recordCurrency);
+        if (record.type === "deposit") depositedTwd += converted;
+        if (record.type === "withdrawal") withdrawnTwd += converted;
+      });
+      const balance = depositedTwd - withdrawnTwd;
+      return {
+        module: "cash", currency: "TWD", current_value: balance,
+        total_contributed: balance, profit_loss: 0,
+        detail: `${records.length} transaction(s) · deposits ${formatTwd(depositedTwd)} · withdrawals ${formatTwd(withdrawnTwd)}`
+      };
+    }
+
+    function formatSourceMoney(value, currency) {
+      try { return new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 2 }).format(Number(value) || 0); }
+      catch { return `${currency} ${(Number(value) || 0).toFixed(2)}`; }
+    }
+
+    async function loadModuleSummaries() {
+      const summaries = [calculateEtfSummary(), calculateCfdSummary(), calculateCashSummary()].filter(Boolean);
+      const connected = [
+        localStorage.getItem(moduleStorageKey(MODULE_STORAGE.etfTransactions)) != null,
+        localStorage.getItem(moduleStorageKey(MODULE_STORAGE.cfdTrades)) != null || localStorage.getItem(moduleStorageKey(MODULE_STORAGE.cfdFunding)) != null,
+        localStorage.getItem(moduleStorageKey(MODULE_STORAGE.cashRecords)) != null
+      ].filter(Boolean).length;
+      setCloudStatus(connected > 0, `${connected}/3 user data stores found`);
+      return summaries;
+    }
+
+    function renderDashboard(rows) {
+      const normalized = rows.map((row) => ({
+        ...row,
+        module: String(row.module || "").toLowerCase(),
+        valueTwd: toTwd(row.current_value, row.currency),
+        contributedTwd: toTwd(row.total_contributed, row.currency),
+        profitTwd: toTwd(row.profit_loss, row.currency)
+      }));
+      const totals = normalized.reduce((sum, row) => ({
+        value: sum.value + row.valueTwd,
+        contributed: sum.contributed + row.contributedTwd,
+        profit: sum.profit + row.profitTwd
+      }), { value: 0, contributed: 0, profit: 0 });
+
+      $("totalNetWorth").textContent = formatTwd(totals.value);
+      $("totalContributed").textContent = formatTwd(totals.contributed);
+      $("totalProfitLoss").textContent = formatTwd(totals.profit);
+      $("overallRoi").textContent = `${totals.contributed ? (totals.profit / totals.contributed * 100).toFixed(2) : "0.00"}%`;
+
+      ["etf", "cfd", "cash"].forEach((module) => {
+        const matches = normalized.filter((row) => row.module === module || (module === "cash" && row.module === "cash_savings"));
+        const value = matches.reduce((sum, row) => sum + row.valueTwd, 0);
+        const profit = matches.reduce((sum, row) => sum + row.profitTwd, 0);
+        $(`${module}Value`).textContent = formatTwd(value);
+        $(`${module}Subvalue`).textContent = matches.length ? (matches[0].detail || `Profit / loss ${formatTwd(profit)}`) : "No module records found";
+      });
+    }
+
+    async function refreshDashboard() {
+      if (!state.session) return;
+      if (!activateUser(state.session.username)) {
+        setCloudStatus(false, "Profile session could not be activated");
+        return;
+      }
+      $("refreshButton").disabled = true;
+      $("refreshButton").textContent = "Updating…";
+      try {
+        await updateExchangeRates();
+        state.summaries = await loadModuleSummaries();
+        renderDashboard(state.summaries);
+      } finally {
+        $("refreshButton").disabled = false;
+        $("refreshButton").textContent = "Refresh";
+      }
+    }
+
+    function initialize() {
+      const session = getLocalSession();
+      if (session?.username && getLocalUsers().some((user) => user.username.toLowerCase() === String(session.username).toLowerCase())) {
+        activateUser(session.username);
+        showApp(session);
+      } else {
+        localStorage.removeItem(LOCAL_SESSION_KEY);
+        localStorage.removeItem(ACTIVE_USER_KEY);
+        showAuth();
+      }
+    }
+
+    /* Refresh after a module changes storage in another same-origin tab. */
+    window.addEventListener("storage", (event) => {
+      if (Object.values(MODULE_STORAGE).some((baseKey) => event.key === moduleStorageKey(baseKey)) && state.session) refreshDashboard();
+    });
+    /* Same-window navigation: browser Back/Forward restores and recalculates. */
+    window.addEventListener("pageshow", () => { if (state.session) refreshDashboard(); });
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible" && state.session) refreshDashboard();
+    });
+
+    initialize();
+  </script>
+</body>
+</html>
