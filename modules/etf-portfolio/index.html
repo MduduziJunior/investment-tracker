@@ -155,7 +155,12 @@ document.addEventListener('DOMContentLoaded',()=>{
 });
 document.addEventListener('DOMContentLoaded',()=>{
  /* GitHub Pages module contract. Override these routes before this script only if the repository uses different folder names. */
- const routes=window.PROFITPILOT_ROUTES||{home:'https://mduduzijunior.github.io/unifier-interface/index.html',etf:'https://mduduzijunior.github.io/etf-portfolio/index.html',cfd:'https://mduduzijunior.github.io/cfd-journal/index.html',cash:'https://mduduzijunior.github.io/cash-savings/index.html'};
+ const routes = window.PROFITPILOT_ROUTES || {
+  home: 'https://mduduzijunior.github.io/investment-tracker/index.html',
+  etf: 'https://mduduzijunior.github.io/investment-tracker/modules/etf-portfolio/index.html',
+  cfd: 'https://mduduzijunior.github.io/investment-tracker/modules/cfd-journal/index.html',
+  cash: 'https://mduduzijunior.github.io/investment-tracker/modules/cash-savings/index.html'
+};
  window.ProfitPilotModule=Object.freeze({id:'etf',name:'Taiwan ETF Portfolio',broker:'Cathay Securities',region:'Taiwan',currency:'TWD',schemaVersion:1,storageKey:KEY,summaryKey:scopedStorageKey('profitpilot-module-summary-etf-v1'),routes});
  document.querySelector('.work').insertAdjacentHTML('afterbegin','<div class="modulebar"><nav aria-label="ProfitPilot modules"><a data-route="home">← Unified Dashboard</a><a class="active" data-route="etf" aria-current="page">ETF</a><a data-route="cfd">CFD</a><a data-route="cash">Cash Savings</a></nav><span class="modulebar-status"><i></i>Independent ETF module · Taiwan · Cathay</span></div>');
  document.querySelectorAll('[data-route]').forEach(link=>{const target=link.dataset.route;link.href=routes[target]||'#'});
