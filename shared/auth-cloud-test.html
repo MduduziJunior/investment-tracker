@@ -1,0 +1,1225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <title>
+    Aurum Imperium — Auth & Cloud Test
+  </title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 30px;
+      font-family: Arial, sans-serif;
+      background: #0b0f14;
+      color: #f3f4f6;
+    }
+
+    .wrap {
+      max-width: 900px;
+      margin: auto;
+    }
+
+    h1 {
+      margin-bottom: 4px;
+    }
+
+    .sub {
+      color: #9ca3af;
+      margin-bottom: 25px;
+    }
+
+    .panel {
+      background: #141a22;
+      border: 1px solid #2a3340;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 18px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns:
+        repeat(auto-fit, minmax(230px, 1fr));
+      gap: 12px;
+    }
+
+    label {
+      display: block;
+      color: #aab2bf;
+      font-size: 13px;
+      margin-bottom: 5px;
+    }
+
+    input {
+      width: 100%;
+      padding: 11px;
+      border-radius: 7px;
+      border: 1px solid #374151;
+      background: #090c10;
+      color: white;
+    }
+
+    button {
+      padding: 11px 15px;
+      border: 0;
+      border-radius: 8px;
+      font-weight: bold;
+      cursor: pointer;
+      margin: 5px 5px 5px 0;
+    }
+
+    .primary {
+      background: #55d98d;
+      color: #07110b;
+    }
+
+    .secondary {
+      background: #364152;
+      color: white;
+    }
+
+    .danger {
+      background: #9f3a3a;
+      color: white;
+    }
+
+    .row {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 10px 0;
+      border-bottom: 1px solid #242c36;
+    }
+
+    .row:last-child {
+      border-bottom: 0;
+    }
+
+    .label {
+      color: #aab2bf;
+    }
+
+    .pass {
+      color: #55d98d;
+      font-weight: bold;
+    }
+
+    .fail {
+      color: #ff6b6b;
+      font-weight: bold;
+    }
+
+    .waiting {
+      color: #f5c451;
+      font-weight: bold;
+    }
+
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: #090c10;
+      border-radius: 8px;
+      padding: 15px;
+      min-height: 140px;
+      overflow: auto;
+    }
+
+    .warning {
+      color: #f5c451;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="wrap">
+
+  <h1>
+    Aurum Imperium Auth & Cloud Test
+  </h1>
+
+  <div class="sub">
+    Temporary isolated test.
+    No existing investment data is modified.
+  </div>
+
+
+  <!-- ======================================================
+       TEST ACCOUNT
+       ====================================================== -->
+
+  <div class="panel">
+
+    <h3>Temporary Supabase Test Account</h3>
+
+    <div class="grid">
+
+      <div>
+        <label>Username</label>
+
+        <input
+          id="username"
+          type="text"
+          value="CloudTest1"
+        >
+      </div>
+
+
+      <div>
+        <label>Email</label>
+
+        <input
+          id="email"
+          type="email"
+          placeholder="Enter a test email"
+        >
+      </div>
+
+
+      <div>
+        <label>Password</label>
+
+        <input
+          id="password"
+          type="password"
+          placeholder="Use a temporary test password"
+        >
+      </div>
+
+    </div>
+
+
+    <div style="margin-top:15px;">
+
+      <button
+        id="signUp"
+        class="primary"
+      >
+        1. Create Test User
+      </button>
+
+
+      <button
+        id="signIn"
+        class="secondary"
+      >
+        2. Sign In
+      </button>
+
+
+      <button
+        id="signOut"
+        class="danger"
+      >
+        Sign Out
+      </button>
+
+    </div>
+
+
+    <div class="warning">
+      Use a temporary test email/password.
+      Do not use your real financial account password.
+    </div>
+
+  </div>
+
+
+  <!-- ======================================================
+       AUTH RESULTS
+       ====================================================== -->
+
+  <div class="panel">
+
+    <h3>Authentication Checks</h3>
+
+    <div class="row">
+      <span class="label">Cloud Engine</span>
+      <span
+        id="engineStatus"
+        class="waiting"
+      >
+        Waiting
+      </span>
+    </div>
+
+
+    <div class="row">
+      <span class="label">Authenticated User</span>
+      <span
+        id="authStatus"
+        class="waiting"
+      >
+        No session
+      </span>
+    </div>
+
+
+    <div class="row">
+      <span class="label">Supabase User ID</span>
+      <span
+        id="userIdStatus"
+        class="waiting"
+      >
+        —
+      </span>
+    </div>
+
+
+    <div class="row">
+      <span class="label">Profile Row</span>
+      <span
+        id="profileStatus"
+        class="waiting"
+      >
+        Not tested
+      </span>
+    </div>
+
+
+    <div class="row">
+      <span class="label">Visible Username</span>
+      <span
+        id="profileName"
+        class="waiting"
+      >
+        —
+      </span>
+    </div>
+
+  </div>
+
+
+  <!-- ======================================================
+       CLOUD SAVE / LOAD TEST
+       ====================================================== -->
+
+  <div class="panel">
+
+    <h3>Cloud Save / Load</h3>
+
+    <button
+      id="saveTest"
+      class="primary"
+    >
+      3. Save Test Data to Cloud
+    </button>
+
+
+    <button
+      id="loadTest"
+      class="secondary"
+    >
+      4. Load Test Data from Cloud
+    </button>
+
+
+    <div class="row">
+      <span class="label">Cloud Save</span>
+      <span
+        id="saveStatus"
+        class="waiting"
+      >
+        Not tested
+      </span>
+    </div>
+
+
+    <div class="row">
+      <span class="label">Cloud Load</span>
+      <span
+        id="loadStatus"
+        class="waiting"
+      >
+        Not tested
+      </span>
+    </div>
+
+
+    <div class="row">
+      <span class="label">Returned Revision</span>
+      <span
+        id="revisionStatus"
+        class="waiting"
+      >
+        —
+      </span>
+    </div>
+
+
+    <div class="row">
+      <span class="label">Data Integrity</span>
+      <span
+        id="integrityStatus"
+        class="waiting"
+      >
+        Not tested
+      </span>
+    </div>
+
+  </div>
+
+
+  <!-- ======================================================
+       LOG
+       ====================================================== -->
+
+  <div class="panel">
+
+    <strong>Test Log</strong>
+
+    <pre id="log">Ready.</pre>
+
+  </div>
+
+</div>
+
+
+<!-- ========================================================
+     SUPABASE SDK
+     ======================================================== -->
+
+<script
+  src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
+</script>
+
+
+<!-- ========================================================
+     AURUM CONFIG
+     ======================================================== -->
+
+<script src="./supabase-config.js"></script>
+
+
+<!-- ========================================================
+     AURUM CLOUD ENGINE
+     ======================================================== -->
+
+<script src="./aurum-cloud.js"></script>
+
+
+<script>
+(() => {
+
+  "use strict";
+
+
+  const $ = id =>
+    document.getElementById(id);
+
+
+  const TEST_MARKER =
+    "AURUM_CLOUD_RUNTIME_TEST_2026";
+
+
+  function setStatus(
+    id,
+    text,
+    type = "waiting"
+  ) {
+
+    const element =
+      $(id);
+
+    element.textContent =
+      text;
+
+    element.className =
+      type;
+
+  }
+
+
+  function log(message) {
+
+    const time =
+      new Date()
+        .toLocaleTimeString();
+
+    $("log").textContent +=
+      "\n[" +
+      time +
+      "] " +
+      message;
+
+  }
+
+
+  function credentials() {
+
+    return {
+
+      username:
+        $("username")
+          .value
+          .trim(),
+
+      email:
+        $("email")
+          .value
+          .trim(),
+
+      password:
+        $("password")
+          .value
+
+    };
+
+  }
+
+
+  async function refreshAuthDisplay() {
+
+    const user =
+      window.AurumCloud
+        .auth
+        .getUser();
+
+
+    if (!user) {
+
+      setStatus(
+        "authStatus",
+        "NO SESSION",
+        "waiting"
+      );
+
+      setStatus(
+        "userIdStatus",
+        "—",
+        "waiting"
+      );
+
+      setStatus(
+        "profileStatus",
+        "Not tested",
+        "waiting"
+      );
+
+      setStatus(
+        "profileName",
+        "—",
+        "waiting"
+      );
+
+      return;
+
+    }
+
+
+    setStatus(
+      "authStatus",
+      "SIGNED IN",
+      "pass"
+    );
+
+
+    setStatus(
+      "userIdStatus",
+      user.id,
+      "pass"
+    );
+
+
+    try {
+
+      const profile =
+        await window.AurumCloud
+          .profile
+          .load();
+
+
+      if (profile) {
+
+        setStatus(
+          "profileStatus",
+          "PASS",
+          "pass"
+        );
+
+
+        setStatus(
+          "profileName",
+          profile.username ||
+          profile.display_name ||
+          "Profile exists",
+          "pass"
+        );
+
+
+        log(
+          "Profile row loaded successfully."
+        );
+
+      } else {
+
+        setStatus(
+          "profileStatus",
+          "FAIL",
+          "fail"
+        );
+
+      }
+
+    } catch (error) {
+
+      setStatus(
+        "profileStatus",
+        "FAIL",
+        "fail"
+      );
+
+
+      log(
+        "Profile error: " +
+        (
+          error?.message ||
+          error
+        )
+      );
+
+    }
+
+  }
+
+
+  async function boot() {
+
+    try {
+
+      await window.AurumCloud
+        .initialize();
+
+
+      setStatus(
+        "engineStatus",
+        "PASS",
+        "pass"
+      );
+
+
+      log(
+        "AurumCloud initialized."
+      );
+
+
+      await refreshAuthDisplay();
+
+    } catch (error) {
+
+      setStatus(
+        "engineStatus",
+        "FAIL",
+        "fail"
+      );
+
+
+      log(
+        "Initialization failed: " +
+        (
+          error?.message ||
+          error
+        )
+      );
+
+    }
+
+  }
+
+
+  // ========================================================
+  // CREATE TEST USER
+  // ========================================================
+
+  $("signUp")
+    .addEventListener(
+      "click",
+      async () => {
+
+        const {
+          username,
+          email,
+          password
+        } =
+          credentials();
+
+
+        if (
+          !username ||
+          !email ||
+          !password
+        ) {
+
+          alert(
+            "Enter username, email and password."
+          );
+
+          return;
+
+        }
+
+
+        try {
+
+          log(
+            "Creating temporary Supabase test user..."
+          );
+
+
+          const result =
+            await window.AurumCloud
+              .auth
+              .signUp({
+
+                username,
+
+                displayName:
+                  username,
+
+                email,
+
+                password
+
+              });
+
+
+          log(
+            "Sign-up request completed."
+          );
+
+
+          /*
+           * If email confirmation is disabled,
+           * Supabase normally provides a session immediately.
+           *
+           * If confirmation is enabled, the user can exist
+           * while session remains null.
+           */
+
+          if (
+            result?.session
+          ) {
+
+            log(
+              "Authenticated session created automatically."
+            );
+
+          } else {
+
+            log(
+              "User created but no immediate session was returned."
+            );
+
+            log(
+              "If necessary, use Sign In after confirming the email."
+            );
+
+          }
+
+
+          await new Promise(
+            resolve =>
+              setTimeout(
+                resolve,
+                500
+              )
+          );
+
+
+          await refreshAuthDisplay();
+
+        } catch (error) {
+
+          log(
+            "SIGN-UP ERROR: " +
+            (
+              error?.message ||
+              error
+            )
+          );
+
+        }
+
+      }
+    );
+
+
+  // ========================================================
+  // SIGN IN
+  // ========================================================
+
+  $("signIn")
+    .addEventListener(
+      "click",
+      async () => {
+
+        const {
+          email,
+          password
+        } =
+          credentials();
+
+
+        if (
+          !email ||
+          !password
+        ) {
+
+          alert(
+            "Enter email and password."
+          );
+
+          return;
+
+        }
+
+
+        try {
+
+          log(
+            "Signing in..."
+          );
+
+
+          await window.AurumCloud
+            .auth
+            .signIn({
+              email,
+              password
+            });
+
+
+          await new Promise(
+            resolve =>
+              setTimeout(
+                resolve,
+                400
+              )
+          );
+
+
+          await refreshAuthDisplay();
+
+
+          log(
+            "Sign in completed."
+          );
+
+        } catch (error) {
+
+          log(
+            "SIGN-IN ERROR: " +
+            (
+              error?.message ||
+              error
+            )
+          );
+
+        }
+
+      }
+    );
+
+
+  // ========================================================
+  // SIGN OUT
+  // ========================================================
+
+  $("signOut")
+    .addEventListener(
+      "click",
+      async () => {
+
+        try {
+
+          await window.AurumCloud
+            .auth
+            .signOut();
+
+
+          await refreshAuthDisplay();
+
+
+          log(
+            "Signed out."
+          );
+
+        } catch (error) {
+
+          log(
+            "SIGN-OUT ERROR: " +
+            (
+              error?.message ||
+              error
+            )
+          );
+
+        }
+
+      }
+    );
+
+
+  // ========================================================
+  // CLOUD SAVE TEST
+  // ========================================================
+
+  $("saveTest")
+    .addEventListener(
+      "click",
+      async () => {
+
+        const user =
+          window.AurumCloud
+            .auth
+            .getUser();
+
+
+        if (!user) {
+
+          alert(
+            "Sign in first."
+          );
+
+          return;
+
+        }
+
+
+        const testData = {
+
+          test_marker:
+            TEST_MARKER,
+
+          purpose:
+            "Aurum Supabase authenticated save/load validation",
+
+          test_value:
+            3000,
+
+          nested_data: {
+
+            cash:
+              3000,
+
+            etf_units:
+              12.5,
+
+            cfd_test:
+              true
+
+          },
+
+          future_extension: {
+
+            unknown_future_field:
+              "preserve-me",
+
+            future_array: [
+              1,
+              2,
+              3
+            ]
+
+          },
+
+          created_by_user:
+            user.id,
+
+          generated_at:
+            new Date()
+              .toISOString()
+
+        };
+
+
+        try {
+
+          setStatus(
+            "saveStatus",
+            "SAVING...",
+            "waiting"
+          );
+
+
+          log(
+            "Saving authenticated test JSON to module_state..."
+          );
+
+
+          const result =
+            await window.AurumCloud
+              .module
+              .save(
+                "unified",
+                testData,
+                {
+                  schemaVersion: 1
+                }
+              );
+
+
+          if (
+            result?.queued
+          ) {
+
+            setStatus(
+              "saveStatus",
+              "QUEUED",
+              "waiting"
+            );
+
+
+            log(
+              "Save is currently queued."
+            );
+
+            return;
+
+          }
+
+
+          setStatus(
+            "saveStatus",
+            "PASS",
+            "pass"
+          );
+
+
+          setStatus(
+            "revisionStatus",
+            String(
+              result?.revision ??
+              "Created"
+            ),
+            "pass"
+          );
+
+
+          log(
+            "Cloud save completed."
+          );
+
+        } catch (error) {
+
+          setStatus(
+            "saveStatus",
+            "FAIL",
+            "fail"
+          );
+
+
+          log(
+            "CLOUD SAVE ERROR: " +
+            (
+              error?.message ||
+              error
+            )
+          );
+
+        }
+
+      }
+    );
+
+
+  // ========================================================
+  // CLOUD LOAD TEST
+  // ========================================================
+
+  $("loadTest")
+    .addEventListener(
+      "click",
+      async () => {
+
+        const user =
+          window.AurumCloud
+            .auth
+            .getUser();
+
+
+        if (!user) {
+
+          alert(
+            "Sign in first."
+          );
+
+          return;
+
+        }
+
+
+        try {
+
+          setStatus(
+            "loadStatus",
+            "LOADING...",
+            "waiting"
+          );
+
+
+          log(
+            "Loading module_state back from Supabase..."
+          );
+
+
+          const result =
+            await window.AurumCloud
+              .module
+              .load(
+                "unified"
+              );
+
+
+          if (
+            !result ||
+            !result.state
+          ) {
+
+            throw new Error(
+              "No cloud state was returned."
+            );
+
+          }
+
+
+          setStatus(
+            "loadStatus",
+            "PASS",
+            "pass"
+          );
+
+
+          setStatus(
+            "revisionStatus",
+            String(
+              result.revision ??
+              "—"
+            ),
+            "pass"
+          );
+
+
+          const state =
+            result.state;
+
+
+          const integrityPass =
+            state.test_marker ===
+              TEST_MARKER &&
+
+            state.test_value ===
+              3000 &&
+
+            state.nested_data
+              ?.cash ===
+              3000 &&
+
+            state.future_extension
+              ?.unknown_future_field ===
+              "preserve-me" &&
+
+            Array.isArray(
+              state.future_extension
+                ?.future_array
+            );
+
+
+          if (
+            integrityPass
+          ) {
+
+            setStatus(
+              "integrityStatus",
+              "PASS",
+              "pass"
+            );
+
+
+            log(
+              "JSON integrity test passed."
+            );
+
+
+            log(
+              "Future/unknown JSON fields were preserved."
+            );
+
+          } else {
+
+            setStatus(
+              "integrityStatus",
+              "FAIL",
+              "fail"
+            );
+
+
+            log(
+              "Loaded data did not exactly match the saved structure."
+            );
+
+          }
+
+
+          log(
+            "Cloud source: " +
+            (
+              result.source ||
+              "unknown"
+            )
+          );
+
+        } catch (error) {
+
+          setStatus(
+            "loadStatus",
+            "FAIL",
+            "fail"
+          );
+
+
+          setStatus(
+            "integrityStatus",
+            "FAIL",
+            "fail"
+          );
+
+
+          log(
+            "CLOUD LOAD ERROR: " +
+            (
+              error?.message ||
+              error
+            )
+          );
+
+        }
+
+      }
+    );
+
+
+  // ========================================================
+  // BOOT
+  // ========================================================
+
+  boot();
+
+})();
+</script>
+
+</body>
+</html>
