@@ -1,15 +1,18 @@
 <!DOCTYPE html>
 <!--
-SUPABASE INVESTMENT TRACKER — CFD MODULE
-GitHub Pages placement: /cfd/index.html
-Unified home route: ../index.html
+SUPABASE INVESTMENT TRACKER — CFD MODULE — CLOUD-NATIVE REPLACEMENT
+Repository placement: /modules/cfd-journal/index.html
+Unified home route: ../../index.html
 
-Deployment model:
-- Keep this file standalone inside the cfd folder.
-- Do not merge its JavaScript with ETF or cash-savings modules.
-- The future root /index.html should link to ./cfd/.
-- One shared Supabase project can later serve all modules using CFD-prefixed tables.
-- Current persistence remains browser-local until the Supabase data adapter is added.
+Architecture:
+- Standalone CFD interface; authentication exists only in the Unified Dashboard.
+- Reuses the authenticated Supabase session through shared/aurum-cloud.js.
+- Keeps a username/user-id-scoped local compatibility mirror for fast/offline use.
+- Synchronizes complete CFD state to Supabase after a 10-second debounce.
+- Private evidence files are cached locally in IndexedDB and synchronized to the
+  authenticated user's private Supabase Storage path when connectivity is available.
+- All CFD trading/funding calculations remain in USD; the Unified Dashboard performs
+  final whole-portfolio conversion/reporting in TWD.
 -->
 <html lang="en">
 <head>
@@ -197,34 +200,72 @@ button{cursor:pointer}
 .module-tag span{border:1px solid var(--line);background:#091426;border-radius:999px;padding:3px 7px}
 @media(max-width:650px){.top-actions .hub-link{width:100%}}
 
+
+
+/* SUPABASE SESSION / CLOUD CONTROLS */
+[hidden]{display:none!important}
+.blocking{position:fixed;inset:0;z-index:200;display:grid;place-items:center;padding:20px;background:rgba(4,10,24,.88);backdrop-filter:blur(9px)}
+.blocking-card{width:min(460px,100%);background:#0c1933;border:1px solid #32456a;border-radius:18px;padding:25px;box-shadow:0 28px 80px rgba(0,0,0,.48);text-align:center}
+.blocking-card h2{margin:0 0 8px;font-size:20px}.blocking-card p{margin:0;color:var(--muted);line-height:1.55;font-size:12px}
+.blocking-card.warning-card{border-color:rgba(255,200,87,.68)}.countdown{font-size:36px;font-weight:900;color:#ffd777;margin:12px 0}
+.cloud-cluster{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.cloud-pill{display:inline-flex;align-items:center;gap:7px;min-height:35px;padding:0 10px;border:1px solid var(--line);border-radius:999px;background:#0b1729;color:var(--muted);font-size:10px;font-weight:800}
+.cloud-dot{width:8px;height:8px;border-radius:50%;background:#71809a;display:inline-block}.cloud-dot.online{background:var(--green);box-shadow:0 0 0 4px rgba(66,211,146,.10)}.cloud-dot.pending{background:var(--amber);box-shadow:0 0 0 4px rgba(255,200,87,.10)}.cloud-dot.error{background:var(--red);box-shadow:0 0 0 4px rgba(255,107,122,.10)}
+.profile-pill{display:inline-flex;align-items:center;min-height:35px;padding:0 10px;border:1px solid var(--line);border-radius:999px;background:#0b1729;color:#dbe8ff;font-size:10px;font-weight:800}
+.conflict-banner{margin:0 0 14px;padding:11px 13px;border:1px solid rgba(255,200,87,.48);border-radius:11px;background:rgba(255,200,87,.08);color:#ffe4a2;font-size:11px;line-height:1.5}
+.cloud-evidence-badge{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:999px;padding:3px 6px;margin-top:5px;font-size:8px;color:#b7cae5;background:#0b1729}
+@media(max-width:760px){.cloud-cluster{width:100%}.cloud-pill,.profile-pill{flex:1 1 auto}.top-actions .btn{flex:1 1 auto}}
+
 </style>
 </head>
 <body>
+<div id="sessionGate" class="blocking">
+  <div class="blocking-card">
+    <h2>Checking secure session…</h2>
+    <p>CFD Journal uses the Supabase account already authenticated through the Unified Dashboard.</p>
+  </div>
+</div>
+
+<div id="inactivityWarning" class="blocking" hidden>
+  <div class="blocking-card warning-card">
+    <h2>Inactivity Logout Warning</h2>
+    <div id="logoutCountdown" class="countdown">10</div>
+    <p>You will be signed out after 60 seconds of inactivity. Any genuine activity or the button below will keep the session active.</p>
+    <button id="staySignedIn" class="btn primary" type="button" style="margin-top:16px">Stay Signed In</button>
+  </div>
+</div>
 <div class="app">
   <header class="topbar">
     <div class="brand">
       <h1>CFD Investment Module</h1>
       <p>A stage-organised CFD journal: enter a trade once, manage only open trades, archive closed trades, and analyse performance monthly.</p>
-      <div class="module-tag"><span>Module: CFD</span><span>GitHub-ready v6.1</span><span>Schema v3</span></div>
+      <div class="module-tag"><span>Module: CFD</span><span>Supabase v7.2</span><span>Schema v4</span><span>USD ledger · TWD unified reporting</span></div>
     </div>
     <div class="top-actions">
-      <a class="btn hub-link" id="hubLink" href="https://mduduzijunior.github.io/unifier-interface/index.html" title="Return to the unified investment tracker">← Investment Tracker</a>
-      <button class="btn success" id="fundsBtn">Deposits &amp; Withdrawals</button>
-      <button class="btn" id="importBtn">Import JSON</button>
+      <div class="cloud-cluster" aria-label="Cloud status">
+        <span class="cloud-pill"><i id="cloudDot" class="cloud-dot"></i><span id="cloudStatus">Connecting securely…</span></span>
+        <span id="profileChip" class="profile-pill">Profile: —</span>
+      </div>
+      <a class="btn hub-link" id="hubLink" href="../../index.html" title="Return to the unified investment tracker">← Investment Tracker</a>
+      <button class="btn" id="loadCloud" type="button">Load Cloud</button>
+      <button class="btn" id="saveCloud" type="button">Save Cloud</button>
+      <button class="btn success" id="fundsBtn" type="button">Deposits &amp; Withdrawals</button>
+      <button class="btn" id="importBtn" type="button">Import JSON</button>
       <input class="file-input" id="importFile" type="file" accept="application/json,.json" />
-      <button class="btn" id="exportBtn">Export</button>
-      
+      <button class="btn" id="exportBtn" type="button">Export</button>
     </div>
   </header>
 
   <nav class="section-links" aria-label="Investment tracker sections">
-    <a href="https://mduduzijunior.github.io/investment-tracker/index.html">Unified Dashboard</a>
-<a href="https://mduduzijunior.github.io/investment-tracker/modules/etf-portfolio/index.html">ETF Portfolio</a>
-<a class="active" href="https://mduduzijunior.github.io/investment-tracker/modules/cfd-journal/index.html" aria-current="page">CFD Journal</a>
-<a href="https://mduduzijunior.github.io/investment-tracker/modules/cash-savings/index.html">Cash Savings</a>
-    
-    
+    <a href="../../index.html">Unified Dashboard</a>
+    <a href="../etf-portfolio/index.html">ETF Portfolio</a>
+    <a class="active" href="./index.html" aria-current="page">CFD Journal</a>
+    <a href="../cash-savings/index.html">Cash Savings</a>
   </nav>
+
+  <div id="conflictBanner" class="conflict-banner hidden">
+    A newer CFD cloud revision is protected. Editing and Save Cloud are locked until you use <strong>Load Cloud</strong> to accept the latest Supabase copy.
+  </div>
 
   <nav class="module-nav" aria-label="CFD module navigation">
     <button class="module-tab dashboard-tab active" type="button" data-view="DASHBOARD">
@@ -320,7 +361,7 @@ button{cursor:pointer}
             </div>
           </article>
         </div>
-        <div class="storage-note">Evidence files are stored locally in this browser using its file database. They are kept separate from trading calculations so screenshots and PDFs do not distort or overload the trade ledger.</div>
+        <div class="storage-note">Evidence binaries are cached locally for fast/offline access and synchronized to this authenticated user's private Supabase Storage path. Metadata remains inside the CFD cloud state; evidence never changes trading calculations.</div>
       </section>
 
       <section class="dashboard-section">
@@ -423,13 +464,13 @@ button{cursor:pointer}
               <div class="field"><label class="required">Trade Time</label><input id="entryTime" type="time" /></div>
               <div class="field"><label>Trade ID</label><input id="tradeId" readonly /></div>
               <div class="field"><label class="required">Instrument</label><input id="instrument" placeholder="EURUSD, US500, XAUUSD..." /></div>
-              <div class="field"><label>Asset Type</label><select id="assetType"><option>Forex</option><option>Index CFD</option><option>Commodity CFD</option><option>Stock CFD</option><option>Crypto CFD</option><option>Other CFD</option></select></div>
+              <div class="field"><label>Asset Type</label><select id="assetType"><option value="">Select asset type</option><option>Forex</option><option>Index CFD</option><option>Commodity CFD</option><option>Stock CFD</option><option>Crypto CFD</option><option>Other CFD</option></select></div>
               <div class="field"><label class="required">Direction</label><select id="direction"><option value="">Unknown / unavailable</option><option>BUY</option><option>SELL</option></select></div>
               <div class="field"><label>Broker</label><input id="broker" placeholder="e.g. Capital.com" /></div>
               <div class="field"><label>Account / Portfolio</label><input id="accountName" placeholder="e.g. CFD $100 Validation" /></div>
-              <div class="field"><label>Trading Session</label><select id="session"><option>Asian</option><option>London</option><option>New York</option><option>London / New York Overlap</option><option>Other</option></select></div>
+              <div class="field"><label>Trading Session</label><select id="session"><option value="">Not recorded</option><option>Asian</option><option>London</option><option>New York</option><option>London / New York Overlap</option><option>Other</option></select></div>
               <div class="field"><label>Strategy / Setup</label><input id="strategy" placeholder="Demand rejection, breakout, pullback..." /></div>
-              <div class="field"><label>Higher-Timeframe Bias</label><select id="htfBias"><option>Bullish</option><option>Bearish</option><option>Neutral</option></select></div>
+              <div class="field"><label>Higher-Timeframe Bias</label><select id="htfBias"><option value="">Not recorded</option><option>Bullish</option><option>Bearish</option><option>Neutral</option></select></div>
               <div class="field"><label>Entry Timeframe</label><input id="entryTimeframe" placeholder="e.g. 5m / 15m / 1h" /></div>
             </div>
           </div>
@@ -444,7 +485,7 @@ button{cursor:pointer}
               <div class="field"><label>Account Equity Before</label><input id="equityBefore" type="number" step="0.01" min="0" placeholder="100.00" /></div>
               <div class="field"><label>Planned Risk %</label><input id="plannedRiskPct" type="number" step="0.01" min="0" placeholder="1.00" /><div class="help">Used to calculate a suggested size.</div></div>
               <div class="field"><label>Position Size</label><input id="positionSize" type="number" step="any" min="0" placeholder="1" /></div>
-              <div class="field"><label>Value per 1.0 Price Move / Size Unit</label><input id="valuePerUnit" type="number" step="any" min="0" value="1" /><div class="help">Makes risk/P&amp;L calculations work across CFDs.</div></div>
+              <div class="field"><label class="required">Value per 1.0 Price Move / Size Unit</label><input id="valuePerUnit" type="number" step="any" min="0" placeholder="Enter the broker/contract value" /><div class="help">Required for reliable risk/P&amp;L calculations. Do not leave an assumed default.</div></div>
               <div class="field"><label>Pip / Point Size</label><input id="pipSize" type="number" step="any" min="0" placeholder="0.0001" /><div class="help">Optional; enables pip/point distance.</div></div>
               <div class="field"><label>Leverage</label><input id="leverage" type="number" step="any" min="0" placeholder="30" /></div>
               <div class="field"><label>Entry Spread Cost</label><input id="spreadCost" type="number" step="0.01" min="0" value="0" /></div>
@@ -470,7 +511,7 @@ button{cursor:pointer}
             <div class="grid two">
               <div class="field"><label>Entry Trigger</label><input id="entryTrigger" placeholder="Rejection, BOS, retest, candle close..." /></div>
               <div class="field"><label>Key Level / Zone</label><input id="keyLevel" placeholder="e.g. demand 1.16400–1.16500" /></div>
-              <div class="field"><label>Market Condition</label><select id="marketCondition"><option>Trending</option><option>Range</option><option>Breakout</option><option>Reversal</option><option>High Volatility</option><option>Low Volatility</option><option>Unclear</option></select></div>
+              <div class="field"><label>Market Condition</label><select id="marketCondition"><option value="">Not recorded</option><option>Trending</option><option>Range</option><option>Breakout</option><option>Reversal</option><option>High Volatility</option><option>Low Volatility</option><option>Unclear</option></select></div>
               <div class="field"><label>News / Event Risk</label><input id="newsRisk" placeholder="CPI, NFP, FOMC, earnings, none..." /></div>
               <div class="field full"><label>Trade Thesis</label><textarea id="tradeThesis" placeholder="What must be true for this trade to make sense? What invalidates the idea?"></textarea></div>
               <div class="field full"><label>Pre-Trade Notes</label><textarea id="preTradeNotes" placeholder="Context, confluences, execution notes, screenshot references..."></textarea></div>
@@ -559,7 +600,7 @@ button{cursor:pointer}
               <div class="field"><label class="required">Exit Date</label><input id="exitDate" type="date" /></div>
               <div class="field"><label class="required">Exit Time</label><input id="exitTime" type="time" /></div>
               <div class="field"><label class="required">Final Exit Price</label><input id="finalExitPrice" type="number" step="any" /></div>
-              <div class="field"><label>Exit Reason</label><select id="exitReason"><option>Take Profit</option><option>Stop Loss</option><option>Manual Close</option><option>Trailing Stop</option><option>Risk Reduction / Invalidated</option><option>Time Exit</option><option>Other</option></select></div>
+              <div class="field"><label>Exit Reason</label><select id="exitReason"><option value="">Select exit reason</option><option>Take Profit</option><option>Stop Loss</option><option>Manual Close</option><option>Trailing Stop</option><option>Risk Reduction / Invalidated</option><option>Time Exit</option><option>Other</option></select></div>
               <div class="field"><label>Final Closed Size</label><input id="finalClosedSize" type="number" step="any" min="0" /></div>
               <div class="field"><label>Final Leg Gross P/L</label><input id="finalLegGrossPnl" type="number" step="0.01" placeholder="Auto-calculated; can override" /></div>
               <div class="field"><label>Exit Commission</label><input id="exitCommission" type="number" step="0.01" min="0" value="0" /></div>
@@ -646,10 +687,12 @@ button{cursor:pointer}
       <div class="grid">
         <div class="field"><label class="required">Date</label><input id="fundDate" type="date" /></div>
         <div class="field"><label class="required">Time</label><input id="fundTime" type="time" /></div>
-        <div class="field"><label class="required">Type</label><select id="fundType"><option>Deposit</option><option>Withdrawal</option></select></div>
+        <div class="field"><label class="required">Type</label><select id="fundType"><option value="">Select type</option><option>Deposit</option><option>Withdrawal</option></select></div>
         <div class="field"><label class="required">Amount (USD)</label><input id="fundAmount" type="number" step="0.01" min="0" placeholder="100.00" /></div>
+        <div class="field"><label class="required">USD → TWD Rate</label><input id="fundFxRate" type="number" step="0.000001" min="0" placeholder="e.g. 31.650000" /><div class="help">TWD per USD at the time of the actual cash movement. Auto-filled from the shared FX cache when available and editable for the broker/bank rate actually used.</div></div>
+        <div class="field"><label>TWD Value at Transaction</label><input id="fundTwdValue" readonly placeholder="Calculated automatically" /></div>
         <div class="field"><label>Broker / Account</label><input id="fundAccount" placeholder="e.g. Capital.com · CFD $100" /></div>
-        <div class="field"><label>Method</label><select id="fundMethod"><option>Bank Transfer</option><option>Card</option><option>Mobile Money</option><option>Cash</option><option>Internal Transfer</option><option>Other</option></select></div>
+        <div class="field"><label>Method</label><select id="fundMethod"><option value="">Not recorded</option><option>Bank Transfer</option><option>Card</option><option>Mobile Money</option><option>Cash</option><option>Internal Transfer</option><option>Other</option></select></div>
         <div class="field"><label>Reference</label><input id="fundReference" placeholder="Transaction/reference number" /></div>
         <div class="field"><label>Notes</label><input id="fundNotes" placeholder="Reason or funding note" /></div>
       </div>
@@ -702,71 +745,80 @@ button{cursor:pointer}
 
 <div class="toast" id="toast"><strong></strong><span></span></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../../shared/supabase-config.js"></script>
+<script src="../../shared/aurum-cloud.js"></script>
 <script>
 (() => {
 'use strict';
 /*
-  GITHUB / UNIFIED-APP INTEGRATION CONTRACT
-  -----------------------------------------
-  Expected repository location:
-      /index.html          -> unified investment-tracker home (added later)
-      /cfd/index.html      -> this module
-      /etf/index.html      -> ETF module
-      /cash-savings/index.html -> cash-savings module
-
-  This CFD module remains standalone. The unified app should LINK to it instead
-  of copying its internal JavaScript into the root page.
-
-  The browser-storage keys below intentionally remain identical to V6 so
-  existing CFD data is preserved when this GitHub-ready file replaces V6.
+  CFD CLOUD / UNIFIED-APP CONTRACT
+  --------------------------------
+  - Authentication is owned by ../../index.html (Unified Dashboard).
+  - This module never creates a second login form.
+  - Complete CFD state is saved under AurumCloud module "cfd".
+  - A user-id-bound username scope is mirrored into localStorage so the Unified
+    Dashboard can read the same current user's CFD ledger without cross-profile mixing.
+  - Trading/funding ledger currency is USD; final cross-module reporting is TWD.
 */
 const ACTIVE_USER_KEY = 'aurum_imperium_active_user_v1';
 const LEGACY_CLAIM_KEY = 'aurum_imperium_legacy_data_claimed_v1';
-const ACTIVE_USERNAME = localStorage.getItem(ACTIVE_USER_KEY) || '';
-const USER_SCOPE = encodeURIComponent(ACTIVE_USERNAME.trim().toLowerCase()) || 'no-active-user';
-const scopedStorageKey = key => `${key}::user:${USER_SCOPE}`;
+const LEGACY_SCOPE_BINDING_PREFIX = 'aurum_imperium_legacy_scope_binding_v2';
+const RATE_CACHE_KEY = 'aurum_imperium_twd_rates_v1';
+const ROOT_URL = '../../index.html';
+const CLOUD_MODULE_ID = 'cfd';
+const AUTO_SAVE_MS = 10000;
+const INACTIVITY_MS = 60000;
+const WARNING_MS = 10000;
+const MAX_IMPORT_BYTES = 20 * 1024 * 1024;
+
 const CFD_BASE_KEYS = Object.freeze({
   trades:'supabase_investment_tracker_cfd_v2',
   funding:'supabase_investment_tracker_cfd_funding_v1',
   evidenceDb:'cfd_trade_tracker_evidence_v1'
 });
-const CFD_CLAIM_OWNER=localStorage.getItem(LEGACY_CLAIM_KEY);
-if(ACTIVE_USERNAME&&(!CFD_CLAIM_OWNER||CFD_CLAIM_OWNER.toLowerCase()===ACTIVE_USERNAME.toLowerCase())){
-  let claimed=false;
-  [CFD_BASE_KEYS.trades,CFD_BASE_KEYS.funding].forEach(base=>{const target=scopedStorageKey(base),candidates=[base,`${base}::user:no-active-user`,`${base}::no-active-user`],source=candidates.find(key=>localStorage.getItem(key)!=null);if(source&&localStorage.getItem(target)==null){localStorage.setItem(target,localStorage.getItem(source));localStorage.removeItem(source);claimed=true}});
-  if(claimed)localStorage.setItem(LEGACY_CLAIM_KEY,ACTIVE_USERNAME);
-}
+
 const MODULE_CONFIG = Object.freeze({
   id: 'cfd',
+  cloudId: CLOUD_MODULE_ID,
   name: 'CFD Investment Module',
-  version: '6.1.0',
-  schemaVersion: 3,
-  route: 'https://mduduzijunior.github.io/cfd-journal/index.html',
-  hubPath: 'https://mduduzijunior.github.io/unifier-interface/index.html',
-  storage: Object.freeze({
-    trades: scopedStorageKey(CFD_BASE_KEYS.trades),
-    funding: scopedStorageKey(CFD_BASE_KEYS.funding),
-    evidenceDb: scopedStorageKey(CFD_BASE_KEYS.evidenceDb)
-  }),
-  futureSupabaseNamespace: 'cfd',
-  futureTables: Object.freeze([
-    'cfd_trades',
-    'cfd_trade_management',
-    'cfd_trade_results',
-    'cfd_funding',
-    'cfd_evidence_metadata'
-  ])
+  version: '7.2.0',
+  schemaVersion: 4,
+  bridgeVersion: 2,
+  route: './index.html',
+  hubPath: ROOT_URL,
+  storage: CFD_BASE_KEYS,
+  reportingCurrency: 'USD',
+  unifiedReportingCurrency: 'TWD'
 });
 
-const STORAGE_KEY = MODULE_CONFIG.storage.trades;
-const FUNDING_KEY = MODULE_CONFIG.storage.funding;
 const SCHEMA_VERSION = MODULE_CONFIG.schemaVersion;
-let trades = loadStore();
-let funding = loadFundingStore();
+let STORAGE_KEY = '';
+let FUNDING_KEY = '';
+let ATTACHMENT_DB = '';
+let trades = [];
+let funding = [];
 let currentId = null;
 let currentStage = 1;
 let pendingImport = null;
 let currentView = 'DASHBOARD';
+
+const cloudRuntime = {
+  initialized:false,
+  user:null,
+  profile:null,
+  username:'',
+  compatibilityScope:'',
+  cloudBaseState:{},
+  evidenceIndex:{},
+  conflictLocked:false,
+  lastActivityAt:Date.now(),
+  warningVisible:false,
+  logoutInProgress:false,
+  lastMutationAt:null,
+  pendingMutation:false,
+  cloudSaveInProgress:false
+};
 
 const PUBLIC_MODULE_DESCRIPTOR = Object.freeze({
   id: MODULE_CONFIG.id,
@@ -783,7 +835,11 @@ const PUBLIC_MODULE_DESCRIPTOR = Object.freeze({
     'monthly-analysis',
     'json-import-export',
     'trade-evidence',
-    'monthly-broker-evidence'
+    'monthly-broker-evidence',
+    'supabase-auth-session',
+    'supabase-cloud-sync',
+    'private-storage-evidence',
+    'offline-local-cache'
   ])
 });
 
@@ -809,12 +865,11 @@ function resolveHubLink(){
   if(!link) return;
   // Relative routing is GitHub Pages project-safe:
   // /repository/cfd/index.html -> /repository/index.html
-  link.setAttribute('href',MODULE_CONFIG.hubPath);
+  link.setAttribute('href',ROOT_URL);
 }
 
 
 let attachmentDBPromise=null;
-const ATTACHMENT_DB=MODULE_CONFIG.storage.evidenceDb;
 const ATTACHMENT_STORE='attachments';
 const ATTACHMENT_MAX_BYTES=20*1024*1024;
 const attachmentObjectUrls=new Map();
@@ -822,7 +877,8 @@ const attachmentObjectUrls=new Map();
 function openAttachmentDB(){
   if(attachmentDBPromise) return attachmentDBPromise;
   attachmentDBPromise=new Promise((resolve,reject)=>{
-    if(!('indexedDB' in window)){ reject(new Error('This browser does not support local evidence-file storage.')); return; }
+    if(!('indexedDB' in window)){ reject(new Error('This browser does not support the local evidence cache.')); return; }
+    if(!ATTACHMENT_DB){ reject(new Error('Evidence cache is not initialized for the authenticated profile.')); return; }
     const req=indexedDB.open(ATTACHMENT_DB,1);
     req.onupgradeneeded=()=>{
       const db=req.result;
@@ -838,6 +894,105 @@ function openAttachmentDB(){
 }
 function attachmentKey(ownerType,ownerId,kind){ return `${ownerType}:${ownerId}:${kind}`; }
 function attachmentOwnerKey(ownerType,ownerId){ return `${ownerType}:${ownerId}`; }
+
+function evidenceMetaKey(ownerType,ownerId,kind){ return attachmentKey(ownerType,ownerId,kind); }
+function safePathPart(value){ return String(value||'unknown').replace(/[^a-zA-Z0-9._-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,120)||'unknown'; }
+function extensionForEvidence(rec){
+  const byName=(String(rec?.name||'').match(/\.([A-Za-z0-9]{1,8})$/)||[])[1];
+  if(byName) return byName.toLowerCase();
+  const type=String(rec?.type||'').toLowerCase();
+  if(type==='application/pdf') return 'pdf';
+  if(type==='image/png') return 'png'; if(type==='image/webp') return 'webp'; if(type==='image/gif') return 'gif';
+  return 'jpg';
+}
+function evidencePath(rec){
+  const uid=cloudRuntime.user?.id;
+  if(!uid) return '';
+  return `${uid}/cfd/${safePathPart(String(rec.ownerType||'file').toLowerCase())}/${safePathPart(rec.ownerId)}/${safePathPart(rec.kind)}.${extensionForEvidence(rec)}`;
+}
+function evidenceBucket(){ return window.AURUM_SUPABASE_CONFIG?.EVIDENCE_BUCKET||'investment-evidence'; }
+function updateEvidenceMeta(rec,patch={}){
+  if(!rec?.ownerType||!rec?.ownerId||!rec?.kind) return null;
+  const key=evidenceMetaKey(rec.ownerType,rec.ownerId,rec.kind);
+  const existing=isObject(cloudRuntime.evidenceIndex?.[key])?cloudRuntime.evidenceIndex[key]:{};
+  const next={...existing,key,ownerType:rec.ownerType,ownerId:rec.ownerId,kind:rec.kind,name:rec.name||existing.name||'attachment',type:rec.type||existing.type||'application/octet-stream',size:Number(rec.size??existing.size)||0,updatedAt:rec.updatedAt||new Date().toISOString(),...patch};
+  cloudRuntime.evidenceIndex={...(cloudRuntime.evidenceIndex||{}),[key]:next};
+  return next;
+}
+async function syncEvidenceRecord(rec,{silent=false}={}){
+  if(!rec||!cloudRuntime.user?.id||!sessionOwnershipValid()) return false;
+  const old=cloudRuntime.evidenceIndex?.[evidenceMetaKey(rec.ownerType,rec.ownerId,rec.kind)];
+  const path=evidencePath(rec);
+  updateEvidenceMeta(rec,{storagePath:path,pendingUpload:true,pendingDelete:false,cloudStatus:navigator.onLine?'uploading':'pending'});
+  markLocalMutation(navigator.onLine?'Evidence queued for private cloud upload':'Evidence saved locally · cloud upload pending');
+  if(!navigator.onLine) return false;
+  try{
+    const client=AurumCloud.getClient();
+    const {error}=await client.storage.from(evidenceBucket()).upload(path,rec.blob,{upsert:true,contentType:rec.type||'application/octet-stream',cacheControl:'3600'});
+    if(error) throw error;
+    if(old?.storagePath&&old.storagePath!==path){ try{ await client.storage.from(evidenceBucket()).remove([old.storagePath]); }catch{} }
+    updateEvidenceMeta(rec,{storagePath:path,pendingUpload:false,pendingDelete:false,cloudStatus:'synced',syncedAt:new Date().toISOString()});
+    markLocalMutation('Evidence synchronized · CFD state sync in 10 seconds');
+    if(!silent) toast('Evidence synchronized','Private Supabase Storage copy is up to date.');
+    return true;
+  }catch(error){
+    updateEvidenceMeta(rec,{storagePath:path,pendingUpload:true,cloudStatus:'pending',lastError:String(error?.message||error)});
+    markLocalMutation('Evidence upload pending · local copy protected');
+    if(!silent) toast('Evidence saved locally','Cloud upload is pending; the local evidence copy is protected.');
+    return false;
+  }
+}
+async function signedEvidenceUrl(meta,expires=300){
+  if(!meta?.storagePath||!cloudRuntime.user?.id) return null;
+  const client=AurumCloud.getClient();
+  const {data,error}=await client.storage.from(evidenceBucket()).createSignedUrl(meta.storagePath,expires);
+  if(error) throw error;
+  return data?.signedUrl||null;
+}
+async function retryEvidenceCloudQueue(){
+  if(!navigator.onLine||!cloudRuntime.user?.id||!sessionOwnershipValid()) return;
+  const entries=Object.values(cloudRuntime.evidenceIndex||{});
+  for(const meta of entries){
+    if(meta?.pendingDelete&&meta.storagePath){
+      try{
+        const {error}=await AurumCloud.getClient().storage.from(evidenceBucket()).remove([meta.storagePath]);
+        if(error) throw error;
+        const next={...(cloudRuntime.evidenceIndex||{})}; delete next[meta.key]; cloudRuntime.evidenceIndex=next; markLocalMutation('Evidence deletion synchronized');
+      }catch{}
+      continue;
+    }
+    if(meta?.pendingUpload){
+      try{ const rec=await getAttachment(meta.ownerType,meta.ownerId,meta.kind); if(rec) await syncEvidenceRecord(rec,{silent:true}); }catch{}
+    }
+  }
+}
+async function migrateLegacyLocalEvidence(){
+  if(!cloudRuntime.user?.id) return 0;
+  try{
+    const db=await openAttachmentDB();
+    const rows=await new Promise((resolve,reject)=>{
+      const tx=db.transaction(ATTACHMENT_STORE,'readonly');
+      const req=tx.objectStore(ATTACHMENT_STORE).getAll();
+      req.onsuccess=()=>resolve(req.result||[]);
+      req.onerror=()=>reject(req.error);
+    });
+    let queued=0;
+    for(const rec of rows){
+      const key=attachmentKey(rec.ownerType,rec.ownerId,rec.kind);
+      const meta=cloudRuntime.evidenceIndex?.[key];
+      if(meta?.storagePath&&!meta.pendingUpload&&!meta.pendingDelete) continue;
+      updateEvidenceMeta(rec,{storagePath:evidencePath(rec),pendingUpload:true,pendingDelete:false,cloudStatus:'pending'});
+      queued++;
+      if(navigator.onLine) await syncEvidenceRecord(rec,{silent:true});
+    }
+    if(queued&&!navigator.onLine) markLocalMutation('Legacy CFD evidence protected · private cloud upload pending');
+    return queued;
+  }catch(error){
+    console.warn('Legacy CFD evidence migration warning:',error);
+    return 0;
+  }
+}
+
 async function getAttachment(ownerType,ownerId,kind){
   if(!ownerId) return null;
   const db=await openAttachmentDB();
@@ -872,13 +1027,28 @@ async function putAttachment(ownerType,ownerId,kind,file){
 }
 async function deleteAttachment(ownerType,ownerId,kind){
   if(!ownerId) return;
+  const key=attachmentKey(ownerType,ownerId,kind);
+  const meta=cloudRuntime.evidenceIndex?.[key]||null;
   const db=await openAttachmentDB();
-  return new Promise((resolve,reject)=>{
+  await new Promise((resolve,reject)=>{
     const tx=db.transaction(ATTACHMENT_STORE,'readwrite');
-    tx.objectStore(ATTACHMENT_STORE).delete(attachmentKey(ownerType,ownerId,kind));
+    tx.objectStore(ATTACHMENT_STORE).delete(key);
     tx.oncomplete=()=>resolve();
     tx.onerror=()=>reject(tx.error);
   });
+  if(meta?.storagePath){
+    cloudRuntime.evidenceIndex={...(cloudRuntime.evidenceIndex||{}),[key]:{...meta,pendingDelete:true,pendingUpload:false,cloudStatus:'delete-pending',updatedAt:new Date().toISOString()}};
+    if(navigator.onLine){
+      try{
+        const {error}=await AurumCloud.getClient().storage.from(evidenceBucket()).remove([meta.storagePath]);
+        if(error) throw error;
+        const next={...(cloudRuntime.evidenceIndex||{})}; delete next[key]; cloudRuntime.evidenceIndex=next;
+      }catch(error){ console.warn('Evidence cloud delete pending:',error); }
+    }
+  }else{
+    const next={...(cloudRuntime.evidenceIndex||{})}; delete next[key]; cloudRuntime.evidenceIndex=next;
+  }
+  markLocalMutation('Evidence removed · cloud sync in 10 seconds');
 }
 async function deleteAttachmentsForOwner(ownerType,ownerId){
   if(!ownerId) return;
@@ -897,6 +1067,10 @@ async function deleteAttachmentsForOwner(ownerType,ownerId){
       tx.onerror=()=>reject(tx.error);
     });
   }catch(err){ console.warn('Attachment cleanup failed:',err); }
+  const owned=Object.values(cloudRuntime.evidenceIndex||{}).filter(meta=>meta?.ownerType===ownerType&&meta?.ownerId===ownerId);
+  for(const meta of owned){
+    try{ await deleteAttachment(ownerType,ownerId,meta.kind); }catch(err){ console.warn('Evidence cloud cleanup pending:',err); }
+  }
 }
 function prettyBytes(bytes){
   const n=Number(bytes)||0;
@@ -924,6 +1098,17 @@ async function renderAttachmentSlot({ownerType,ownerId,kind,previewId,metaId,vie
   try{
     const rec=await getAttachment(ownerType,ownerId,kind);
     if(!rec){
+      const cloudMeta=cloudRuntime.evidenceIndex?.[attachmentKey(ownerType,ownerId,kind)];
+      if(cloudMeta&&!cloudMeta.pendingDelete&&cloudMeta.storagePath){
+        let signed=null;
+        try{ signed=await signedEvidenceUrl(cloudMeta,300); }catch{}
+        if(image&&signed) preview.innerHTML=`<img src="${signed}" alt="${escapeHTML(cloudMeta.name||'Evidence')}" />`;
+        else preview.innerHTML=attachmentPlaceholder(image?'☁':'PDF',`${cloudMeta.name||'Cloud evidence'}
+${prettyBytes(cloudMeta.size)}`);
+        meta.innerHTML=`<strong>${escapeHTML(cloudMeta.name||'Cloud evidence')}</strong><br>${prettyBytes(cloudMeta.size)} · private cloud copy <span class="cloud-evidence-badge">☁ Supabase</span>`;
+        viewBtn.disabled=!signed&&!cloudMeta.storagePath; removeBtn.disabled=!editable;
+        return;
+      }
       preview.innerHTML=attachmentPlaceholder(image?'▧':'PDF',emptyText);
       meta.textContent='No file attached.';
       viewBtn.disabled=true; removeBtn.disabled=true;
@@ -938,7 +1123,7 @@ async function renderAttachmentSlot({ownerType,ownerId,kind,previewId,metaId,vie
       preview.innerHTML=attachmentPlaceholder('PDF',`${rec.name}\n${prettyBytes(rec.size)}`);
     }
     const stamp=rec.updatedAt?new Date(rec.updatedAt).toLocaleString():'';
-    meta.innerHTML=`<strong>${escapeHTML(rec.name)}</strong><br>${prettyBytes(rec.size)}${stamp?` · saved ${escapeHTML(stamp)}`:''}`;
+    const cloudMeta=cloudRuntime.evidenceIndex?.[attachmentKey(ownerType,ownerId,kind)]; const cloudLabel=cloudMeta?.pendingUpload?' · cloud pending':cloudMeta?.storagePath?' · cloud synced':' · local cache'; meta.innerHTML=`<strong>${escapeHTML(rec.name)}</strong><br>${prettyBytes(rec.size)}${stamp?` · saved ${escapeHTML(stamp)}`:''}${cloudLabel}`;
     viewBtn.disabled=false;
     removeBtn.disabled=!editable;
   }catch(err){
@@ -951,11 +1136,19 @@ async function renderAttachmentSlot({ownerType,ownerId,kind,previewId,metaId,vie
 async function viewAttachment(ownerType,ownerId,kind){
   try{
     const rec=await getAttachment(ownerType,ownerId,kind);
-    if(!rec){ toast('No attachment','Attach a file first.'); return; }
-    const url=URL.createObjectURL(rec.blob);
-    const w=window.open(url,'_blank');
-    if(!w) toast('Pop-up blocked','Allow pop-ups for this local app to view the attachment.');
-    setTimeout(()=>URL.revokeObjectURL(url),60000);
+    if(rec){
+      const url=URL.createObjectURL(rec.blob);
+      const w=window.open(url,'_blank');
+      if(!w) toast('Pop-up blocked','Allow pop-ups for this app to view the attachment.');
+      setTimeout(()=>URL.revokeObjectURL(url),60000);
+      return;
+    }
+    const meta=cloudRuntime.evidenceIndex?.[attachmentKey(ownerType,ownerId,kind)];
+    if(meta?.storagePath&&!meta.pendingDelete){
+      const url=await signedEvidenceUrl(meta,120);
+      if(url){ const w=window.open(url,'_blank'); if(!w) toast('Pop-up blocked','Allow pop-ups to view private cloud evidence.'); return; }
+    }
+    toast('No attachment','Attach a file first.');
   }catch(err){ toast('Could not open attachment',err.message||'Storage error.'); }
 }
 function evidenceMonthValue(){
@@ -963,12 +1156,16 @@ function evidenceMonthValue(){
   return /^\d{4}-\d{2}$/.test(v)?v:'';
 }
 async function saveEvidenceFile(ownerType,ownerId,kind,file,expected){
+  if(!mutationAllowed()) return false;
   if(!file) return false;
   if(expected==='image'&&!file.type.startsWith('image/')){ toast('Wrong file type','Please choose a PNG, JPG, WEBP, or GIF screenshot.'); return false; }
   if(expected==='pdf'&&file.type!=='application/pdf'&&!/\.pdf$/i.test(file.name)){ toast('Wrong file type','Please choose a PDF file.'); return false; }
   try{
-    await putAttachment(ownerType,ownerId,kind,file);
-    toast('Evidence saved',`${file.name} attached successfully.`);
+    const rec=await putAttachment(ownerType,ownerId,kind,file);
+    updateEvidenceMeta(rec,{storagePath:evidencePath(rec),pendingUpload:true,pendingDelete:false,cloudStatus:'pending'});
+    markLocalMutation('Evidence saved locally · private cloud upload scheduled');
+    syncEvidenceRecord(rec,{silent:true}).catch(()=>null);
+    toast('Evidence saved',`${file.name} attached. Private cloud sync is scheduled.`);
     return true;
   }catch(err){
     toast('Attachment not saved',err.message||'Storage error.');
@@ -1022,35 +1219,469 @@ async function refreshMonthlyEvidence(){
 
 const $ = id => document.getElementById(id);
 const $$ = sel => [...document.querySelectorAll(sel)];
-const num = v => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
-const nullableNum = v => v === '' || v == null ? null : Number(v);
+function normalizeZero(value,epsilon=1e-12){
+  const n=Number(value);
+  if(!Number.isFinite(n)) return n;
+  return Object.is(n,-0)||Math.abs(n)<epsilon?0:n;
+}
+function parseNumeric(v){
+  if(typeof v==='number') return Number.isFinite(v)?normalizeZero(v):null;
+  if(v===''||v==null) return null;
+  let cleaned=String(v).trim().replace(/[−–—]/g,'-').replace(/\u00A0/g,' ');
+  let negative=false;
+  if(/^\(.*\)$/.test(cleaned)){ negative=true; cleaned=cleaned.slice(1,-1); }
+  cleaned=cleaned
+    .replace(/,/g,'')
+    .replace(/\s+/g,'')
+    .replace(/^(USD|US\$|TWD|NT\$)/i,'')
+    .replace(/^\$/,'')
+    .replace(/%$/,'');
+  if(!cleaned) return null;
+  const n=Number(cleaned);
+  if(!Number.isFinite(n)) return null;
+  return normalizeZero(negative?-Math.abs(n):n);
+}
+const num = v => parseNumeric(v) ?? 0;
+const nullableNum = v => parseNumeric(v);
 const nowParts = () => { const d = new Date(); return { date: localDate(d), time: d.toTimeString().slice(0,5) }; };
 const localDate = d => { const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${day}`; };
-const money = v => num(v).toLocaleString(undefined,{style:'currency',currency:'USD',minimumFractionDigits:2,maximumFractionDigits:2});
-const fmt = (v, dp=5) => v == null || !Number.isFinite(Number(v)) ? '—' : Number(v).toLocaleString(undefined,{maximumFractionDigits:dp});
-const pct = v => Number.isFinite(Number(v)) ? `${Number(v).toFixed(2)}%` : '—';
+const rounded = (v,dp=2) => { const n=parseNumeric(v); if(n==null) return null; const p=10**dp; return normalizeZero(Math.round((n+Number.EPSILON)*p)/p,0.5/p); };
+const money = v => { const n=rounded(v,2) ?? 0; return n.toLocaleString(undefined,{style:'currency',currency:'USD',minimumFractionDigits:2,maximumFractionDigits:2}); };
+const fmt = (v, dp=5) => { const n=parseNumeric(v); return n==null?'—':normalizeZero(n).toLocaleString(undefined,{maximumFractionDigits:dp}); };
+const pct = v => { const n=rounded(v,2); return n==null?'—':`${n.toFixed(2)}%`; };
 const deepClone = obj => JSON.parse(JSON.stringify(obj));
 
-function uid(){ return `CFD-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2,6).toUpperCase()}`; }
+function isObject(v){ return !!v && typeof v==='object' && !Array.isArray(v); }
+function cleanUsername(value){ return String(value||'').trim().replace(/\s+/g,''); }
+function compatibilityBindingKey(displayUsername){ return `${LEGACY_SCOPE_BINDING_PREFIX}::${encodeURIComponent(cleanUsername(displayUsername).toLowerCase())}`; }
+function ownerKey(key){ return key?`${key}::owner-user-id`:null; }
+function scopedStorageKey(base,scope=cloudRuntime.compatibilityScope||cloudRuntime.username){
+  const token=encodeURIComponent(String(scope||'').trim().toLowerCase());
+  return token?`${base}::user:${token}`:'';
+}
+function activateCompatibilityScope(profile,userId){
+  const display=cleanUsername(profile?.username||profile?.display_name||cloudRuntime.username||`user_${String(userId).slice(0,8)}`)||`user_${String(userId).slice(0,8)}`;
+  const bindingKey=compatibilityBindingKey(display);
+  const existing=localStorage.getItem(bindingKey);
+  let scopeName=display;
+  if(!existing) localStorage.setItem(bindingKey,userId);
+  else if(existing!==userId) scopeName=`${display}__${String(userId).slice(0,8)}`;
+  cloudRuntime.compatibilityScope=scopeName;
+  localStorage.setItem(ACTIVE_USER_KEY,scopeName);
+  return scopeName;
+}
+function configureScopedStores(){
+  const assign=()=>{
+    STORAGE_KEY=scopedStorageKey(CFD_BASE_KEYS.trades);
+    FUNDING_KEY=scopedStorageKey(CFD_BASE_KEYS.funding);
+    ATTACHMENT_DB=scopedStorageKey(CFD_BASE_KEYS.evidenceDb);
+  };
+  assign();
+  if(cloudRuntime.user?.id){
+    const mismatched=[STORAGE_KEY,FUNDING_KEY].some(key=>{const owner=localStorage.getItem(ownerKey(key));return owner&&owner!==cloudRuntime.user.id;});
+    if(mismatched){
+      const display=cleanUsername(cloudRuntime.username)||'user';
+      cloudRuntime.compatibilityScope=`${display}__${String(cloudRuntime.user.id).replace(/-/g,'').slice(0,16)}`;
+      localStorage.setItem(ACTIVE_USER_KEY,cloudRuntime.compatibilityScope);
+      assign();
+    }
+  }
+  attachmentDBPromise=null;
+}
+function bindingProvesScopeOwnership(){
+  if(!cloudRuntime.user?.id) return false;
+  const display=cleanUsername(cloudRuntime.username);
+  const binding=localStorage.getItem(compatibilityBindingKey(display));
+  if(binding===cloudRuntime.user.id && cloudRuntime.compatibilityScope===display) return true;
+  return cloudRuntime.compatibilityScope===`${display}__${String(cloudRuntime.user.id).slice(0,8)}`;
+}
+function canonicalScopeOwnsLegacyClaim(){
+  if(!cloudRuntime.user?.id) return false;
+  const display=cleanUsername(cloudRuntime.username);
+  return cloudRuntime.compatibilityScope===display && localStorage.getItem(compatibilityBindingKey(display))===cloudRuntime.user.id;
+}
+function localStoreOwnerMatches(key){
+  if(!key||!cloudRuntime.user?.id) return false;
+  const owner=localStorage.getItem(ownerKey(key));
+  return !owner||owner===cloudRuntime.user.id;
+}
+function claimLegacyLocalData(){
+  if(!cloudRuntime.user?.id||!bindingProvesScopeOwnership()||!canonicalScopeOwnsLegacyClaim()) return false;
+  const claim=String(localStorage.getItem(LEGACY_CLAIM_KEY)||'').trim().toLowerCase();
+  const scope=String(cloudRuntime.compatibilityScope||'').trim().toLowerCase();
+  if(claim && claim!==scope) return false;
+  let claimed=false;
+  for(const base of [CFD_BASE_KEYS.trades,CFD_BASE_KEYS.funding]){
+    const target=scopedStorageKey(base);
+    if(!target||localStorage.getItem(target)!=null) continue;
+    const candidates=[base,`${base}::user:no-active-user`,`${base}::no-active-user`];
+    const source=candidates.find(key=>localStorage.getItem(key)!=null);
+    if(!source) continue;
+    localStorage.setItem(target,localStorage.getItem(source));
+    localStorage.setItem(ownerKey(target),cloudRuntime.user.id);
+    localStorage.removeItem(source);
+    claimed=true;
+  }
+  if(claimed) localStorage.setItem(LEGACY_CLAIM_KEY,cloudRuntime.compatibilityScope);
+  return claimed;
+}
+function persistLocalStores(){
+  if(!STORAGE_KEY||!FUNDING_KEY) return false;
+  try{
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(trades));
+    localStorage.setItem(FUNDING_KEY,JSON.stringify(funding));
+    if(cloudRuntime.user?.id){
+      localStorage.setItem(ownerKey(STORAGE_KEY),cloudRuntime.user.id);
+      localStorage.setItem(ownerKey(FUNDING_KEY),cloudRuntime.user.id);
+    }
+    if(cloudRuntime.compatibilityScope) localStorage.setItem(ACTIVE_USER_KEY,cloudRuntime.compatibilityScope);
+    return true;
+  }catch(error){
+    console.warn('CFD local compatibility mirror failed:',error);
+    return false;
+  }
+}
+function setCloudStatus(kind,text){
+  const dot=$('cloudDot'),label=$('cloudStatus');
+  if(dot) dot.className=`cloud-dot ${kind||''}`.trim();
+  if(label) label.textContent=text||'';
+}
+function setConflictLock(locked,message='Sync conflict protected · Load Cloud to resolve'){
+  cloudRuntime.conflictLocked=!!locked;
+  $('conflictBanner')?.classList.toggle('hidden',!locked);
+  if($('saveCloud')) $('saveCloud').disabled=!!locked;
+  if(locked){ setCloudStatus('error',message); toast('Cloud conflict protected','A newer cloud revision was preserved. Load Cloud before editing or saving again.'); }
+}
+function sessionOwnershipValid(){
+  if(!cloudRuntime.initialized||!cloudRuntime.user?.id) return true;
+  const live=window.AurumCloud?.auth?.getUser?.();
+  return !!live?.id&&live.id===cloudRuntime.user.id;
+}
+function mutationAllowed(showMessage=true){
+  if(!sessionOwnershipValid()){
+    if(showMessage) toast('Session changed','This CFD page belongs to a different authenticated profile. Returning to the Unified Dashboard.');
+    redirectForMissingSession('session-changed');
+    return false;
+  }
+  if(!cloudRuntime.conflictLocked) return true;
+  if(showMessage) toast('Editing locked','Load Cloud first so a newer Supabase revision cannot be overwritten.');
+  return false;
+}
+function currentTwdPerUsd(){
+  try{
+    const cached=JSON.parse(localStorage.getItem(RATE_CACHE_KEY)||'null');
+    const unitsPerTwd=parseNumeric(cached?.rates?.USD);
+    return unitsPerTwd!=null&&unitsPerTwd>0?1/unitsPerTwd:null;
+  }catch{return null;}
+}
+function updateFundingTwdPreview(){
+  const amount=getNumber('fundAmount'),rate=getNumber('fundFxRate');
+  setValue('fundTwdValue',amount!=null&&amount>0&&rate!=null&&rate>0?`NT$${(amount*rate).toFixed(2)}`:'');
+}
+function populateFundingFxRate(){
+  const cached=currentTwdPerUsd();
+  if(cached!=null&&cached>0) setValue('fundFxRate',cached.toFixed(6));
+  else if(!getValue('fundFxRate')) setValue('fundFxRate','');
+  updateFundingTwdPreview();
+}
+function publishedCfdSummary(){
+  const ft=fundingTotals();
+  const realised=realisedTradingNet();
+  const open=trades.filter(t=>String(t?.status||'').toUpperCase()==='OPEN').length;
+  const closed=trades.filter(t=>String(t?.status||'').toUpperCase()==='CLOSED'&&t.result).length;
+  const account=ft.net+realised;
+  return {
+    module:'cfd',currency:'USD',current_value:account,total_contributed:ft.net,profit_loss:realised,
+    detail:`${open} open · ${closed} closed · account ${money(account)} · realised trading P/L ${money(realised)}`
+  };
+}
+function buildCloudState(){
+  const base=isObject(cloudRuntime.cloudBaseState)?deepClone(cloudRuntime.cloudBaseState):{};
+  const raw=isObject(base.raw)?deepClone(base.raw):{};
+  return {
+    ...base,
+    module:CLOUD_MODULE_ID,
+    source:'cfd-module',
+    updatedAt:new Date().toISOString(),
+    legacyScope:cloudRuntime.compatibilityScope||cloudRuntime.username||base.legacyScope||null,
+    bridgeVersion:MODULE_CONFIG.bridgeVersion,
+    schemaVersion:SCHEMA_VERSION,
+    reportingCurrency:'USD',
+    raw:{
+      ...raw,
+      trades:deepClone(trades),
+      funding:deepClone(funding),
+      ownerUserId:cloudRuntime.user?.id||null,
+      nativeCfdModule:true,
+      nativeModuleVersion:MODULE_CONFIG.version,
+      evidenceIndex:deepClone(cloudRuntime.evidenceIndex||{})
+    },
+    publishedSummary:publishedCfdSummary()
+  };
+}
+function extractEnvelopeState(result){
+  if(!isObject(result)) return null;
+  if(isObject(result.state)) return result.state;
+  if(isObject(result.payload)) return result.payload;
+  return null;
+}
+function assertCloudOwnership(cloudState){
+  const owner=String(cloudState?.raw?.ownerUserId||cloudState?.ownerUserId||'').trim();
+  if(owner&&cloudRuntime.user?.id&&owner!==cloudRuntime.user.id) throw new Error('Protected CFD cloud state belongs to a different authenticated user and was not applied.');
+}
+function sanitizeTradeCollection(rows){
+  if(!Array.isArray(rows)) return [];
+  const out=[];
+  rows.forEach((raw,index)=>{
+    const normalized=normalizeTradeRecord(raw,index);
+    if(normalized?.trade) out.push(normalized.trade);
+    else console.warn('Skipped invalid CFD trade state record:',normalized?.error||raw);
+  });
+  return out;
+}
+function sanitizeFundingCollection(rows){
+  if(!Array.isArray(rows)) return [];
+  return rows.map((raw,index)=>normalizeFundingRecord(raw,index)).filter(Boolean);
+}
+function cloudStateParts(cloudState){
+  const raw=isObject(cloudState?.raw)?cloudState.raw:{};
+  const cloudTrades=Array.isArray(raw.trades)?raw.trades:(Array.isArray(cloudState?.trades)?cloudState.trades:[]);
+  const cloudFunding=Array.isArray(raw.funding)?raw.funding:(Array.isArray(cloudState?.funding)?cloudState.funding:[]);
+  const evidence=isObject(raw.evidenceIndex)?raw.evidenceIndex:(isObject(cloudState?.evidenceIndex)?cloudState.evidenceIndex:{});
+  return {trades:sanitizeTradeCollection(cloudTrades),funding:sanitizeFundingCollection(cloudFunding),evidenceIndex:deepClone(evidence),native:Boolean(raw.nativeCfdModule||cloudState?.source==='cfd-module')};
+}
+function applyCloudState(cloudState,{source='cloud',mergeCompatibility=false}={}){
+  if(!isObject(cloudState)) return false;
+  assertCloudOwnership(cloudState);
+  const parts=cloudStateParts(cloudState);
+  if(mergeCompatibility){
+    trades=mergeTradeCollections(trades,parts.trades).trades;
+    funding=mergeFundingCollections(funding,parts.funding).funding;
+    cloudRuntime.evidenceIndex={...parts.evidenceIndex,...cloudRuntime.evidenceIndex};
+  }else{
+    trades=parts.trades;
+    funding=parts.funding;
+    cloudRuntime.evidenceIndex=parts.evidenceIndex;
+  }
+  cloudRuntime.cloudBaseState=deepClone(cloudState);
+  currentId=null; currentView='DASHBOARD'; currentStage=1;
+  persistLocalStores();
+  renderJournal(); renderDashboard(); renderFunding(); showDashboard(); closeWorkspace();
+  if(source==='cloud') setCloudStatus('online','Cloud connected · CFD loaded');
+  refreshMonthlyEvidence().catch(()=>null);
+  return true;
+}
+function cloudCacheKey(){
+  const config=window.AURUM_SUPABASE_CONFIG;
+  return config?.LOCAL_PREFIX&&cloudRuntime.user?.id?`${config.LOCAL_PREFIX}:module:${cloudRuntime.user.id}:${CLOUD_MODULE_ID}`:null;
+}
+async function resolveConflictByAcceptingCloud(){
+  if(!window.confirm('A newer CFD cloud revision is protected. Load the latest Supabase copy now? Unsynchronized local cloud-cache changes for this module will be discarded. Export JSON first if you need them.')) return false;
+  const key=cloudCacheKey();
+  if(key) try{ localStorage.removeItem(key); }catch{}
+  setConflictLock(false);
+  return loadCloudNow({forceAfterConflict:true});
+}
+function markLocalMutation(message='Saved locally · cloud sync in 10 seconds'){
+  persistLocalStores();
+  if(!cloudRuntime.initialized||!cloudRuntime.user?.id||cloudRuntime.conflictLocked||!sessionOwnershipValid()) return;
+  cloudRuntime.lastMutationAt=Date.now();
+  cloudRuntime.pendingMutation=true;
+  try{
+    const snapshot=buildCloudState();
+    cloudRuntime.cloudBaseState=deepClone(snapshot);
+    AurumCloud.module.autoSave(CLOUD_MODULE_ID,snapshot,{schemaVersion:SCHEMA_VERSION,delayMs:AUTO_SAVE_MS});
+    setCloudStatus('pending',navigator.onLine?message:'Offline · change queued safely');
+  }catch(error){
+    setCloudStatus('error','Cloud staging failed · local data preserved');
+    toast('Cloud staging failed',error?.message||'Local CFD data is preserved.');
+  }
+}
+async function saveCloudNow({silent=false}={}){
+  if(!cloudRuntime.user?.id||!sessionOwnershipValid()){ if(!silent) redirectForMissingSession('session-changed'); return false; }
+  if(cloudRuntime.conflictLocked){ if(!silent) toast('Save blocked','Load Cloud first to resolve the protected conflict.'); return false; }
+  if(cloudRuntime.cloudSaveInProgress) return false;
+  cloudRuntime.cloudSaveInProgress=true;
+  $('saveCloud').disabled=true;
+  setCloudStatus('pending','Saving CFD to cloud…');
+  try{
+    const snapshot=buildCloudState();
+    const result=await AurumCloud.module.save(CLOUD_MODULE_ID,snapshot,{schemaVersion:SCHEMA_VERSION});
+    if(result?.queued){
+      cloudRuntime.pendingMutation=true;
+      setCloudStatus('pending',navigator.onLine?'Save queued · synchronization pending':'Offline · save queued safely');
+      if(!silent) toast('CFD save queued','The change is protected locally and will synchronize when available.');
+      return false;
+    }
+    cloudRuntime.cloudBaseState=deepClone(result?.state||snapshot);
+    cloudRuntime.pendingMutation=false;
+    persistLocalStores();
+    setCloudStatus('online','Cloud connected · CFD synced');
+    if(!silent) toast('CFD saved to cloud','Trades, funding and evidence metadata are synchronized.');
+    return true;
+  }catch(error){
+    cloudRuntime.pendingMutation=true;
+    setCloudStatus('error','Cloud save failed · local data preserved');
+    if(!silent) toast('Cloud save failed',error?.message||'Local CFD data is preserved.');
+    return false;
+  }finally{
+    cloudRuntime.cloudSaveInProgress=false;
+    $('saveCloud').disabled=cloudRuntime.conflictLocked;
+  }
+}
+async function loadCloudNow({forceAfterConflict=false,initial=false}={}){
+  if(!cloudRuntime.user?.id||!sessionOwnershipValid()){ if(!initial) redirectForMissingSession('session-changed'); return false; }
+  if(cloudRuntime.conflictLocked&&!forceAfterConflict) return resolveConflictByAcceptingCloud();
+  $('loadCloud').disabled=true;
+  setCloudStatus('pending','Loading CFD from cloud…');
+  try{
+    const result=await AurumCloud.module.load(CLOUD_MODULE_ID);
+    if(!result){
+      setCloudStatus('online','Cloud connected · no CFD state yet');
+      if(!initial) toast('No cloud CFD state','Your current local CFD data was not erased.');
+      return false;
+    }
+    if(result.source==='local-unsynced'){
+      const local=extractEnvelopeState(result);
+      if(local) applyCloudState(local,{source:'local-unsynced'});
+      cloudRuntime.pendingMutation=true;
+      setCloudStatus('pending','Unsynced local CFD changes protected');
+      if(!initial) toast('Local changes protected','Unsynced CFD changes were not overwritten by cloud data.');
+      return false;
+    }
+    const cloud=extractEnvelopeState(result);
+    if(!cloud) throw new Error('Cloud load returned no CFD state.');
+    const parts=cloudStateParts(cloud);
+    applyCloudState(cloud,{source:'cloud',mergeCompatibility:initial&&!parts.native});
+    setConflictLock(false);
+    cloudRuntime.pendingMutation=false;
+    if(!initial) toast('CFD loaded from cloud','Latest Supabase state applied to this authenticated profile.');
+    return true;
+  }catch(error){
+    setCloudStatus('error','Cloud load failed · current data preserved');
+    if(!initial) toast('Cloud load failed',error?.message||'Current CFD data is preserved.');
+    return false;
+  }finally{
+    $('loadCloud').disabled=false;
+  }
+}
+async function redirectForMissingSession(reason='session-required'){
+  $('sessionGate').hidden=false;
+  setTimeout(()=>location.replace(`${ROOT_URL}?reason=${encodeURIComponent(reason)}`),350);
+}
+function resetActivity(){
+  if(!cloudRuntime.initialized||!cloudRuntime.user?.id) return;
+  cloudRuntime.lastActivityAt=Date.now();
+  if(cloudRuntime.warningVisible){ cloudRuntime.warningVisible=false; $('inactivityWarning').hidden=true; }
+}
+async function logoutForInactivity(){
+  if(cloudRuntime.logoutInProgress) return;
+  cloudRuntime.logoutInProgress=true;
+  try{
+    if(cloudRuntime.pendingMutation){
+      try{ const snapshot=buildCloudState(); AurumCloud.module.autoSave(CLOUD_MODULE_ID,snapshot,{schemaVersion:SCHEMA_VERSION,delayMs:0}); if(navigator.onLine) await AurumCloud.sync.flush(); }catch{}
+    }
+    await AurumCloud.auth.signOut();
+  }catch(error){ console.warn('CFD inactivity logout warning:',error); }
+  finally{ location.replace(`${ROOT_URL}?reason=inactivity-logout`); }
+}
+function updateInactivityTimer(){
+  if(!cloudRuntime.initialized||!cloudRuntime.user?.id||cloudRuntime.logoutInProgress) return;
+  const remaining=INACTIVITY_MS-(Date.now()-cloudRuntime.lastActivityAt);
+  if(remaining<=0){ $('inactivityWarning').hidden=true; logoutForInactivity(); return; }
+  if(remaining<=WARNING_MS){
+    cloudRuntime.warningVisible=true;
+    $('inactivityWarning').hidden=false;
+    $('logoutCountdown').textContent=String(Math.max(1,Math.ceil(remaining/1000)));
+  }else if(cloudRuntime.warningVisible){
+    cloudRuntime.warningVisible=false; $('inactivityWarning').hidden=true;
+  }
+}
+function bindCloudEvents(){
+  window.addEventListener('aurum-cloud:conflict',event=>{
+    if(event.detail?.moduleName&&event.detail.moduleName!==CLOUD_MODULE_ID) return;
+    setConflictLock(true);
+  });
+  window.addEventListener('aurum-cloud:sync-start',()=>{ if(!cloudRuntime.conflictLocked) setCloudStatus('pending','Synchronizing CFD…'); });
+  window.addEventListener('aurum-cloud:sync-end',()=>{
+    if(cloudRuntime.conflictLocked) return;
+    try{
+      const pending=Array.isArray(AurumCloud.sync.pending?.())?AurumCloud.sync.pending().some(op=>op.moduleName===CLOUD_MODULE_ID):false;
+      cloudRuntime.pendingMutation=pending;
+      setCloudStatus(pending?'pending':(navigator.onLine?'online':'pending'),pending?(navigator.onLine?'CFD sync pending':'Offline · CFD queued safely'):(navigator.onLine?'Cloud connected · CFD synced':'Offline · local CFD available'));
+    }catch{}
+  });
+  window.addEventListener('aurum-cloud:offline',()=>setCloudStatus('pending','Offline · local CFD available'));
+  window.addEventListener('aurum-cloud:online',()=>{
+    if(!cloudRuntime.conflictLocked) setCloudStatus('pending','Back online · synchronizing CFD');
+    migrateLegacyLocalEvidence().then(()=>retryEvidenceCloudQueue()).catch(()=>null);
+  });
+  const authHandler=event=>{
+    const ev=event?.detail?.event||event?.detail?.type||'';
+    const live=window.AurumCloud?.auth?.getUser?.();
+    if(/SIGNED_OUT/i.test(String(ev))||!live?.id){ if(!cloudRuntime.logoutInProgress) redirectForMissingSession('session-ended'); return; }
+    if(cloudRuntime.user?.id&&live.id!==cloudRuntime.user.id){ redirectForMissingSession('session-changed'); }
+  };
+  window.addEventListener('aurum-cloud:auth',authHandler);
+  window.addEventListener('aurum-cloud:auth-changed',authHandler);
+}
+function bindActivityEvents(){
+  const names=['pointerdown','keydown','touchstart','wheel','scroll','input','click'];
+  let last=0;
+  for(const name of names) window.addEventListener(name,()=>{const now=Date.now();if(now-last<250)return;last=now;resetActivity();},{passive:true});
+  window.addEventListener('mousemove',()=>{const now=Date.now();if(now-last<1000)return;last=now;resetActivity();},{passive:true});
+}
+function bindConflictMutationGuard(){
+  document.addEventListener('click',event=>{
+    if(!cloudRuntime.conflictLocked) return;
+    const target=event.target.closest('button,[data-delete-fund],[data-delete-adj]');
+    if(!target) return;
+    const allowed=new Set(['loadCloud','staySignedIn']);
+    if(allowed.has(target.id)) return;
+    if(target.closest('#fundsModal')||target.closest('#importModal')||['saveDraftBtn','openTradeBtn','addAdjustmentBtn','closeTradeBtn','deleteTradeBtn','dashboardNewBtn','emptyNew','fundsBtn','dashboardFundingBtn','importBtn','uploadEntryScreenshotBtn','removeEntryScreenshotBtn','uploadResultScreenshotBtn','removeResultScreenshotBtn','uploadMonthlyPdfBtn','removeMonthlyPdfBtn','uploadMonthlyAnalyticsBtn','removeMonthlyAnalyticsBtn'].includes(target.id)){
+      event.preventDefault(); event.stopImmediatePropagation(); mutationAllowed(true);
+    }
+  },true);
+}
+function stageBeforeUnload(){
+  if(!sessionOwnershipValid()) return;
+  persistLocalStores();
+  if(!cloudRuntime.initialized||!cloudRuntime.user?.id||!cloudRuntime.pendingMutation||cloudRuntime.conflictLocked) return;
+  try{
+    const snapshot=buildCloudState();
+    AurumCloud.module.autoSave(CLOUD_MODULE_ID,snapshot,{schemaVersion:SCHEMA_VERSION,delayMs:0});
+    if(navigator.onLine) AurumCloud.sync.flush().catch(()=>null);
+  }catch(error){ console.warn('CFD unload staging warning:',error); }
+}
+
+
+function uniqueToken(prefix){ const token=globalThis.crypto?.randomUUID?.().replace(/-/g,'').slice(0,16).toUpperCase()||`${Date.now().toString(36)}${Math.random().toString(36).slice(2,10)}`.toUpperCase(); return `${prefix}-${token}`; }
+function uid(){ return uniqueToken('CFD'); }
 function loadStore(){
   try{
+    if(!STORAGE_KEY) return [];
+    if(!localStoreOwnerMatches(STORAGE_KEY)){ console.error('Blocked CFD local store owned by another authenticated user.'); return []; }
     const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-    return Array.isArray(raw) ? raw : [];
-  }catch(err){ console.warn('Unable to load local data', err); return []; }
+    return sanitizeTradeCollection(raw);
+  }catch(err){ console.warn('Unable to load local CFD trades', err); return []; }
 }
 function loadFundingStore(){
   try{
+    if(!FUNDING_KEY) return [];
+    if(!localStoreOwnerMatches(FUNDING_KEY)){ console.error('Blocked CFD funding store owned by another authenticated user.'); return []; }
     const raw=JSON.parse(localStorage.getItem(FUNDING_KEY)||'[]');
-    return Array.isArray(raw)?raw:[];
-  }catch(err){ console.warn('Unable to load funding data',err); return []; }
+    return sanitizeFundingCollection(raw);
+  }catch(err){ console.warn('Unable to load local CFD funding',err); return []; }
 }
-function saveStore(){
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(trades));
+function saveStore({sync=true,message='CFD trade change saved locally · cloud sync in 10 seconds'}={}){
+  persistLocalStores();
   renderJournal(); renderDashboard(); renderFunding();
+  if(sync) markLocalMutation(message);
 }
-function saveFundingStore(){
-  localStorage.setItem(FUNDING_KEY,JSON.stringify(funding));
+function saveFundingStore({sync=true,message='CFD funding change saved locally · cloud sync in 10 seconds'}={}){
+  persistLocalStores();
   renderFunding(); renderDashboard();
+  if(sync) markLocalMutation(message);
 }
 function toast(title, message=''){
   const t=$('toast'); t.querySelector('strong').textContent=title; t.querySelector('span').textContent=message;
@@ -1059,7 +1690,7 @@ function toast(title, message=''){
 function currentTrade(){ return trades.find(t=>t.id===currentId) || null; }
 function makeBlankTrade(){
   const n=nowParts();
-  return {schemaVersion:SCHEMA_VERSION,id:uid(),status:'DRAFT',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),entry:{date:n.date,time:n.time,assetType:'Forex',direction:'BUY',session:'London',htfBias:'Neutral',marketCondition:'Trending',valuePerUnit:1,spreadCost:0,entryCommission:0},management:[],result:null};
+  return {schemaVersion:SCHEMA_VERSION,id:uid(),status:'DRAFT',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),entry:{date:n.date,time:n.time,assetType:'',direction:'',session:'',htfBias:'',marketCondition:'',valuePerUnit:null,spreadCost:0,entryCommission:0},management:[],result:null};
 }
 function showDashboard(){
   currentView='DASHBOARD';
@@ -1132,6 +1763,7 @@ function setView(view){
   }
 }
 function createTrade(){
+  if(!mutationAllowed()) return;
   currentView='NEW';
   showTradeShell();
 
@@ -1171,12 +1803,13 @@ function collectEntry(){
     entryTrigger:getValue('entryTrigger').trim(), keyLevel:getValue('keyLevel').trim(), marketCondition:getValue('marketCondition'), newsRisk:getValue('newsRisk').trim(), tradeThesis:getValue('tradeThesis').trim(), preTradeNotes:getValue('preTradeNotes').trim()
   };
 }
-function entryFingerprint(e){ return [e.instrument,e.direction,e.date,e.time,effectiveEntry(e)].map(v=>String(v??'').trim().toUpperCase()).join('|'); }
+function entryFingerprint(e){ return [e.instrument,e.direction,e.date,e.time,effectiveEntry(e),e.broker,e.accountName].map(v=>String(v??'').trim().toUpperCase()).join('|'); }
 function findDuplicateTrade(entry,currentTradeId){
   const fp=entryFingerprint(entry);
   return trades.find(x=>x.id!==currentTradeId && x.status!=='DRAFT' && entryFingerprint(x.entry||{})===fp) || null;
 }
 function saveEntryToModel(status){
+  if(!mutationAllowed()) return false;
   const t=currentTrade(); if(!t) return false;
   if(t.status!=='DRAFT'){ toast('Entry is locked','This trade is already entered. Use Management for later changes.'); return false; }
   const entry=collectEntry();
@@ -1186,7 +1819,7 @@ function saveEntryToModel(status){
     if(duplicate) errors.push(`Possible duplicate of ${duplicate.id}. The same instrument, direction, date/time and entry price already exists.`);
     if(errors.length){ showValidation('entryValidation', errors); toast('Entry needs attention',errors[0]); return false; }
   }
-  hideValidation('entryValidation'); t.entry=entry; t.status=status; t.updatedAt=new Date().toISOString(); saveStore(); updateWorkspaceHeader(); updateStages(); return true;
+  hideValidation('entryValidation'); t.entry={...(isObject(t.entry)?t.entry:{}),...entry}; t.status=status; t.updatedAt=new Date().toISOString(); saveStore(); updateWorkspaceHeader(); updateStages(); return true;
 }
 function validateEntry(e){
   const errors=[];
@@ -1194,34 +1827,39 @@ function validateEntry(e){
   if(!(e.plannedEntry>0)) errors.push('Planned entry price must be greater than zero.'); if(!(e.initialSL>0)) errors.push('Initial stop loss is required.'); if(!(e.initialTP>0)) errors.push('Initial take profit is required.');
   if(e.direction==='BUY' && e.plannedEntry>0){ if(!(e.initialSL<e.plannedEntry)) errors.push('For a BUY, stop loss should be below entry.'); if(!(e.initialTP>e.plannedEntry)) errors.push('For a BUY, take profit should be above entry.'); }
   if(e.direction==='SELL' && e.plannedEntry>0){ if(!(e.initialSL>e.plannedEntry)) errors.push('For a SELL, stop loss should be above entry.'); if(!(e.initialTP<e.plannedEntry)) errors.push('For a SELL, take profit should be below entry.'); }
-  if(e.positionSize != null && e.positionSize<0) errors.push('Position size cannot be negative.'); if(!(e.valuePerUnit>0)) errors.push('Value per price move is required and must be greater than zero.');
+  if(!(e.positionSize>0)) errors.push('Position size is required and must be greater than zero.'); if(!(e.valuePerUnit>0)) errors.push('Value per price move is required and must be greater than zero.');
   return errors;
 }
 function showValidation(id, errors){ const el=$(id); el.innerHTML=errors.map(x=>`• ${escapeHTML(x)}`).join('<br>'); el.classList.add('show'); }
 function hideValidation(id){ const el=$(id); el.classList.remove('show'); el.textContent=''; }
 
-function effectiveEntry(e){ return e.actualEntry || e.plannedEntry || 0; }
-function knownValuePerUnit(e){ const v=Number(e?.valuePerUnit); return Number.isFinite(v)&&v>0?v:null; }
-function moneyOrDash(v){ return v==null||!Number.isFinite(Number(v))?'—':money(v); }
+function effectiveEntry(e){ const actual=nullableNum(e?.actualEntry),planned=nullableNum(e?.plannedEntry); return actual!=null&&actual>0?actual:(planned!=null&&planned>0?planned:0); }
+function knownValuePerUnit(e){ const v=parseNumeric(e?.valuePerUnit); return v!=null&&v>0?v:null; }
+function moneyOrDash(v){ const n=parseNumeric(v); return n==null?'—':money(n); }
 function initialRiskMoney(e){
-  const ep=effectiveEntry(e), vpu=knownValuePerUnit(e), size=Number(e?.positionSize);
-  return ep&&e.initialSL!=null&&Number.isFinite(size)&&size>0&&vpu!=null ? Math.abs(ep-e.initialSL)*size*vpu : null;
+  const ep=effectiveEntry(e), vpu=knownValuePerUnit(e), size=nullableNum(e?.positionSize), sl=nullableNum(e?.initialSL);
+  return ep>0&&sl!=null&&size!=null&&size>0&&vpu!=null ? Math.abs(ep-sl)*size*vpu : null;
 }
 function plannedRewardMoney(e){
-  const ep=effectiveEntry(e), vpu=knownValuePerUnit(e), size=Number(e?.positionSize);
-  return ep&&e.initialTP!=null&&Number.isFinite(size)&&size>0&&vpu!=null ? Math.abs(e.initialTP-ep)*size*vpu : null;
+  const ep=effectiveEntry(e), vpu=knownValuePerUnit(e), size=nullableNum(e?.positionSize), tp=nullableNum(e?.initialTP);
+  return ep>0&&tp!=null&&size!=null&&size>0&&vpu!=null ? Math.abs(tp-ep)*size*vpu : null;
 }
 function plannedRR(e){
-  const ep=effectiveEntry(e), risk=Math.abs(ep-num(e.initialSL)), reward=Math.abs(num(e.initialTP)-ep);
-  return ep&&e.initialSL!=null&&e.initialTP!=null&&risk>0 ? reward/risk : null;
+  const ep=effectiveEntry(e), sl=nullableNum(e?.initialSL), tp=nullableNum(e?.initialTP);
+  if(!(ep>0)||sl==null||tp==null) return null;
+  const risk=Math.abs(ep-sl), reward=Math.abs(tp-ep);
+  return risk>0 ? reward/risk : null;
 }
 function currentState(t){
-  const e=t.entry||{}; let sl=e.initialSL, tp=e.initialTP, size=num(e.positionSize), partial=0;
-  (t.management||[]).forEach(a=>{ if(a.newSL!=null) sl=a.newSL; if(a.newTP!=null) tp=a.newTP; if(a.positionAfter!=null) size=num(a.positionAfter); partial += num(a.partialRealizedPnl); });
+  const e=t.entry||{}; let sl=nullableNum(e.initialSL), tp=nullableNum(e.initialTP), size=num(e.positionSize), partial=0;
+  (t.management||[]).forEach(a=>{
+    const nextSL=nullableNum(a.newSL),nextTP=nullableNum(a.newTP),nextSize=nullableNum(a.positionAfter);
+    if(nextSL!=null) sl=nextSL; if(nextTP!=null) tp=nextTP; if(nextSize!=null) size=nextSize; partial += num(a.partialRealizedPnl);
+  });
   return {sl,tp,size,partialRealizedPnl:partial};
 }
 function signedPnl(direction, entry, exit, size, valuePerUnit){
-  const vpu=Number(valuePerUnit), qty=Number(size);
+  const vpu=parseNumeric(valuePerUnit), qty=parseNumeric(size);
   if(!['BUY','SELL'].includes(direction)||!entry||exit==null||!Number.isFinite(qty)||qty<0||!Number.isFinite(vpu)||vpu<=0) return null;
   const movement = direction==='SELL' ? entry-exit : exit-entry;
   return movement*qty*vpu;
@@ -1230,7 +1868,7 @@ function signedPnl(direction, entry, exit, size, valuePerUnit){
 function calculateEntryPreview(){
   const e=collectEntry(), ep=effectiveEntry(e), sl=e.initialSL, tp=e.initialTP, size=num(e.positionSize), vpu=knownValuePerUnit(e), eq=num(e.equityBefore), pip=e.pipSize;
   const slDist=(ep&&sl!=null)?Math.abs(ep-sl):null, tpDist=(ep&&tp!=null)?Math.abs(tp-ep):null;
-  const risk=slDist!=null&&vpu!=null&&size>0?slDist*size*vpu:null, reward=tpDist!=null&&vpu!=null&&size>0?tpDist*size*vpu:null, rr=slDist>0?tpDist/slDist:null;
+  const risk=slDist!=null&&vpu!=null&&size>0?slDist*size*vpu:null, reward=tpDist!=null&&vpu!=null&&size>0?tpDist*size*vpu:null, rr=slDist>0&&tpDist!=null?tpDist/slDist:null;
   $('cSLDistance').textContent=slDist==null?'—':fmt(slDist,8); $('cTPDistance').textContent=tpDist==null?'—':fmt(tpDist,8); $('cRR').textContent=rr==null?'—':`1 : ${rr.toFixed(2)}`;
   $('cRiskMoney').textContent=risk==null?'—':money(risk); $('cRewardMoney').textContent=reward==null?'—':money(reward); $('cRiskActualPct').textContent=eq>0&&risk!=null?`${(risk/eq*100).toFixed(2)}% of equity`:'—';
   $('cSLPips').textContent=pip>0&&slDist!=null?`${(slDist/pip).toFixed(1)} pips / points`:'Pip / point size not set'; $('cTPPips').textContent=pip>0&&tpDist!=null?`${(tpDist/pip).toFixed(1)} pips / points`:'Pip / point size not set';
@@ -1239,13 +1877,35 @@ function calculateEntryPreview(){
 }
 
 function collectAdjustment(){
-  return { id:`ADJ-${Date.now().toString(36).toUpperCase()}`, date:getValue('adjustDate'), time:getValue('adjustTime'), marketPrice:getNumber('adjustMarketPrice'), type:getValue('adjustType'), previousSL:getNumber('previousSL'), newSL:getNumber('newSL'), previousTP:getNumber('previousTP'), newTP:getNumber('newTP'), positionBefore:getNumber('positionBefore'), positionAfter:getNumber('positionAfter'), partialExitPrice:getNumber('partialExitPrice'), partialRealizedPnl:getNumber('partialRealizedPnl'), reason:getValue('adjustReason').trim(), notes:getValue('adjustNotes').trim(), createdAt:new Date().toISOString() };
+  return { id:uniqueToken('ADJ'), date:getValue('adjustDate'), time:getValue('adjustTime'), marketPrice:getNumber('adjustMarketPrice'), type:getValue('adjustType'), previousSL:getNumber('previousSL'), newSL:getNumber('newSL'), previousTP:getNumber('previousTP'), newTP:getNumber('newTP'), positionBefore:getNumber('positionBefore'), positionAfter:getNumber('positionAfter'), partialExitPrice:getNumber('partialExitPrice'), partialRealizedPnl:getNumber('partialRealizedPnl'), reason:getValue('adjustReason').trim(), notes:getValue('adjustNotes').trim(), createdAt:new Date().toISOString() };
 }
 function validateAdjustment(a,t){
-  const errors=[]; if(t.status!=='OPEN') errors.push(t.status==='DRAFT'?'Open the trade from the Entry stage before adding management events.':'Closed trades are read-only and cannot receive new management events.'); if(!a.date) errors.push('Adjustment date is required.'); if(!a.time) errors.push('Adjustment time is required.');
+  const errors=[];
+  if(t.status!=='OPEN') errors.push(t.status==='DRAFT'?'Open the trade from the Entry stage before adding management events.':'Closed trades are read-only and cannot receive new management events.');
+  if(!a.date) errors.push('Adjustment date is required.');
+  if(!a.time) errors.push('Adjustment time is required.');
   if(a.positionAfter!=null && a.positionAfter<0) errors.push('Position after adjustment cannot be negative.');
-  if(a.type==='Partial Close' && a.positionAfter!=null && a.positionBefore!=null && a.positionAfter>=a.positionBefore) errors.push('For a partial close, position after should be smaller than position before.');
-  if(a.type==='Add to Position' && a.positionAfter!=null && a.positionBefore!=null && a.positionAfter<=a.positionBefore) errors.push('For an addition, position after should be larger than position before.');
+
+  const needsSL=['Move Stop Loss','Move SL to Breakeven','Trailing Stop Update','Manual Risk Reduction'].includes(a.type);
+  if(needsSL && !(a.newSL>0)) errors.push(`${a.type} requires a valid new stop-loss price.`);
+  if(a.type==='Move Take Profit' && !(a.newTP>0)) errors.push('Move Take Profit requires a valid new take-profit price.');
+
+  if(['Partial Close','Reduce Position'].includes(a.type)){
+    if(a.positionBefore==null || !(a.positionBefore>0)) errors.push('The current position size is unavailable for this reduction.');
+    if(a.positionAfter==null) errors.push('Position after the reduction is required.');
+    else if(a.positionBefore!=null && a.positionAfter>=a.positionBefore) errors.push('Position after a reduction must be smaller than position before.');
+    if(!(a.partialExitPrice>0)) errors.push('A partial/reduction exit price is required.');
+    const canAuto=a.partialExitPrice>0&&a.positionBefore!=null&&a.positionAfter!=null&&knownValuePerUnit(t.entry||{})!=null;
+    if(a.partialRealizedPnl==null&&!canAuto) errors.push('Enter the partial realised P/L because it cannot be calculated safely from the available trade data.');
+  }
+  if(a.type==='Add to Position'){
+    if(a.positionBefore==null) errors.push('The current position size is unavailable.');
+    if(a.positionAfter==null) errors.push('Position after the addition is required.');
+    else if(a.positionBefore!=null && a.positionAfter<=a.positionBefore) errors.push('For an addition, position after must be larger than position before.');
+  }
+
+  const changed=[a.newSL,a.newTP,a.positionAfter,a.partialExitPrice,a.partialRealizedPnl,a.marketPrice,a.reason,a.notes].some(isMeaningful);
+  if(!changed) errors.push('Record at least one actual management change, price, reason, or note.');
   return errors;
 }
 function autoPartialPnl(){
@@ -1258,6 +1918,7 @@ function adjustmentFingerprint(a){
   return [a.date,a.time,a.type,a.marketPrice,a.newSL,a.newTP,a.positionAfter,a.partialExitPrice,a.partialRealizedPnl].map(v=>String(v??'')).join('|');
 }
 function addAdjustment(){
+  if(!mutationAllowed()) return;
   const t=currentTrade(); if(!t) return;
   if(t.status!=='OPEN'){ toast('Management unavailable',t.status==='DRAFT'?'Save Entry & Open Trade first.':'This trade is closed and read-only.'); return; }
   const a=collectAdjustment();
@@ -1268,6 +1929,7 @@ function addAdjustment(){
   hideValidation('adjustValidation'); t.management=t.management||[]; t.management.push(a); t.updatedAt=new Date().toISOString(); saveStore(); renderManagement(); clearAdjustmentInputs(); toast('Adjustment added',`${a.type} was added to the permanent management timeline.`);
 }
 function deleteAdjustment(id){
+  if(!mutationAllowed()) return;
   const t=currentTrade(); if(!t || t.status!=='OPEN') return; if(!confirm('Delete this management event?')) return;
   t.management=(t.management||[]).filter(a=>a.id!==id); t.updatedAt=new Date().toISOString(); saveStore(); renderManagement(); toast('Adjustment deleted');
 }
@@ -1278,9 +1940,9 @@ function prepareAdjustmentDefaults(){
   const t=currentTrade(); if(!t) return; const s=currentState(t); setValue('previousSL',s.sl); setValue('previousTP',s.tp); setValue('positionBefore',s.size); if(getValue('adjustType')==='Move SL to Breakeven') setValue('newSL',effectiveEntry(t.entry));
 }
 function renderManagement(){
-  const t=currentTrade(); if(!t) return; const s=currentState(t), e=t.entry||{}, ep=effectiveEntry(e), vpu=num(e.valuePerUnit||1);
+  const t=currentTrade(); if(!t) return; const s=currentState(t), e=t.entry||{}, ep=effectiveEntry(e), vpu=knownValuePerUnit(e);
   $('mCurrentSL').textContent=fmt(s.sl,8); $('mCurrentTP').textContent=fmt(s.tp,8); $('mCurrentSize').textContent=fmt(s.size,6); $('mPartialPnL').textContent=money(s.partialRealizedPnl);
-  const risk=(s.sl!=null&&ep)?Math.abs(ep-s.sl)*s.size*vpu:0, reward=(s.tp!=null&&ep)?Math.abs(s.tp-ep)*s.size*vpu:0; $('mCurrentRisk').textContent=money(risk); $('mCurrentRR').textContent=risk>0?`1 : ${(reward/risk).toFixed(2)}`:'—';
+  const risk=(s.sl!=null&&ep>0&&s.size>0&&vpu!=null)?Math.abs(ep-s.sl)*s.size*vpu:null, reward=(s.tp!=null&&ep>0&&s.size>0&&vpu!=null)?Math.abs(s.tp-ep)*s.size*vpu:null; $('mCurrentRisk').textContent=moneyOrDash(risk); $('mCurrentRR').textContent=risk!=null&&risk>0&&reward!=null?`1 : ${(reward/risk).toFixed(2)}`:'—';
   const timeline=$('managementTimeline'); const arr=t.management||[]; $('eventCount').textContent=`${arr.length} event${arr.length===1?'':'s'}`;
   if(!arr.length){ timeline.innerHTML='<div class="muted" style="font-size:11px;padding:10px 2px">No management adjustments yet. The original entry remains the active trade state.</div>'; }
   else timeline.innerHTML=arr.map((a,i)=>`<div class="event"><div class="event-index">${i+1}</div><div><h4>${escapeHTML(a.type)}</h4><p>${escapeHTML(a.date||'')} ${escapeHTML(a.time||'')} · market ${fmt(a.marketPrice,8)}</p><p>SL ${fmt(a.previousSL,8)} → <strong>${fmt(a.newSL ?? a.previousSL,8)}</strong> · TP ${fmt(a.previousTP,8)} → <strong>${fmt(a.newTP ?? a.previousTP,8)}</strong></p><p>Position ${fmt(a.positionBefore,6)} → <strong>${fmt(a.positionAfter ?? a.positionBefore,6)}</strong> · partial P/L <span class="money ${num(a.partialRealizedPnl)>=0?'positive':'negative'}">${money(a.partialRealizedPnl)}</span></p>${a.reason?`<p>Reason: ${escapeHTML(a.reason)}</p>`:''}${a.notes?`<p>Notes: ${escapeHTML(a.notes)}</p>`:''}</div><button class="delete-event" data-delete-adj="${a.id}" title="Delete adjustment" ${t.status==='CLOSED'?'disabled':''}>✕</button></div>`).join('');
@@ -1292,32 +1954,33 @@ function collectResult(){
   return {exitDate:getValue('exitDate'), exitTime:getValue('exitTime'), finalExitPrice:getNumber('finalExitPrice'), exitReason:getValue('exitReason'), finalClosedSize:getNumber('finalClosedSize'), finalLegGrossPnl:getNumber('finalLegGrossPnl'), exitCommission:getNumber('exitCommission')??0, swapFinancing:getNumber('swapFinancing')??0, otherCosts:getNumber('otherCosts')??0, equityAfter:getNumber('equityAfter'), lowestPrice:getNumber('lowestPrice'), highestPrice:getNumber('highestPrice'), executionQuality:getValue('executionQuality'), planFollowed:getValue('planFollowed'), primaryMistake:getValue('primaryMistake').trim(), primaryStrength:getValue('primaryStrength').trim(), reviewNotes:getValue('reviewNotes').trim()};
 }
 function resultMetrics(t, r=collectResult()){
-  const e=t.entry||{}, s=currentState(t), ep=effectiveEntry(e), finalSize=r.finalClosedSize==null?s.size:r.finalClosedSize;
+  const e=t.entry||{}, s=currentState(t), ep=effectiveEntry(e), finalSize=r.finalClosedSize==null?s.size:num(r.finalClosedSize);
   const autoFinalCalc = r.finalExitPrice!=null ? signedPnl(e.direction,ep,r.finalExitPrice,finalSize,e.valuePerUnit) : null;
-  const autoFinal = autoFinalCalc==null ? 0 : autoFinalCalc;
-  const finalGross = r.finalLegGrossPnl==null ? autoFinal : r.finalLegGrossPnl;
+  const manualFinal=parseNumeric(r.finalLegGrossPnl);
+  const finalGross = manualFinal!=null?manualFinal:(finalSize===0?0:autoFinalCalc);
+  const pnlKnown=finalGross!=null&&Number.isFinite(Number(finalGross));
   const partial=s.partialRealizedPnl; const costs=num(e.spreadCost)+num(e.entryCommission)+num(r.exitCommission)+num(r.swapFinancing)+num(r.otherCosts);
-  const net=partial+finalGross-costs, initRisk=initialRiskMoney(e), rMult=initRisk!=null&&initRisk>0?net/initRisk:null, ret=num(e.equityBefore)>0?net/num(e.equityBefore)*100:null;
+  const net=pnlKnown?normalizeZero(partial+finalGross-costs):0, initRisk=initialRiskMoney(e), rMult=pnlKnown&&initRisk!=null&&initRisk>0?net/initRisk:null, ret=pnlKnown&&num(e.equityBefore)>0?net/num(e.equityBefore)*100:null;
   let maeDist=null,mfeDist=null;
   if(ep){ if(e.direction==='BUY'){ if(r.lowestPrice!=null) maeDist=Math.max(0,ep-r.lowestPrice); if(r.highestPrice!=null) mfeDist=Math.max(0,r.highestPrice-ep); } else { if(r.highestPrice!=null) maeDist=Math.max(0,r.highestPrice-ep); if(r.lowestPrice!=null) mfeDist=Math.max(0,ep-r.lowestPrice); } }
   const vpu=knownValuePerUnit(e);
   const maeMoney=maeDist==null||vpu==null?null:maeDist*num(e.positionSize)*vpu, mfeMoney=mfeDist==null||vpu==null?null:mfeDist*num(e.positionSize)*vpu;
   const maeR=initRisk>0&&maeMoney!=null?maeMoney/initRisk:null, mfeR=initRisk>0&&mfeMoney!=null?mfeMoney/initRisk:null;
   const start=e.date&&e.time?new Date(`${e.date}T${e.time}`):null, end=r.exitDate&&r.exitTime?new Date(`${r.exitDate}T${r.exitTime}`):null; const hold=start&&end&&!isNaN(start)&&!isNaN(end)?Math.max(0,end-start):null;
-  return {finalGross,partial,costs,net,initRisk,rMult,ret,maeDist,mfeDist,maeMoney,mfeMoney,maeR,mfeR,hold,finalSize};
+  return {finalGross,partial,costs,net,pnlKnown,initRisk,rMult,ret,maeDist,mfeDist,maeMoney,mfeMoney,maeR,mfeR,hold,finalSize};
 }
 function formatDuration(ms){ if(ms==null) return '—'; const mins=Math.floor(ms/60000), d=Math.floor(mins/1440), h=Math.floor((mins%1440)/60), m=mins%60; return `${d?d+'d ':''}${h}h ${m}m`; }
-function validateResult(r,t){ const errors=[]; if(t.status!=='OPEN') errors.push(t.status==='DRAFT'?'Open the trade before closing it.':'This trade is already closed.'); if(!r.exitDate) errors.push('Exit date is required.'); if(!r.exitTime) errors.push('Exit time is required.'); if(!(r.finalExitPrice>0)) errors.push('Final exit price is required.'); if(r.finalClosedSize!=null && r.finalClosedSize<0) errors.push('Final closed size cannot be negative.'); return errors; }
+function validateResult(r,t){ const errors=[]; if(t.status!=='OPEN') errors.push(t.status==='DRAFT'?'Open the trade before closing it.':'This trade is already closed.'); if(!r.exitDate) errors.push('Exit date is required.'); if(!r.exitTime) errors.push('Exit time is required.'); if(!(r.finalExitPrice>0)) errors.push('Final exit price is required.'); if(r.finalClosedSize!=null && r.finalClosedSize<0) errors.push('Final closed size cannot be negative.'); const s=currentState(t),size=r.finalClosedSize==null?s.size:num(r.finalClosedSize),auto=size===0?0:signedPnl(t.entry?.direction,effectiveEntry(t.entry||{}),r.finalExitPrice,size,t.entry?.valuePerUnit); if(parseNumeric(r.finalLegGrossPnl)==null&&auto==null) errors.push('Final leg gross P/L cannot be calculated safely because contract value data is missing. Enter the broker-reported gross P/L before closing the trade.'); return errors; }
 function calculateResultPreview(){
   const t=currentTrade(); if(!t) return; const r=collectResult(), m=resultMetrics(t,r);
-  $('rNetPnl').textContent=money(m.net); $('rNetPnl').className=`v ${m.net>0?'positive':m.net<0?'negative':''}`; $('rMultiple').textContent=m.rMult==null?'—':`${m.rMult.toFixed(2)}R`; $('rReturnPct').textContent=m.ret==null?'—':pct(m.ret); $('rHolding').textContent=formatDuration(m.hold);
-  $('rMAE').textContent=m.maeDist==null?'—':fmt(m.maeDist,8); $('rMAESub').textContent=m.maeMoney==null?'Maximum adverse excursion':`${money(m.maeMoney)} · ${m.maeR.toFixed(2)}R`;
-  $('rMFE').textContent=m.mfeDist==null?'—':fmt(m.mfeDist,8); $('rMFESub').textContent=m.mfeMoney==null?'Maximum favourable excursion':`${money(m.mfeMoney)} · ${m.mfeR.toFixed(2)}R`;
+  $('rNetPnl').textContent=m.pnlKnown?money(m.net):'—'; $('rNetPnl').className=`v ${m.pnlKnown?(m.net>0?'positive':m.net<0?'negative':''):''}`; $('rMultiple').textContent=m.rMult==null?'—':`${m.rMult.toFixed(2)}R`; $('rReturnPct').textContent=m.ret==null?'—':pct(m.ret); $('rHolding').textContent=formatDuration(m.hold);
+  $('rMAE').textContent=m.maeDist==null?'—':fmt(m.maeDist,8); $('rMAESub').textContent=m.maeMoney==null?'Maximum adverse excursion':`${money(m.maeMoney)} · ${m.maeR==null?'R unavailable':m.maeR.toFixed(2)+'R'}`;
+  $('rMFE').textContent=m.mfeDist==null?'—':fmt(m.mfeDist,8); $('rMFESub').textContent=m.mfeMoney==null?'Maximum favourable excursion':`${money(m.mfeMoney)} · ${m.mfeR==null?'R unavailable':m.mfeR.toFixed(2)+'R'}`;
   renderTradeSummary(t,r,m);
 }
 function renderTradeSummary(t,r,m){
-  const e=t.entry||{}, rr=plannedRR(e); const outcome=m.net>0?'WIN':m.net<0?'LOSS':'BREAKEVEN'; const cls=m.net>0?'positive':m.net<0?'negative':'amber';
-  const rows=[['Outcome',`<span class="${cls}"><strong>${outcome}</strong></span>`],['Instrument / Direction',`${escapeHTML(e.instrument||'—')} · ${escapeHTML(e.direction||'—')}`],['Initial R:R',rr==null?'—':`1 : ${rr.toFixed(2)}`],['Initial planned risk',moneyOrDash(initialRiskMoney(e))],['Partial realised P/L',money(m.partial)],['Final leg gross P/L',money(m.finalGross)],['Total costs',money(m.costs)],['Net P/L',`<span class="${cls}"><strong>${money(m.net)}</strong></span>`],['R-Multiple',m.rMult==null?'—':`${m.rMult.toFixed(2)}R`],['MAE / MFE',`${m.maeR==null?'—':m.maeR.toFixed(2)+'R'} / ${m.mfeR==null?'—':m.mfeR.toFixed(2)+'R'}`],['Holding time',formatDuration(m.hold)]];
+  const e=t.entry||{}, rr=plannedRR(e); const outcome=!m.pnlKnown?'P/L UNAVAILABLE':m.net>0?'WIN':m.net<0?'LOSS':'BREAKEVEN'; const cls=!m.pnlKnown?'muted':m.net>0?'positive':m.net<0?'negative':'amber';
+  const rows=[['Outcome',`<span class="${cls}"><strong>${outcome}</strong></span>`],['Instrument / Direction',`${escapeHTML(e.instrument||'—')} · ${escapeHTML(e.direction||'—')}`],['Initial R:R',rr==null?'—':`1 : ${rr.toFixed(2)}`],['Initial planned risk',moneyOrDash(initialRiskMoney(e))],['Partial realised P/L',money(m.partial)],['Final leg gross P/L',m.finalGross==null?'—':money(m.finalGross)],['Total costs',money(m.costs)],['Net P/L',m.pnlKnown?`<span class="${cls}"><strong>${money(m.net)}</strong></span>`:'—'],['R-Multiple',m.rMult==null?'—':`${m.rMult.toFixed(2)}R`],['MAE / MFE',`${m.maeR==null?'—':m.maeR.toFixed(2)+'R'} / ${m.mfeR==null?'—':m.mfeR.toFixed(2)+'R'}`],['Holding time',formatDuration(m.hold)]];
   $('tradeSummaryBody').innerHTML=rows.map(([a,b])=>`<tr><td>${a}</td><td>${b}</td></tr>`).join('');
 }
 function autoFinalLegPnl(){
@@ -1326,28 +1989,33 @@ function autoFinalLegPnl(){
   calculateResultPreview();
 }
 function closeTrade(){
+  if(!mutationAllowed()) return;
   const t=currentTrade(); if(!t) return; if(t.status!=='OPEN'){ toast('Cannot close trade',t.status==='DRAFT'?'Open the trade first.':'This trade is already closed.'); return; } const r=collectResult(); const errors=validateResult(r,t); if(errors.length){ showValidation('resultValidation',errors); toast('Result needs attention',errors[0]); return; }
-  hideValidation('resultValidation'); const m=resultMetrics(t,r); if(r.finalLegGrossPnl==null) r.finalLegGrossPnl=m.finalGross; t.result=r; t.status='CLOSED'; t.updatedAt=new Date().toISOString(); currentView='CLOSED'; currentStage=3; saveStore(); showTradeShell(); loadTradeIntoUI(); switchStage(3,false); renderJournal(); refreshTradeEvidence(); toast('Trade moved to Closed Trades',`Net result: ${money(m.net)} · ${m.rMult==null?'R unavailable':m.rMult.toFixed(2)+'R'}`);
+  hideValidation('resultValidation'); const m=resultMetrics(t,r); if(r.finalLegGrossPnl==null) r.finalLegGrossPnl=m.finalGross; t.result={...(isObject(t.result)?t.result:{}),...r}; t.status='CLOSED'; t.updatedAt=new Date().toISOString(); currentView='CLOSED'; currentStage=3; saveStore(); showTradeShell(); loadTradeIntoUI(); switchStage(3,false); renderJournal(); refreshTradeEvidence(); toast('Trade moved to Closed Trades',`Net result: ${m.pnlKnown?money(m.net):'unavailable'} · ${m.rMult==null?'R unavailable':m.rMult.toFixed(2)+'R'}`);
 }
 
-function fundingUid(){ return `FUND-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2,5).toUpperCase()}`; }
+function fundingUid(){ return uniqueToken('FUND'); }
 function fundingTotals(){
   const deposits=funding.filter(x=>x.type==='Deposit').reduce((s,x)=>s+num(x.amount),0);
   const withdrawals=funding.filter(x=>x.type==='Withdrawal').reduce((s,x)=>s+num(x.amount),0);
   return {deposits,withdrawals,net:deposits-withdrawals};
 }
-function realisedTradingNet(){ return trades.filter(t=>t.status==='CLOSED'&&t.result).reduce((s,t)=>s+resultMetrics(t,t.result).net,0); }
-function openFunding(){ const n=nowParts(); setValue('fundDate',n.date); setValue('fundTime',n.time); $('fundsModal').classList.remove('hidden'); renderFunding(); setTimeout(()=>$('fundAmount').focus(),0); }
+function realisedTradingNet(){ return trades.filter(t=>t.status==='CLOSED'&&t.result).reduce((s,t)=>{const m=resultMetrics(t,t.result);return s+(m.pnlKnown?m.net:0);},0); }
+function openFunding(){ const n=nowParts(); setValue('fundDate',n.date); setValue('fundTime',n.time); setValue('fundType',''); setValue('fundMethod',''); populateFundingFxRate(); $('fundsModal').classList.remove('hidden'); renderFunding(); setTimeout(()=>$('fundAmount').focus(),0); }
 function closeFunding(){ $('fundsModal').classList.add('hidden'); hideValidation('fundValidation'); }
 function addFunding(){
-  const item={id:fundingUid(),date:getValue('fundDate'),time:getValue('fundTime'),type:getValue('fundType'),amount:getNumber('fundAmount'),account:getValue('fundAccount').trim(),method:getValue('fundMethod'),reference:getValue('fundReference').trim(),notes:getValue('fundNotes').trim(),createdAt:new Date().toISOString()};
-  const errors=[]; if(!item.date) errors.push('Date is required.'); if(!item.time) errors.push('Time is required.'); if(!(item.amount>0)) errors.push('Amount must be greater than zero.');
-  const fp=[item.date,item.time,item.type,item.amount,item.account,item.reference].map(v=>String(v??'').trim().toUpperCase()).join('|');
-  if(funding.some(x=>[x.date,x.time,x.type,x.amount,x.account,x.reference].map(v=>String(v??'').trim().toUpperCase()).join('|')===fp)) errors.push('This funding movement appears to be an exact duplicate.');
+  if(!mutationAllowed()) return;
+  const cachedRate=currentTwdPerUsd();
+  const twdPerUsd=getNumber('fundFxRate');
+  const rawAmount=getNumber('fundAmount');
+  const rateSource=twdPerUsd!=null&&cachedRate!=null&&Math.abs(twdPerUsd-cachedRate)<=Math.max(0.000001,cachedRate*0.000001)?'shared-rate-cache':'manual';
+  const item={id:fundingUid(),date:getValue('fundDate'),time:getValue('fundTime'),type:getValue('fundType'),amount:rawAmount,currency:'USD',fxRateTwdAtTransaction:twdPerUsd,twdAtTransaction:twdPerUsd!=null&&twdPerUsd>0&&rawAmount!=null&&rawAmount>0?rawAmount*twdPerUsd:null,fxRateSource:rateSource,account:getValue('fundAccount').trim(),method:getValue('fundMethod'),reference:getValue('fundReference').trim(),notes:getValue('fundNotes').trim(),createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
+  const errors=[]; if(!item.date) errors.push('Date is required.'); if(!item.time) errors.push('Time is required.'); if(!['Deposit','Withdrawal'].includes(item.type)) errors.push('Choose Deposit or Withdrawal.'); if(!(item.amount>0)) errors.push('Amount must be greater than zero.'); if(!(item.fxRateTwdAtTransaction>0)) errors.push('USD → TWD transaction-time rate is required so unified monthly analysis remains historically accurate.');
+  if(funding.some(x=>sameFundingIdentity(x,item))) errors.push('This funding movement appears to be an exact duplicate.');
   if(errors.length){ showValidation('fundValidation',errors); toast('Funding entry needs attention',errors[0]); return; }
-  hideValidation('fundValidation'); funding.unshift(item); saveFundingStore(); ['fundAmount','fundReference','fundNotes'].forEach(id=>setValue(id,'')); toast(`${item.type} recorded`,`${money(item.amount)} added to the funding ledger.`);
+  hideValidation('fundValidation'); funding.unshift(item); saveFundingStore(); ['fundAmount','fundReference','fundNotes','fundTwdValue'].forEach(id=>setValue(id,'')); populateFundingFxRate(); toast(`${item.type} recorded`,`${money(item.amount)} added with a permanent transaction-time TWD basis.`);
 }
-function deleteFunding(id){ const item=funding.find(x=>x.id===id); if(!item) return; if(!confirm(`Delete this ${item.type.toLowerCase()} of ${money(item.amount)}?`)) return; funding=funding.filter(x=>x.id!==id); saveFundingStore(); toast('Funding entry deleted'); }
+function deleteFunding(id){ if(!mutationAllowed()) return; const item=funding.find(x=>x.id===id); if(!item) return; if(!confirm(`Delete this ${item.type.toLowerCase()} of ${money(item.amount)}?`)) return; funding=funding.filter(x=>x.id!==id); saveFundingStore(); toast('Funding entry deleted'); }
 function renderFunding(){
   if(!$('fundingBody')) return; const totals=fundingTotals(), realised=realisedTradingNet();
   $('fDeposits').textContent=money(totals.deposits); $('fWithdrawals').textContent=money(totals.withdrawals); $('fNetFunding').textContent=money(totals.net); $('fNetFunding').className=`v ${totals.net>0?'positive':totals.net<0?'negative':''}`;
@@ -1373,30 +2041,37 @@ function maxTradingDrawdown(closedTrades){
   const ordered=[...closedTrades].sort((a,b)=>tradeCloseDate(a).localeCompare(tradeCloseDate(b)));
   let equity=0,peak=0,maxDD=0;
   ordered.forEach(t=>{
-    equity+=resultMetrics(t,t.result).net;
+    const m=resultMetrics(t,t.result); if(!m.pnlKnown) return;
+    equity+=m.net;
     peak=Math.max(peak,equity);
     maxDD=Math.max(maxDD,peak-equity);
   });
   return maxDD;
 }
+function earliestRecordedEquity(){
+  const ordered=[...trades].sort((a,b)=>`${a.entry?.date||'9999'}T${a.entry?.time||'23:59'}`.localeCompare(`${b.entry?.date||'9999'}T${b.entry?.time||'23:59'}`));
+  for(const t of ordered){ const eq=parseNumeric(t.entry?.equityBefore); if(eq!=null&&eq>0) return eq; }
+  return 0;
+}
 function capitalBaseForROI(ft){
   if(ft.deposits>0) return {value:ft.deposits,label:'Net P/L ÷ total deposits'};
-  const first=trades.map(t=>num(t.entry?.equityBefore)).find(v=>v>0);
-  return first>0?{value:first,label:'Net P/L ÷ first recorded equity'}:{value:0,label:'Add a deposit or starting equity to calculate ROI'};
+  const first=earliestRecordedEquity();
+  return first>0?{value:first,label:'Net P/L ÷ earliest recorded starting equity'}:{value:0,label:'Add a deposit or starting equity to calculate ROI'};
 }
 function monthlyPerformanceRows(closed){
   const monthSet=new Set();
   closed.forEach(t=>{const k=monthKey(tradeCloseDate(t)); if(k) monthSet.add(k);});
   funding.forEach(x=>{const k=monthKey(x.date); if(k) monthSet.add(k);});
   const months=[...monthSet].sort();
-  let cumulativeFunding=0,cumulativePL=0;
+  let cumulativeFunding=funding.some(x=>x.type==='Deposit')?0:earliestRecordedEquity(),cumulativePL=0;
   const rows=[];
 
   months.forEach(key=>{
     const monthTrades=closed.filter(t=>monthKey(tradeCloseDate(t))===key);
     const ms=monthTrades.map(t=>resultMetrics(t,t.result));
-    const net=ms.reduce((a,m)=>a+m.net,0);
-    const wins=ms.filter(m=>m.net>0).length, losses=ms.filter(m=>m.net<0).length;
+    const known=ms.filter(m=>m.pnlKnown);
+    const net=known.reduce((a,m)=>a+m.net,0);
+    const wins=known.filter(m=>m.net>0).length, losses=known.filter(m=>m.net<0).length;
     const rs=ms.filter(m=>m.rMult!=null).map(m=>m.rMult);
     const grossWins=ms.filter(m=>m.net>0).reduce((a,m)=>a+m.net,0);
     const grossLoss=Math.abs(ms.filter(m=>m.net<0).reduce((a,m)=>a+m.net,0));
@@ -1415,7 +2090,7 @@ function monthlyPerformanceRows(closed){
 
     rows.push({
       key,label:monthLabel(key),trades:monthTrades.length,wins,losses,
-      winRate:monthTrades.length?wins/monthTrades.length*100:null,
+      winRate:known.length?wins/known.length*100:null,
       net,roi:monthlyROI,
       avgR:rs.length?rs.reduce((a,b)=>a+b,0)/rs.length:null,
       pf:grossLoss>0?grossWins/grossLoss:(grossWins>0?Infinity:null),
@@ -1433,12 +2108,13 @@ function groupedPerformance(closed,selector){
     map.get(key).push(m);
   });
   return [...map.entries()].map(([name,ms])=>{
-    const wins=ms.filter(m=>m.net>0).length;
-    const net=ms.reduce((a,m)=>a+m.net,0);
-    const rs=ms.filter(m=>m.rMult!=null).map(m=>m.rMult);
+    const known=ms.filter(m=>m.pnlKnown);
+    const wins=known.filter(m=>m.net>0).length;
+    const net=known.reduce((a,m)=>a+m.net,0);
+    const rs=known.filter(m=>m.rMult!=null).map(m=>m.rMult);
     return {
-      name,trades:ms.length,winRate:ms.length?wins/ms.length*100:0,
-      net,avg:ms.length?net/ms.length:0,
+      name,trades:ms.length,winRate:known.length?wins/known.length*100:0,
+      net,avg:known.length?net/known.length:0,
       avgR:rs.length?rs.reduce((a,b)=>a+b,0)/rs.length:null
     };
   }).sort((a,b)=>{
@@ -1451,8 +2127,9 @@ function renderDashboard(){
   const closed=trades.filter(t=>t.status==='CLOSED'&&t.result);
   const open=trades.filter(t=>t.status==='OPEN');
   const metrics=closed.map(t=>resultMetrics(t,t.result));
-  const wins=metrics.filter(m=>m.net>0), losses=metrics.filter(m=>m.net<0);
-  const net=metrics.reduce((s,m)=>s+m.net,0);
+  const knownMetrics=metrics.filter(m=>m.pnlKnown);
+  const wins=knownMetrics.filter(m=>m.net>0), losses=knownMetrics.filter(m=>m.net<0);
+  const net=knownMetrics.reduce((s,m)=>s+m.net,0);
   const rs=metrics.filter(m=>m.rMult!=null).map(m=>m.rMult);
   const grossWins=wins.reduce((s,m)=>s+m.net,0);
   const grossLoss=Math.abs(losses.reduce((s,m)=>s+m.net,0));
@@ -1469,10 +2146,10 @@ function renderDashboard(){
   $('dROISub').textContent=capital.label;
   $('dNet').textContent=money(net);
   $('dNet').className=`value ${net>0?'positive':net<0?'negative':''}`;
-  $('dWinRate').textContent=closed.length?`${(wins.length/closed.length*100).toFixed(1)}%`:'0.0%';
+  $('dWinRate').textContent=knownMetrics.length?`${(wins.length/knownMetrics.length*100).toFixed(1)}%`:'0.0%';
   $('dPF').textContent=grossLoss>0?(grossWins/grossLoss).toFixed(2):(grossWins>0?'∞':'—');
   $('dAvgR').textContent=rs.length?`${(rs.reduce((a,b)=>a+b,0)/rs.length).toFixed(2)}R`:'—';
-  $('dExpectancy').textContent=closed.length?money(net/closed.length):'$0.00';
+  $('dExpectancy').textContent=knownMetrics.length?money(net/knownMetrics.length):'$0.00';
   $('dMaxDD').textContent=money(maxDD);
   $('dOpen').textContent=open.length;
   $('dClosed').textContent=closed.length;
@@ -1489,7 +2166,7 @@ function renderDashboard(){
   $('dMFE').textContent=mfes.length?`${(mfes.reduce((a,b)=>a+b,0)/mfes.length).toFixed(2)}R`:'—';
   $('dPlanFollow').textContent=planRecorded.length?`${(fullyFollowed/planRecorded.length*100).toFixed(1)}%`:'—';
 
-  const ranked=closed.map(t=>({t,m:resultMetrics(t,t.result)})).sort((a,b)=>b.m.net-a.m.net);
+  const ranked=closed.map(t=>({t,m:resultMetrics(t,t.result)})).filter(x=>x.m.pnlKnown).sort((a,b)=>b.m.net-a.m.net);
   const best=ranked[0], worst=ranked[ranked.length-1];
   $('dBest').textContent=best?money(best.m.net):'$0.00';
   $('dBestSub').textContent=best?`${best.t.entry?.instrument||'Unknown'} · ${tradeCloseDate(best.t)||'No date'}`:'—';
@@ -1538,7 +2215,7 @@ function renderDashboard(){
   }
   refreshMonthlyEvidence();
 }
-function tradeNet(t){ return t.status==='CLOSED'&&t.result?resultMetrics(t,t.result).net:null; }
+function tradeNet(t){ if(!(t.status==='CLOSED'&&t.result)) return null; const m=resultMetrics(t,t.result); return m.pnlKnown?m.net:null; }
 function renderJournal(){
   updateModuleNav();
   if(currentView==='DASHBOARD'||currentView==='NEW') return;
@@ -1619,8 +2296,8 @@ function updateStages(){
 }
 function loadTradeIntoUI(){
   const t=currentTrade(); if(!t){closeWorkspace();return;} if(t.status==='OPEN'&&currentView==='OPEN') currentStage=2; if(t.status==='CLOSED'&&currentView==='CLOSED') currentStage=3; if(t.status==='DRAFT') currentStage=1; openWorkspace(); const e=t.entry||{};
-  const map={entryDate:e.date,entryTime:e.time,tradeId:t.id,instrument:e.instrument,assetType:e.assetType||'Forex',direction:e.direction??'',broker:e.broker,accountName:e.accountName,session:e.session||'London',strategy:e.strategy,htfBias:e.htfBias||'Neutral',entryTimeframe:e.entryTimeframe,plannedEntry:e.plannedEntry,actualEntry:e.actualEntry,initialSL:e.initialSL,initialTP:e.initialTP,equityBefore:e.equityBefore,plannedRiskPct:e.plannedRiskPct,positionSize:e.positionSize,valuePerUnit:e.valuePerUnit,pipSize:e.pipSize,leverage:e.leverage,spreadCost:e.spreadCost??0,entryCommission:e.entryCommission??0,entryTrigger:e.entryTrigger,keyLevel:e.keyLevel,marketCondition:e.marketCondition||'Trending',newsRisk:e.newsRisk,tradeThesis:e.tradeThesis,preTradeNotes:e.preTradeNotes}; Object.entries(map).forEach(([id,v])=>setValue(id,v));
-  const n=nowParts(); setValue('adjustDate',n.date); setValue('adjustTime',n.time); const r=t.result||{}; const rmap={exitDate:r.exitDate||n.date,exitTime:r.exitTime||n.time,finalExitPrice:r.finalExitPrice,exitReason:r.exitReason||'Take Profit',finalClosedSize:r.finalClosedSize,finalLegGrossPnl:r.finalLegGrossPnl,exitCommission:r.exitCommission??0,swapFinancing:r.swapFinancing??0,otherCosts:r.otherCosts??0,equityAfter:r.equityAfter,lowestPrice:r.lowestPrice,highestPrice:r.highestPrice,executionQuality:r.executionQuality,planFollowed:r.planFollowed,primaryMistake:r.primaryMistake,primaryStrength:r.primaryStrength,reviewNotes:r.reviewNotes}; Object.entries(rmap).forEach(([id,v])=>setValue(id,v));
+  const map={entryDate:e.date,entryTime:e.time,tradeId:t.id,instrument:e.instrument,assetType:e.assetType||'',direction:e.direction??'',broker:e.broker,accountName:e.accountName,session:e.session||'',strategy:e.strategy,htfBias:e.htfBias||'',entryTimeframe:e.entryTimeframe,plannedEntry:e.plannedEntry,actualEntry:e.actualEntry,initialSL:e.initialSL,initialTP:e.initialTP,equityBefore:e.equityBefore,plannedRiskPct:e.plannedRiskPct,positionSize:e.positionSize,valuePerUnit:e.valuePerUnit,pipSize:e.pipSize,leverage:e.leverage,spreadCost:e.spreadCost??0,entryCommission:e.entryCommission??0,entryTrigger:e.entryTrigger,keyLevel:e.keyLevel,marketCondition:e.marketCondition||'',newsRisk:e.newsRisk,tradeThesis:e.tradeThesis,preTradeNotes:e.preTradeNotes}; Object.entries(map).forEach(([id,v])=>setValue(id,v));
+  const n=nowParts(); setValue('adjustDate',n.date); setValue('adjustTime',n.time); const r=t.result||{}; const rmap={exitDate:r.exitDate||n.date,exitTime:r.exitTime||n.time,finalExitPrice:r.finalExitPrice,exitReason:r.exitReason||'',finalClosedSize:r.finalClosedSize,finalLegGrossPnl:r.finalLegGrossPnl,exitCommission:r.exitCommission??0,swapFinancing:r.swapFinancing??0,otherCosts:r.otherCosts??0,equityAfter:r.equityAfter,lowestPrice:r.lowestPrice,highestPrice:r.highestPrice,executionQuality:r.executionQuality,planFollowed:r.planFollowed,primaryMistake:r.primaryMistake,primaryStrength:r.primaryStrength,reviewNotes:r.reviewNotes}; Object.entries(rmap).forEach(([id,v])=>setValue(id,v));
   updateWorkspaceHeader(); updateStages(); calculateEntryPreview(); renderManagement(); calculateResultPreview(); switchStage(currentStage,false); renderJournal();
   applyTradeLocks(t);
   refreshTradeEvidence();
@@ -1645,6 +2322,7 @@ function switchStage(n,scroll=true){
   if(n===2) renderManagement(); if(n===3){ if(!t.result){ const st=currentState(t); if(getValue('finalClosedSize')==='') setValue('finalClosedSize',st.size); } calculateResultPreview(); } applyTradeLocks(t); if(scroll) window.scrollTo({top:0,behavior:'smooth'});
 }
 function deleteCurrentTrade(){
+  if(!mutationAllowed()) return;
   const t=currentTrade(); if(!t) return;
   if(!confirm(`Delete ${t.entry?.instrument||t.id}? This cannot be undone.`)) return;
   trades=trades.filter(x=>x.id!==t.id); currentId=null; saveStore();
@@ -1663,8 +2341,8 @@ async function attachmentManifest(){
       req.onsuccess=()=>resolve(req.result||[]);
       req.onerror=()=>reject(req.error);
     });
-    return rows.map(r=>({ownerType:r.ownerType,ownerId:r.ownerId,kind:r.kind,name:r.name,type:r.type,size:r.size,updatedAt:r.updatedAt}));
-  }catch(err){ return []; }
+    const local=rows.map(r=>({ownerType:r.ownerType,ownerId:r.ownerId,kind:r.kind,name:r.name,type:r.type,size:r.size,updatedAt:r.updatedAt,localCached:true,...(cloudRuntime.evidenceIndex?.[r.key]||{})})); const keys=new Set(local.map(x=>x.key||attachmentKey(x.ownerType,x.ownerId,x.kind))); const cloudOnly=Object.values(cloudRuntime.evidenceIndex||{}).filter(x=>x&&!keys.has(x.key)); return [...local,...cloudOnly];
+  }catch(err){ return Object.values(cloudRuntime.evidenceIndex||{}); }
 }
 async function exportData(){
   const attachments=await attachmentManifest();
@@ -1673,9 +2351,12 @@ async function exportData(){
     exportedAt:new Date().toISOString(),
     app:MODULE_CONFIG.name,
     module:PUBLIC_MODULE_DESCRIPTOR,
+    profile:{username:cloudRuntime.username||null,userId:cloudRuntime.user?.id||null},
+    reportingCurrency:'USD',unifiedReportingCurrency:'TWD',
+    security:{credentialsIncluded:false,authenticationTokensIncluded:false},
     trades,funding,
     attachmentManifest:attachments,
-    attachmentNote:'Attachment file metadata is listed here; the actual local screenshot/PDF blobs remain in this browser evidence store.'
+    attachmentNote:'Attachment metadata is included. Binary files are stored separately in the authenticated user private Supabase Storage path and may also be cached locally for offline access.'
   };
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
   const a=document.createElement('a');
@@ -1688,8 +2369,7 @@ async function exportData(){
 
 function cleanString(v){ return v==null?'':String(v).trim(); }
 function toNullableNumber(v){
-  if(v===''||v==null) return null;
-  const n=Number(v); return Number.isFinite(n)?n:null;
+  return parseNumeric(v);
 }
 function validStatus(v,result){
   const x=cleanString(v).toUpperCase();
@@ -1708,6 +2388,7 @@ function normalizedDirection(v,source){
 function normalizeManagementRow(raw,tradeId,index){
   if(!raw||typeof raw!=='object') return null;
   return {
+    ...deepClone(raw),
     id:cleanString(raw.id)||`IMP-MGT-${tradeId}-${index+1}`,
     date:cleanString(raw.date), time:cleanString(raw.time),
     type:cleanString(raw.type)||'Imported Adjustment',
@@ -1717,21 +2398,43 @@ function normalizeManagementRow(raw,tradeId,index){
     positionBefore:toNullableNumber(raw.positionBefore), positionAfter:toNullableNumber(raw.positionAfter),
     partialExitPrice:toNullableNumber(raw.partialExitPrice),
     partialRealizedPnl:toNullableNumber(raw.partialRealizedPnl),
-    reason:cleanString(raw.reason), notes:cleanString(raw.notes), imported:true
+    reason:cleanString(raw.reason), notes:cleanString(raw.notes), imported:raw.imported===true
   };
 }
+function stableHash(value){
+  const s=String(value??''); let h=2166136261;
+  for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); }
+  return (h>>>0).toString(36).toUpperCase();
+}
+function importedTradeFingerprint(raw={}){
+  const e=isObject(raw.entry)?raw.entry:{},r=isObject(raw.result)?raw.result:{},s=isObject(raw.source)?raw.source:{};
+  return [
+    e.instrument??s.instrument??s.symbol, e.direction??s.direction??s.directionRaw,
+    e.date??s.openDate??s.date, e.time??s.openTime, e.actualEntry??e.plannedEntry??s.openPrice,
+    e.positionSize??s.quantity, e.broker??s.broker, e.accountName??s.accountName,
+    r.exitDate??s.closeDate, r.exitTime??s.closeTime, r.finalExitPrice??s.closePrice,
+    r.finalLegGrossPnl??s.realisedPnl??s.ledgerAmount
+  ].map(v=>String(v??'').trim().toUpperCase()).join('|');
+}
+function fallbackTradeFingerprint(t={}){
+  const e=t.entry||{},r=t.result||{},s=t.source||{};
+  return [e.instrument,e.direction,e.date,e.time,e.actualEntry??e.plannedEntry,e.positionSize,e.broker,e.accountName,r.exitDate,r.exitTime,r.finalExitPrice,r.finalLegGrossPnl,s.openPrice,s.closePrice,s.quantity].map(v=>String(v??'').trim().toUpperCase()).join('|');
+}
+
 function normalizeTradeRecord(raw,index){
   if(!raw||typeof raw!=='object'||Array.isArray(raw)) return {error:`Record ${index+1} is not a trade object.`};
 
   const source=(raw.source&&typeof raw.source==='object'&&!Array.isArray(raw.source))?deepClone(raw.source):{};
   const e=(raw.entry&&typeof raw.entry==='object')?raw.entry:{};
   const rr=(raw.result&&typeof raw.result==='object')?raw.result:null;
-  const id=cleanString(raw.id)||cleanString(source.positionId)||(source.ledgerTransactionId?`CAP-TXN-${source.ledgerTransactionId}`:uid());
+  const importFingerprint=importedTradeFingerprint(raw);
+  const id=cleanString(raw.id)||cleanString(source.positionId)||(source.ledgerTransactionId?`CAP-TXN-${source.ledgerTransactionId}`:`IMP-${stableHash(importFingerprint||`ROW-${index+1}`)}`);
 
   const entry={
+    ...deepClone(e),
     date:cleanString(e.date), time:cleanString(e.time),
     instrument:cleanString(e.instrument).toUpperCase(),
-    assetType:cleanString(e.assetType)||'Other CFD',
+    assetType:cleanString(e.assetType)||'',
     direction:normalizedDirection(e.direction,source),
     broker:cleanString(e.broker)||cleanString(source.broker),
     accountName:cleanString(e.accountName),
@@ -1760,6 +2463,7 @@ function normalizeTradeRecord(raw,index){
   };
 
   const result=rr?{
+    ...deepClone(rr),
     exitDate:cleanString(rr.exitDate), exitTime:cleanString(rr.exitTime),
     finalExitPrice:toNullableNumber(rr.finalExitPrice ?? source.closePrice),
     exitReason:cleanString(rr.exitReason),
@@ -1783,6 +2487,7 @@ function normalizeTradeRecord(raw,index){
     : [];
 
   const trade={
+    ...deepClone(raw),
     schemaVersion:SCHEMA_VERSION,
     id,
     status:validStatus(raw.status,result),
@@ -1800,19 +2505,28 @@ function normalizeTradeRecord(raw,index){
   return {trade,warnings};
 }
 function normalizeFundingRecord(raw,index){
-  if(!raw||typeof raw!=='object') return null;
+  if(!raw||typeof raw!=='object'||Array.isArray(raw)) return null;
   const text=cleanString(raw.type);
   const type=/withdraw/i.test(text)?'Withdrawal':/deposit/i.test(text)?'Deposit':'';
   const amount=Math.abs(num(raw.amount));
   if(!type||!(amount>0)) return null;
+  let rate=toNullableNumber(raw.fxRateTwdAtTransaction),twd=toNullableNumber(raw.twdAtTransaction);
+  if((rate==null||rate<=0)&&twd!=null&&twd>0) rate=twd/amount;
+  if((twd==null||twd<=0)&&rate!=null&&rate>0) twd=amount*rate;
+  const fingerprint=[cleanString(raw.date),cleanString(raw.time),type,amount,cleanString(raw.account),cleanString(raw.method),cleanString(raw.reference),cleanString(raw.notes),rate].join('|');
   return {
-    id:cleanString(raw.id)||`IMP-FUND-${index+1}-${Date.now().toString(36)}`,
+    ...deepClone(raw),
+    id:cleanString(raw.id)||`IMP-FUND-${stableHash(fingerprint||`ROW-${index+1}`)}`,
     date:cleanString(raw.date), time:cleanString(raw.time), type, amount,
+    currency:cleanString(raw.currency)||'USD',
+    fxRateTwdAtTransaction:rate,
+    twdAtTransaction:twd,
     account:cleanString(raw.account),
     method:cleanString(raw.method)||'Imported',
     reference:cleanString(raw.reference),
     notes:cleanString(raw.notes),
-    createdAt:cleanString(raw.createdAt)||new Date().toISOString()
+    createdAt:cleanString(raw.createdAt)||new Date().toISOString(),
+    updatedAt:cleanString(raw.updatedAt)||cleanString(raw.createdAt)||new Date().toISOString()
   };
 }
 function tradeKeys(t){
@@ -1825,7 +2539,10 @@ function tradeKeys(t){
 }
 function sameTradeIdentity(a,b){
   const ka=new Set(tradeKeys(a));
-  return tradeKeys(b).some(k=>ka.has(k));
+  if(tradeKeys(b).some(k=>ka.has(k))) return true;
+  const fa=fallbackTradeFingerprint(a),fb=fallbackTradeFingerprint(b);
+  const meaningful=fa.replace(/\|/g,'').length>8&&fb.replace(/\|/g,'').length>8;
+  return meaningful&&fa===fb;
 }
 function isMeaningful(v){ return !(v==null||v===''||(Array.isArray(v)&&!v.length)); }
 function mergeObjectsPreserveExisting(existing={},incoming={}){
@@ -1864,7 +2581,7 @@ function mergeTradeRecord(existing,incoming){
     result:(existing.result||incoming.result)
       ? mergeObjectsPreserveExisting(existing.result||{},incoming.result||{})
       : null,
-    source:{...(existing.source||{}),...(incoming.source||{})}
+    source:mergeObjectsPreserveExisting(existing.source||{},incoming.source||{})
   };
 }
 function mergeTradeCollections(existing,incoming){
@@ -1887,8 +2604,15 @@ function dedupeIncomingTrades(records){
   return {trades:out,duplicates};
 }
 function fundingFingerprint(x){
-  return [x.date,x.time,x.type,x.amount,x.account,x.reference]
+  return [x.date,x.time,x.type,num(x.amount),x.account,x.method,x.reference,x.notes,nullableNum(x.fxRateTwdAtTransaction)]
     .map(v=>cleanString(v).toUpperCase()).join('|');
+}
+function sameFundingIdentity(a,b){
+  const aId=cleanString(a?.id),bId=cleanString(b?.id);
+  if(aId&&bId&&aId===bId) return true;
+  const aRef=cleanString(a?.reference).toUpperCase(),bRef=cleanString(b?.reference).toUpperCase();
+  if(aRef&&bRef&&aRef===bRef&&cleanString(a?.type).toUpperCase()===cleanString(b?.type).toUpperCase()) return true;
+  return fundingFingerprint(a)===fundingFingerprint(b);
 }
 function mergeFundingCollections(existing,incoming){
   const out=existing.map(deepClone);
@@ -1896,7 +2620,7 @@ function mergeFundingCollections(existing,incoming){
   let added=0,duplicates=0;
   incoming.forEach(x=>{
     const fp=fundingFingerprint(x);
-    if(seen.has(fp)){ duplicates++; return; }
+    if(out.some(existing=>sameFundingIdentity(existing,x))||seen.has(fp)){ duplicates++; return; }
     seen.add(fp); out.push(deepClone(x)); added++;
   });
   return {funding:out,added,duplicates};
@@ -1937,7 +2661,9 @@ function closeImportPreview(){
   hideValidation('importValidation');
 }
 function importData(file){
+  if(!mutationAllowed()) return;
   if(!file) return;
+  if(file?.size>MAX_IMPORT_BYTES){ alert('Import failed: JSON file is larger than 20 MB.'); return; }
   const reader=new FileReader();
 
   reader.onerror=()=>{
@@ -1947,14 +2673,15 @@ function importData(file){
 
   reader.onload=()=>{
     try{
-      const parsed=JSON.parse(String(reader.result||'').replace(/^\uFEFF/,''));
+      const parsed=JSON.parse(String(reader.result||'').replace(/^\uFEFF/,'')); const backupUserId=String(parsed?.profile?.userId||'').trim(); const backupUsername=String(parsed?.profile?.username||'').trim(); if(backupUserId&&cloudRuntime.user?.id&&backupUserId!==cloudRuntime.user.id&&!confirm('This CFD backup belongs to a different authenticated user ID. Importing it will intentionally copy CFD data into the current account. Continue?')){ $('importFile').value=''; return; } if(!backupUserId&&backupUsername&&cloudRuntime.username&&backupUsername.toLowerCase()!==cloudRuntime.username.toLowerCase()&&!confirm(`This CFD backup identifies profile “${backupUsername}”, while you are signed in as “${cloudRuntime.username}”. Import it into the current account?`)){ $('importFile').value=''; return; }
+      const importRoot=isObject(parsed?.state?.raw)?parsed.state.raw:isObject(parsed?.payload?.raw)?parsed.payload.raw:isObject(parsed?.modules?.cfd?.raw)?parsed.modules.cfd.raw:isObject(parsed?.modules?.cfd)?parsed.modules.cfd:isObject(parsed?.raw)?parsed.raw:parsed;
       const rawTrades=Array.isArray(parsed)
         ? parsed
-        : Array.isArray(parsed?.trades)
-          ? parsed.trades
+        : Array.isArray(importRoot?.trades)
+          ? importRoot.trades
           : null;
 
-      if(!rawTrades) throw new Error('Expected a top-level "trades" array (schemaVersion 3 CFD JSON).');
+      if(!rawTrades) throw new Error('Expected CFD trades in a top-level export, cloud-state export, or Aurum Imperium whole-app backup.');
 
       const normalized=[],warnings=[],errors=[];
       rawTrades.forEach((raw,i)=>{
@@ -1967,16 +2694,16 @@ function importData(file){
       });
 
       const deduped=dedupeIncomingTrades(normalized);
-      const rawFunding=Array.isArray(parsed?.funding)?parsed.funding:[];
+      const rawFunding=Array.isArray(importRoot?.funding)?importRoot.funding:[];
       const fundingRows=rawFunding.map((x,i)=>normalizeFundingRecord(x,i)).filter(Boolean);
       const existingMatches=deduped.trades.filter(t=>trades.some(x=>sameTradeIdentity(x,t))).length;
 
       showImportPreview({
         fileName:file.name,
-        schemaVersion:parsed?.schemaVersion??null,
+        schemaVersion:parsed?.schemaVersion??parsed?.modules?.cfd?.schemaVersion??importRoot?.schemaVersion??null,
         trades:deduped.trades,
         funding:fundingRows,
-        fundingProvided:Array.isArray(parsed?.funding),
+        fundingProvided:Array.isArray(importRoot?.funding),
         fileDuplicates:deduped.duplicates,
         existingMatches,
         warnings,
@@ -1995,6 +2722,7 @@ function importData(file){
   reader.readAsText(file);
 }
 function commitImport(mode){
+  if(!mutationAllowed()) return;
   if(!pendingImport) return;
   const p=pendingImport;
 
@@ -2009,8 +2737,8 @@ function commitImport(mode){
       fundingMessage=`${mf.added} funding added`;
     }
 
-    localStorage.setItem(STORAGE_KEY,JSON.stringify(trades));
-    localStorage.setItem(FUNDING_KEY,JSON.stringify(funding));
+    persistLocalStores();
+    markLocalMutation('CFD JSON import merged · cloud sync in 10 seconds');
     currentId=null;
     currentView='DASHBOARD';
     showDashboard();
@@ -2026,8 +2754,8 @@ function commitImport(mode){
     trades=p.trades.map(deepClone);
     if(p.fundingProvided) funding=p.funding.map(deepClone);
 
-    localStorage.setItem(STORAGE_KEY,JSON.stringify(trades));
-    localStorage.setItem(FUNDING_KEY,JSON.stringify(funding));
+    persistLocalStores();
+    markLocalMutation('CFD JSON replacement staged · cloud sync in 10 seconds');
     currentId=null;
     currentView='DASHBOARD';
     showDashboard();
@@ -2038,6 +2766,9 @@ function commitImport(mode){
 }
 
 // Listeners
+$('loadCloud').addEventListener('click',()=>loadCloudNow());
+$('saveCloud').addEventListener('click',()=>saveCloudNow());
+$('staySignedIn').addEventListener('click',resetActivity);
 $$('[data-view]').forEach(b=>b.addEventListener('click',()=>setView(b.dataset.view)));
 $('dashboardFundingBtn').addEventListener('click',openFunding);
 
@@ -2090,7 +2821,7 @@ $('removeMonthlyAnalyticsBtn').addEventListener('click',async()=>{
   if(confirm(`Remove the broker analytics screenshot for ${monthLabel(month)}?`)){ await deleteAttachment('MONTH',month,'analyticsScreenshot'); refreshMonthlyEvidence(); }
 });
 
-$('fundsBtn').addEventListener('click',openFunding); $('closeFundsBtn').addEventListener('click',closeFunding); $('addFundBtn').addEventListener('click',addFunding); $('fundsModal').addEventListener('click',e=>{if(e.target===$('fundsModal')) closeFunding();});
+$('fundsBtn').addEventListener('click',openFunding); $('closeFundsBtn').addEventListener('click',closeFunding); $('addFundBtn').addEventListener('click',addFunding); ['fundAmount','fundFxRate'].forEach(id=>$(id).addEventListener('input',updateFundingTwdPreview)); $('fundsModal').addEventListener('click',e=>{if(e.target===$('fundsModal')) closeFunding();});
 document.addEventListener('keydown',e=>{if(e.key!=='Escape') return; if(!$('importModal').classList.contains('hidden')) closeImportPreview(); else if(!$('fundsModal').classList.contains('hidden')) closeFunding();});
 $('emptyNew').addEventListener('click',createTrade); $('dashboardNewBtn').addEventListener('click',createTrade);
 $('deleteTradeBtn').addEventListener('click',deleteCurrentTrade); $('exportBtn').addEventListener('click',exportData); $('importBtn').addEventListener('click',()=>{ $('importFile').value=''; $('importFile').click(); }); $('importFile').addEventListener('change',e=>{if(e.target.files&&e.target.files[0]) importData(e.target.files[0]);}); $('cancelImportTop').addEventListener('click',closeImportPreview); $('cancelImportBtn').addEventListener('click',closeImportPreview); $('mergeImportBtn').addEventListener('click',()=>commitImport('merge')); $('replaceImportBtn').addEventListener('click',()=>commitImport('replace')); $('importModal').addEventListener('click',e=>{if(e.target===$('importModal')) closeImportPreview();});
@@ -2099,14 +2830,127 @@ $$('.stage').forEach(b=>b.addEventListener('click',()=>switchStage(Number(b.data
 $('saveDraftBtn').addEventListener('click',()=>{ if(saveEntryToModel('DRAFT')) toast('Draft saved','The trade remains editable and has not been marked open.'); });
 $('openTradeBtn').addEventListener('click',()=>{ if(saveEntryToModel('OPEN')){ currentView='OPEN'; currentStage=2; showTradeShell(); loadTradeIntoUI(); switchStage(2,false); renderJournal(); refreshTradeEvidence(); toast('Trade moved to Waiting for Management','The original entry and its pre-entry screenshot are locked. All later changes must be recorded as management events.'); } });
 $('addAdjustmentBtn').addEventListener('click',addAdjustment); $('closeTradeBtn').addEventListener('click',closeTrade);
-$('adjustType').addEventListener('change',()=>{prepareAdjustmentDefaults();autoPartialPnl();}); ['positionAfter','partialExitPrice'].forEach(id=>$(id).addEventListener('input',autoPartialPnl));
+$('adjustType').addEventListener('change',()=>{ ['newSL','newTP','positionAfter','partialExitPrice','partialRealizedPnl'].forEach(id=>setValue(id,'')); prepareAdjustmentDefaults(); autoPartialPnl(); }); ['positionAfter','partialExitPrice'].forEach(id=>$(id).addEventListener('input',autoPartialPnl));
 ['plannedEntry','actualEntry','initialSL','initialTP','equityBefore','plannedRiskPct','positionSize','valuePerUnit','pipSize','direction'].forEach(id=>$(id).addEventListener('input',calculateEntryPreview)); $('direction').addEventListener('change',calculateEntryPreview);
 ['finalExitPrice','finalClosedSize'].forEach(id=>$(id).addEventListener('input',autoFinalLegPnl)); ['finalLegGrossPnl','exitCommission','swapFinancing','otherCosts','equityAfter','lowestPrice','highestPrice','exitDate','exitTime'].forEach(id=>$(id).addEventListener('input',calculateResultPreview));
 
-renderJournal(); renderDashboard(); renderFunding();
-currentView='DASHBOARD'; currentId=null; showDashboard(); closeWorkspace();
-resolveHubLink();
-announceModuleReady();
+function runCriticalSelfCheck(){
+  const errors=[];
+  const requiredIds=['sessionGate','cloudStatus','profileChip','loadCloud','saveCloud','dashboardShell','tradeShell','tradeList','fundsModal','fundDate','fundTime','fundAmount','fundFxRate','fundTwdValue','entryDate','entryTime','instrument','direction','plannedEntry','initialSL','initialTP','valuePerUnit','closeTradeBtn'];
+  requiredIds.forEach(id=>{ if(!$(id)) errors.push(`Missing required interface element #${id}.`); });
+  if(parseNumeric('3,000')!==3000) errors.push('Numeric parser failed the 3,000 → 3000 integrity check.');
+  if(parseNumeric('(1,250.50)')!==-1250.5) errors.push('Numeric parser failed negative formatted-value handling.');
+  if(Math.abs(rounded(-0,2)??1)!==0) errors.push('Negative-zero normalization failed.');
+  if(!STORAGE_KEY||!FUNDING_KEY||STORAGE_KEY===FUNDING_KEY) errors.push('Authenticated local storage keys are not configured safely.');
+  if(!localStoreOwnerMatches(STORAGE_KEY)||!localStoreOwnerMatches(FUNDING_KEY)) errors.push('A local CFD store is owned by a different authenticated user.');
+  if(typeof window.AurumCloud?.module?.load!=='function'||typeof window.AurumCloud?.module?.save!=='function') errors.push('AurumCloud module load/save API is unavailable.');
+  return errors;
+}
+function stateIntegrityWarnings(){
+  const warnings=[];
+  const tradeIds=trades.map(t=>cleanString(t?.id)).filter(Boolean),fundIds=funding.map(x=>cleanString(x?.id)).filter(Boolean);
+  if(new Set(tradeIds).size!==tradeIds.length) warnings.push('Duplicate trade IDs detected.');
+  if(new Set(fundIds).size!==fundIds.length) warnings.push('Duplicate funding IDs detected.');
+  const badStatus=trades.filter(t=>!['DRAFT','OPEN','CLOSED'].includes(cleanString(t?.status).toUpperCase()));
+  if(badStatus.length) warnings.push(`${badStatus.length} trade record(s) have invalid status values.`);
+  const unknownPnl=trades.filter(t=>t?.status==='CLOSED'&&t?.result&&!resultMetrics(t,t.result).pnlKnown).length;
+  if(unknownPnl) warnings.push(`${unknownPnl} closed trade(s) have unavailable P/L and are excluded from financial performance totals until corrected.`);
+  return warnings;
+}
+
+async function initializeModule(){
+
+  try{
+    if(!window.AurumCloud) throw new Error('Shared Aurum Cloud engine did not load.');
+    await AurumCloud.initialize();
+    const user=AurumCloud.auth.getUser();
+    if(!user?.id){ await redirectForMissingSession('session-required'); return; }
+
+    cloudRuntime.user=deepClone(user);
+    try{ cloudRuntime.profile=await AurumCloud.profile.load(); }
+    catch{ cloudRuntime.profile=AurumCloud.profile.get?.()||null; }
+    cloudRuntime.username=cleanUsername(cloudRuntime.profile?.username||user.user_metadata?.username||user.user_metadata?.display_name||String(user.email||'Investor').split('@')[0])||`user_${String(user.id).slice(0,8)}`;
+    activateCompatibilityScope(cloudRuntime.profile||{username:cloudRuntime.username},user.id);
+    configureScopedStores();
+    const selfCheckErrors=runCriticalSelfCheck();
+    if(selfCheckErrors.length) throw new Error(`CFD safety self-check failed: ${selfCheckErrors.join(' ')}`);
+    const claimed=claimLegacyLocalData();
+    trades=loadStore();
+    funding=loadFundingStore();
+    persistLocalStores();
+
+    $('profileChip').textContent=`Profile: ${cloudRuntime.username}`;
+    bindCloudEvents();
+    bindActivityEvents();
+    bindConflictMutationGuard();
+    resolveHubLink();
+    setCloudStatus('pending',navigator.onLine?'Loading authenticated CFD state…':'Offline · loading local CFD cache…');
+
+    let result=null;
+    try{ result=await AurumCloud.module.load(CLOUD_MODULE_ID); }
+    catch(error){ console.warn('Initial CFD cloud load:',error); }
+
+    let migrationNeeded=claimed;
+    if(result){
+      if(result.source==='local-unsynced'){
+        const local=extractEnvelopeState(result);
+        if(local) applyCloudState(local,{source:'local-unsynced'});
+        cloudRuntime.pendingMutation=true;
+      }else{
+        const cloud=extractEnvelopeState(result);
+        if(cloud){
+          const parts=cloudStateParts(cloud);
+          applyCloudState(cloud,{source:'cloud',mergeCompatibility:!parts.native});
+          if(!parts.native) migrationNeeded=true;
+        }
+      }
+    }else{
+      renderJournal(); renderDashboard(); renderFunding(); currentView='DASHBOARD'; currentId=null; showDashboard(); closeWorkspace();
+      if(trades.length||funding.length) migrationNeeded=true;
+    }
+
+    const integrityWarnings=stateIntegrityWarnings();
+    if(integrityWarnings.length) console.warn('CFD data integrity warnings:',integrityWarnings);
+    cloudRuntime.initialized=true;
+    cloudRuntime.lastActivityAt=Date.now();
+    $('sessionGate').hidden=true;
+    announceModuleReady();
+    setInterval(updateInactivityTimer,250);
+    refreshMonthlyEvidence().catch(()=>null);
+    retryEvidenceCloudQueue().catch(()=>null);
+
+    if(migrationNeeded){
+      markLocalMutation('CFD migration protected · cloud sync in 10 seconds');
+      toast('CFD cloud migration ready','Existing authenticated CFD data was preserved and will synchronize to Supabase.');
+    }else if(result?.source==='local-unsynced'){
+      setCloudStatus('pending','Unsynced local CFD changes protected');
+    }else if(navigator.onLine){
+      setCloudStatus('online',result?'Cloud connected · CFD synced':'Cloud connected · CFD ready');
+    }else{
+      setCloudStatus('pending','Offline · local CFD available');
+    }
+  }catch(error){
+    console.error('CFD initialization failed:',error);
+    $('sessionGate').hidden=false;
+    const card=$('sessionGate').querySelector('.blocking-card');
+    card.querySelector('h2').textContent='CFD Journal could not initialize';
+    card.querySelector('p').textContent=`${error?.message||'Unknown initialization error.'} Returning to the Unified Dashboard.`;
+    setCloudStatus('error','CFD initialization failed');
+    setTimeout(()=>location.replace(`${ROOT_URL}?reason=module-initialization-error`),1800);
+  }
+}
+
+window.addEventListener('pageshow',()=>{if(cloudRuntime.initialized&&cloudRuntime.user?.id)resetActivity();});
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState!=='visible'||!cloudRuntime.initialized) return;
+  const u=AurumCloud.auth.getUser();
+  if(!u?.id) redirectForMissingSession('session-ended');
+  else if(cloudRuntime.user?.id&&u.id!==cloudRuntime.user.id) redirectForMissingSession('session-changed');
+  else resetActivity();
+});
+window.addEventListener('beforeunload',stageBeforeUnload);
+
+initializeModule();
 })();
 </script>
 </body>
