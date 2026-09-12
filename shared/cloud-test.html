@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Aurum Imperium — Cloud Core Test</title>
+
+  <style>
+    body {
+      margin: 0;
+      padding: 30px;
+      font-family: Arial, sans-serif;
+      background: #0b0f14;
+      color: #f3f4f6;
+    }
+
+    .wrap {
+      max-width: 850px;
+      margin: auto;
+    }
+
+    h1 {
+      margin-bottom: 5px;
+    }
+
+    .sub {
+      color: #9ca3af;
+      margin-bottom: 25px;
+    }
+
+    .panel {
+      background: #141a22;
+      border: 1px solid #2a3340;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 18px;
+    }
+
+    .row {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 10px 0;
+      border-bottom: 1px solid #242c36;
+    }
+
+    .row:last-child {
+      border-bottom: 0;
+    }
+
+    .label {
+      color: #aab2bf;
+    }
+
+    .pass {
+      color: #55d98d;
+      font-weight: bold;
+    }
+
+    .fail {
+      color: #ff6b6b;
+      font-weight: bold;
+    }
+
+    .waiting {
+      color: #f5c451;
+      font-weight: bold;
+    }
+
+    button {
+      border: 0;
+      border-radius: 8px;
+      padding: 12px 18px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    #runTest {
+      background: #55d98d;
+      color: #07110b;
+    }
+
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: #090c10;
+      padding: 15px;
+      border-radius: 8px;
+      min-height: 100px;
+      overflow: auto;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="wrap">
+
+  <h1>Aurum Imperium Cloud Test</h1>
+
+  <div class="sub">
+    Isolated Supabase integration test — no financial data is modified.
+  </div>
+
+
+  <div class="panel">
+
+    <div class="row">
+      <span class="label">Supabase SDK</span>
+      <span id="sdkStatus" class="waiting">Waiting</span>
+    </div>
+
+    <div class="row">
+      <span class="label">Configuration</span>
+      <span id="configStatus" class="waiting">Waiting</span>
+    </div>
+
+    <div class="row">
+      <span class="label">AurumCloud Engine</span>
+      <span id="engineStatus" class="waiting">Waiting</span>
+    </div>
+
+    <div class="row">
+      <span class="label">Supabase Connection</span>
+      <span id="connectionStatus" class="waiting">Not tested</span>
+    </div>
+
+    <div class="row">
+      <span class="label">Authentication Session</span>
+      <span id="authStatus" class="waiting">Not tested</span>
+    </div>
+
+    <div class="row">
+      <span class="label">Device ID</span>
+      <span id="deviceStatus" class="waiting">Not tested</span>
+    </div>
+
+  </div>
+
+
+  <div class="panel">
+
+    <button id="runTest">
+      Run Cloud Test
+    </button>
+
+  </div>
+
+
+  <div class="panel">
+
+    <strong>Test Log</strong>
+
+    <pre id="log">Ready to test.</pre>
+
+  </div>
+
+</div>
+
+
+<!-- =======================================================
+     1. SUPABASE JAVASCRIPT SDK
+     ======================================================= -->
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+
+<!-- =======================================================
+     2. AURUM CONFIGURATION
+     ======================================================= -->
+
+<script src="./supabase-config.js"></script>
+
+
+<!-- =======================================================
+     3. AURUM SHARED CLOUD ENGINE
+     ======================================================= -->
+
+<script src="./aurum-cloud.js"></script>
+
+
+<script>
+(() => {
+  "use strict";
+
+
+  const $ = id =>
+    document.getElementById(id);
+
+
+  function setStatus(
+    id,
+    message,
+    type
+  ) {
+
+    const el = $(id);
+
+    el.textContent = message;
+
+    el.className = type;
+
+  }
+
+
+  function log(message) {
+
+    const box = $("log");
+
+    const time =
+      new Date()
+        .toLocaleTimeString();
+
+    box.textContent +=
+      "\n[" +
+      time +
+      "] " +
+      message;
+
+  }
+
+
+  function resetLog() {
+    $("log").textContent =
+      "Starting test...";
+  }
+
+
+  async function runTest() {
+
+    resetLog();
+
+
+    // -------------------------------------------------------
+    // TEST 1 — SUPABASE SDK
+    // -------------------------------------------------------
+
+    if (
+      window.supabase &&
+      typeof window.supabase.createClient === "function"
+    ) {
+
+      setStatus(
+        "sdkStatus",
+        "PASS",
+        "pass"
+      );
+
+      log(
+        "Supabase JavaScript SDK loaded."
+      );
+
+    } else {
+
+      setStatus(
+        "sdkStatus",
+        "FAIL",
+        "fail"
+      );
+
+      log(
+        "Supabase JavaScript SDK did not load."
+      );
+
+      return;
+
+    }
+
+
+    // -------------------------------------------------------
+    // TEST 2 — CONFIGURATION
+    // -------------------------------------------------------
+
+    if (
+      !window.AURUM_SUPABASE_CONFIG ||
+      typeof window.AURUM_VALIDATE_SUPABASE_CONFIG !== "function"
+    ) {
+
+      setStatus(
+        "configStatus",
+        "FAIL",
+        "fail"
+      );
+
+      log(
+        "Aurum Supabase configuration is missing."
+      );
+
+      return;
+
+    }
+
+
+    const validation =
+      window.AURUM_VALIDATE_SUPABASE_CONFIG();
+
+
+    if (validation.valid) {
+
+      setStatus(
+        "configStatus",
+        "PASS",
+        "pass"
+      );
+
+      log(
+        "Supabase configuration validated."
+      );
+
+    } else {
+
+      setStatus(
+        "configStatus",
+        "FAIL",
+        "fail"
+      );
+
+      log(
+        "Configuration error: " +
+        validation.errors.join(" ")
+      );
+
+      return;
+
+    }
+
+
+    // -------------------------------------------------------
+    // TEST 3 — CLOUD ENGINE EXISTS
+    // -------------------------------------------------------
+
+    if (
+      !window.AurumCloud ||
+      typeof window.AurumCloud.initialize !== "function"
+    ) {
+
+      setStatus(
+        "engineStatus",
+        "FAIL",
+        "fail"
+      );
+
+      log(
+        "AurumCloud engine did not load."
+      );
+
+      return;
+
+    }
+
+
+    setStatus(
+      "engineStatus",
+      "PASS",
+      "pass"
+    );
+
+    log(
+      "AurumCloud engine loaded."
+    );
+
+
+    // -------------------------------------------------------
+    // TEST 4 — INITIALISE + CONTACT SUPABASE
+    // -------------------------------------------------------
+
+    try {
+
+      await window.AurumCloud.initialize();
+
+
+      setStatus(
+        "connectionStatus",
+        "PASS",
+        "pass"
+      );
+
+      log(
+        "AurumCloud successfully contacted Supabase."
+      );
+
+    } catch (error) {
+
+      setStatus(
+        "connectionStatus",
+        "FAIL",
+        "fail"
+      );
+
+      log(
+        "Connection failed: " +
+        (
+          error?.message ||
+          error
+        )
+      );
+
+      return;
+
+    }
+
+
+    // -------------------------------------------------------
+    // TEST 5 — AUTH SESSION
+    // -------------------------------------------------------
+
+    const user =
+      window.AurumCloud
+        .auth
+        .getUser();
+
+
+    if (user) {
+
+      setStatus(
+        "authStatus",
+        "SIGNED IN",
+        "pass"
+      );
+
+      log(
+        "Authenticated Supabase session found."
+      );
+
+    } else {
+
+      setStatus(
+        "authStatus",
+        "NO SESSION",
+        "waiting"
+      );
+
+      log(
+        "No user is signed in. This is expected before our login test."
+      );
+
+    }
+
+
+    // -------------------------------------------------------
+    // TEST 6 — DEVICE ID
+    // -------------------------------------------------------
+
+    try {
+
+      const deviceId =
+        window.AurumCloud
+          .device
+          .getId();
+
+
+      if (deviceId) {
+
+        setStatus(
+          "deviceStatus",
+          "PASS",
+          "pass"
+        );
+
+        log(
+          "Persistent device identity created successfully."
+        );
+
+      } else {
+
+        throw new Error(
+          "Device ID was empty."
+        );
+
+      }
+
+    } catch (error) {
+
+      setStatus(
+        "deviceStatus",
+        "FAIL",
+        "fail"
+      );
+
+      log(
+        "Device identity failed: " +
+        (
+          error?.message ||
+          error
+        )
+      );
+
+      return;
+
+    }
+
+
+    log(
+      "BASE CLOUD TEST COMPLETED."
+    );
+
+  }
+
+
+  $("runTest")
+    .addEventListener(
+      "click",
+      runTest
+    );
+
+
+})();
+</script>
+
+</body>
+</html>
