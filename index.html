@@ -1765,9 +1765,76 @@
       }
     }
 
-    async function getCloudModuleEnvelope(moduleName) {
+    function cloudSyncQueueKey() {
+      const config = window.AURUM_SUPABASE_CONFIG || {};
+      const userId = state.session?.userId;
+      if (!userId) return null;
+      const prefix = config.LOCAL_PREFIX || "aurum_imperium_cloud_v1";
+      const queuePrefix = config.LOCAL_KEYS?.SYNC_QUEUE || `${prefix}_sync_queue`;
+      return `${queuePrefix}:${userId}`;
+    }
+
+    function hasPendingCloudModuleWrite(moduleName) {
+      const queueKey = cloudSyncQueueKey();
+      if (!queueKey) return false;
       try {
-        return await AurumCloud.module.load(moduleName);
+        const queue = JSON.parse(localStorage.getItem(queueKey) || "[]");
+        return Array.isArray(queue) && queue.some(operation =>
+          operation?.kind === "module-state" && operation?.moduleName === moduleName
+        );
+      } catch {
+        return true;
+      }
+    }
+
+    function discardPendingCloudModuleWrites(moduleNames = Object.values(MODULE_NAMES)) {
+      const config = window.AURUM_SUPABASE_CONFIG || {};
+      const userId = state.session?.userId;
+      if (!userId) return;
+
+      const targets = new Set(moduleNames.map(name => String(name || "").toLowerCase()).filter(Boolean));
+      const prefix = config.LOCAL_PREFIX || "aurum_imperium_cloud_v1";
+
+      // A revision conflict removes the rejected operation from the queue, but
+      // the SDK intentionally leaves its dirty cache in place. When the user
+      // explicitly chooses Load All from Cloud, remove that stale revision so
+      // the next load can seed the authoritative cloud revision again.
+      targets.forEach(moduleName => {
+        localStorage.removeItem(`${prefix}:module:${userId}:${moduleName}`);
+      });
+
+      const queueKey = cloudSyncQueueKey();
+      try {
+        const queue = JSON.parse(localStorage.getItem(queueKey) || "[]");
+        if (!Array.isArray(queue)) return;
+        const filtered = queue.filter(operation => {
+          const moduleName = String(operation?.moduleName || "").toLowerCase();
+          return operation?.kind !== "module-state" || !targets.has(moduleName);
+        });
+        if (filtered.length !== queue.length) localStorage.setItem(queueKey, JSON.stringify(filtered));
+      } catch {
+        // A malformed queue is left untouched; the SDK remains responsible for
+        // reporting it instead of this recovery path deleting unrelated data.
+      }
+    }
+
+    async function getCloudModuleEnvelope(moduleName, options = {}) {
+      try {
+        let envelope = await AurumCloud.module.load(moduleName);
+
+        // A hidden stale cache can surface its conflict only when load() first
+        // attempts to flush it. Accepting cloud means clearing those rejected
+        // module writes and retrying once with a fresh revision cache.
+        const orphanedDirtyCache = envelope?.source === "local-unsynced" && !hasPendingCloudModuleWrite(moduleName);
+        if (options.acceptCloudOnConflict && envelope?.source === "local-unsynced" && (state.conflictLock || orphanedDirtyCache)) {
+          const conflictedModules = state.conflictModules.filter(name => Object.values(MODULE_NAMES).includes(name));
+          discardPendingCloudModuleWrites(conflictedModules.length ? conflictedModules : [moduleName]);
+          state.conflictLock = false;
+          state.conflictModules = [];
+          envelope = await AurumCloud.module.load(moduleName);
+        }
+
+        return envelope;
       } catch (error) {
         if (!navigator.onLine) return null;
         throw error;
@@ -1783,10 +1850,17 @@
       state.suppressAutoSave = true;
 
       try {
+        if (state.conflictLock) {
+          const conflictedModules = state.conflictModules.filter(name => Object.values(MODULE_NAMES).includes(name));
+          discardPendingCloudModuleWrites(conflictedModules.length ? conflictedModules : Object.values(MODULE_NAMES));
+          state.conflictLock = false;
+          state.conflictModules = [];
+        }
+
         let found = 0;
         const cloudRawByModule = {};
         for (const moduleName of [MODULE_NAMES.etf, MODULE_NAMES.cfd, MODULE_NAMES.cash]) {
-          const envelope = await getCloudModuleEnvelope(moduleName);
+          const envelope = await getCloudModuleEnvelope(moduleName, { acceptCloudOnConflict: true });
           if (envelope?.state) {
             const cloudRaw = extractCloudRaw(moduleName, envelope.state);
             cloudRawByModule[moduleName] = deepClone(cloudRaw);
@@ -1800,7 +1874,7 @@
         // are derived and are not copied into a section ledger. Without this
         // read, the first Unified save after opening the dashboard can use an
         // empty/stale base revision and correctly trigger conflict protection.
-        await getCloudModuleEnvelope(MODULE_NAMES.unified);
+        await getCloudModuleEnvelope(MODULE_NAMES.unified, { acceptCloudOnConflict: true });
 
         state.cloudStoreCount = found;
         state.cloudStoreCountKnown = true;
