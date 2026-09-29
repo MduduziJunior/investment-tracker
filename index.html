@@ -444,7 +444,7 @@
 
         <div class="data-status">
           <div class="item"><span>Cloud state</span><strong id="dataCloudState">Connecting</strong></div>
-          <div class="item"><span>User data stores</span><strong id="dataStoreCount">0/3 found</strong></div>
+          <div class="item"><span>User data stores</span><strong id="dataStoreCount">Checking cloud stores…</strong></div>
           <div class="item"><span>Sync state</span><strong id="dataSyncState">Waiting</strong></div>
           <div class="item"><span>Last cloud sync</span><strong id="lastCloudSync">Never</strong></div>
           <div class="item"><span>Auto-save</span><strong id="autoSaveStatus">Idle</strong></div>
@@ -586,6 +586,7 @@
     const MODULE_STORAGE = Object.freeze({
       etfTransactions: "profitpilot-etf-v1",
       etfQuotes: "profitpilot-etf-v1-quotes",
+      etfManualQuotes: "profitpilot-etf-v1-manual-quotes",
       etfSummary: "profitpilot-module-summary-etf-v1",
       etfJourney: "profitpilot-etf-v1-journey",
       etfPriceHistory: "profitpilot-etf-v1-price-history",
@@ -607,7 +608,7 @@
     const IDLE_LOGOUT_MS = 60000;
     const IDLE_WARNING_MS = 50000;
     const MAX_MONTHS = 24;
-    const ANALYSIS_CALCULATION_VERSION = "2";
+    const ANALYSIS_CALCULATION_VERSION = "3";
 
     const $ = id => document.getElementById(id);
     const state = {
@@ -616,6 +617,8 @@
       compatibilityScope: "",
       rates: null,
       summaries: [],
+      cloudStoreCount: 0,
+      cloudStoreCountKnown: false,
       totals: { value: 0, contributed: 0, profit: 0, roi: 0 },
       currentFlows: { deposits: 0, withdrawals: 0, net: 0 },
       analysisPeriodKey: "",
@@ -842,6 +845,13 @@
 
     function setSyncState(text) {
       $("dataSyncState").textContent = text;
+    }
+
+    function renderCloudStoreCount() {
+      const count = Math.max(0, Math.min(3, Number(state.cloudStoreCount) || 0));
+      $("dataStoreCount").textContent = state.cloudStoreCountKnown
+        ? `${count}/3 cloud store(s)`
+        : "Checking cloud stores…";
     }
 
     function formatLastSync(value) {
@@ -1279,6 +1289,7 @@
       return {
         transactions: readJson(moduleStorageKey(MODULE_STORAGE.etfTransactions), []),
         quotes: readJson(moduleStorageKey(MODULE_STORAGE.etfQuotes), {}),
+        manualQuotes: readJson(moduleStorageKey(MODULE_STORAGE.etfManualQuotes), {}),
         summary: readJson(moduleStorageKey(MODULE_STORAGE.etfSummary), null),
         journey: readJson(moduleStorageKey(MODULE_STORAGE.etfJourney), {}),
         priceHistory: readJson(moduleStorageKey(MODULE_STORAGE.etfPriceHistory), [])
@@ -1307,63 +1318,117 @@
       };
     }
 
+    function etfCashRoute(item, kind = normalizedToken(item?.kind)) {
+      if (!["buy", "sell"].includes(kind)) return "";
+      const route = normalizedToken(item?.cashRoute ?? item?.fundingRoute ?? item?.proceedsRoute);
+      if (["external", "outside", "external-account", "external_account"].includes(route)) return "external";
+      // Pre-schema-9 transactions used ETF reserve cash for both purchases and sales.
+      return "reserve";
+    }
+
+    function etfRecordOrder(a, b) {
+      return String(a?.date || "").localeCompare(String(b?.date || "")) ||
+        Number(a?.createdAt || 0) - Number(b?.createdAt || 0) ||
+        String(a?.id || "").localeCompare(String(b?.id || ""));
+    }
+
+    function etfQuoteIsOnline(quote) {
+      if (!(Number(quote?.price) > 0)) return false;
+      if (normalizedToken(quote?.priceAuthority) === "online") return true;
+      return /(?:TWSE|TPEX|Edge Function|online|market feed|official daily close)/i.test(String(quote?.source || "")) &&
+        !/(?:manual|execution|fallback)/i.test(String(quote?.source || ""));
+    }
+
+    function etfQuoteTime(quote) {
+      const value = Date.parse(String(quote?.updated || quote?.marketTime || quote?.fetchedAt || ""));
+      return Number.isFinite(value) ? value : 0;
+    }
+
+    function etfCurrentPrice(ticker, raw, latestTrade, fallback = 0) {
+      const saved = raw?.quotes?.[ticker];
+      const manual = raw?.manualQuotes?.[ticker] || raw?.manual_quotes?.[ticker];
+      if (etfQuoteIsOnline(saved)) return Number(saved.price);
+      const executionPrice = Number(latestTrade?.price) > 0 ? Number(latestTrade.price) : 0;
+      const executionTime = Number(latestTrade?.updatedAt || latestTrade?.createdAt || 0);
+      const candidates = [
+        Number(manual?.price) > 0 ? { price:Number(manual.price), time:etfQuoteTime(manual) } : null,
+        Number(saved?.price) > 0 ? { price:Number(saved.price), time:etfQuoteTime(saved) } : null,
+        executionPrice > 0 ? { price:executionPrice, time:executionTime } : null
+      ].filter(Boolean);
+      if (candidates.length) return candidates.reduce((best, item) => item.time >= best.time ? item : best).price;
+      return Number(fallback) > 0 ? Number(fallback) : 0;
+    }
+
     function calculateEtfSummary(raw = readEtfLocal()) {
-      const published = raw.summary;
-      const transactions = Array.isArray(raw.transactions) ? raw.transactions : [];
-      const quotes = raw.quotes && typeof raw.quotes === "object" ? raw.quotes : {};
-      const ledgerExists = localStorage.getItem(moduleStorageKey(MODULE_STORAGE.etfTransactions)) != null;
-
-      if (!ledgerExists && published && Number.isFinite(Number(published.netWorth))) {
-        return {
-          module: "etf",
-          currency: published.currency || "TWD",
-          current_value: Number(published.netWorth) || 0,
-          total_contributed: Number(published.netContributions) || 0,
-          profit_loss: Number(published.totalGain) || 0,
-          detail: `${Number(published.holdingsCount) || 0} holding(s) · restored from ETF summary`
-        };
-      }
-
-      let deposits = 0, withdrawals = 0, impliedFunding = 0, cash = 0;
+      const transactions = Array.isArray(raw.transactions) ? [...raw.transactions].sort(etfRecordOrder) : [];
+      let deposits = 0, withdrawals = 0, impliedFunding = 0, reserveCash = 0;
+      let externalPurchases = 0, externalSales = 0;
       const holdings = {};
-      [...transactions].sort((a, b) => String(a.date || "").localeCompare(String(b.date || ""))).forEach(item => {
-        const amount = Math.abs(parseStoredAmount(item.amount)), quantity = Math.abs(parseStoredAmount(item.qty)), price = Math.abs(parseStoredAmount(item.price)), fees = Math.abs(parseStoredAmount(item.fees));
-        if (normalizedToken(item.kind) === "deposit") { deposits += amount; cash += amount; }
-        if (normalizedToken(item.kind) === "withdrawal") { withdrawals += amount; cash -= amount; }
-        if (normalizedToken(item.kind) === "fee") {
-          if (amount > cash) { impliedFunding += amount - cash; cash = 0; } else cash -= amount;
-        }
-        if (!item.ticker) return;
-        const holding = holdings[item.ticker] ||= { qty: 0, cost: 0, realised: 0, dividends: 0 };
-        if (normalizedToken(item.kind) === "buy") {
+
+      const spendReserve = amount => {
+        const required = Math.max(0, amount);
+        if (required > reserveCash) { impliedFunding += required - reserveCash; reserveCash = 0; }
+        else reserveCash -= required;
+      };
+
+      for (const item of transactions) {
+        const kind = normalizedToken(item.kind);
+        const amount = Math.abs(parseStoredAmount(item.amount));
+        const quantity = Math.abs(parseStoredAmount(item.qty));
+        const price = Math.abs(parseStoredAmount(item.price));
+        const fees = Math.abs(parseStoredAmount(item.fees));
+        if (kind === "deposit") { deposits += amount; reserveCash += amount; continue; }
+        if (kind === "withdrawal") { withdrawals += amount; spendReserve(amount); continue; }
+        if (kind === "fee") { spendReserve(amount); continue; }
+        if (!item.ticker) continue;
+        const holding = holdings[item.ticker] ||= { qty:0, cost:0, lots:[], latestTrade:null };
+        if (kind === "buy") {
           const purchaseCost = quantity * price + fees;
           holding.qty += quantity;
           holding.cost += purchaseCost;
-          if (purchaseCost > cash) { impliedFunding += purchaseCost - cash; cash = 0; } else cash -= purchaseCost;
+          holding.lots.push({ qty:quantity, remaining:quantity, unitCost:quantity ? purchaseCost / quantity : 0 });
+          holding.latestTrade = item;
+          if (etfCashRoute(item, kind) === "external") externalPurchases += purchaseCost;
+          else spendReserve(purchaseCost);
+          continue;
         }
-        if (normalizedToken(item.kind) === "sell") {
-          const sold = Math.min(quantity, holding.qty), average = holding.qty ? holding.cost / holding.qty : 0;
-          holding.qty -= sold;
-          holding.cost -= sold * average;
-          holding.realised += sold * price - sold * average - fees;
-          cash += sold * price - fees;
+        if (kind === "sell") {
+          const sold = Math.min(quantity, holding.qty);
+          let left = sold;
+          for (const lot of holding.lots) {
+            if (left <= 0) break;
+            const used = Math.min(left, lot.remaining);
+            lot.remaining -= used;
+            holding.qty -= used;
+            holding.cost -= used * lot.unitCost;
+            left -= used;
+          }
+          const validProceeds = Math.max(0, sold * price - fees);
+          holding.latestTrade = item;
+          if (etfCashRoute(item, kind) === "external") externalSales += validProceeds;
+          else reserveCash += validProceeds;
+          continue;
         }
-        if (normalizedToken(item.kind) === "dividend") { holding.dividends += amount; cash += amount; }
-      });
+        if (kind === "dividend") reserveCash += amount;
+      }
 
       let market = 0, count = 0;
-      Object.entries(holdings).forEach(([ticker, holding]) => {
-        if (holding.qty <= 0) return;
+      for (const [ticker, holding] of Object.entries(holdings)) {
+        if (holding.qty <= 0) continue;
         count++;
-        const savedPrice = Number(quotes?.[ticker]?.price);
-        const price = savedPrice > 0 ? savedPrice : (holding.qty ? holding.cost / holding.qty : 0);
-        market += holding.qty * price;
-      });
-      const net = cash + market;
-      const contributed = deposits + impliedFunding - withdrawals;
-      const gain = net - contributed;
-      const fundingNote = impliedFunding > 0 ? ` · ${formatTwd(impliedFunding)} purchase funding inferred` : "";
-      return { module: "etf", currency: "TWD", current_value: net, total_contributed: contributed, profit_loss: gain, detail: `${count} holding(s) · calculated from ETF ledger${fundingNote}` };
+        const fallback = holding.qty ? holding.cost / holding.qty : 0;
+        market += holding.qty * etfCurrentPrice(ticker, raw, holding.latestTrade, fallback);
+      }
+      const net = reserveCash + market;
+      const grossContributions = deposits + impliedFunding + externalPurchases;
+      const externalDistributions = withdrawals + externalSales;
+      const contributed = grossContributions - externalDistributions;
+      const gain = net + externalDistributions - grossContributions;
+      const legacyNote = impliedFunding > 0 ? ` · ${formatTwd(impliedFunding)} legacy funding inferred` : "";
+      return {
+        module:"etf", currency:"TWD", current_value:normalizeZero(net), total_contributed:normalizeZero(contributed), profit_loss:normalizeZero(gain),
+        detail:`${count} holding(s) · market ${formatTwd(market)} · reserve ${formatTwd(reserveCash)}${legacyNote}`
+      };
     }
 
     function cfdTradeNet(trade) {
@@ -1458,7 +1523,9 @@
         }
         if (kind === "buy") {
           const purchaseCost = qty * price + fees;
-          if (purchaseCost > cash) {
+          if (etfCashRoute(item, kind) === "external") {
+            if (isTarget) deposits += purchaseCost;
+          } else if (purchaseCost > cash) {
             const shortfall = purchaseCost - cash;
             cash = 0;
             if (isTarget) deposits += shortfall;
@@ -1466,7 +1533,10 @@
           continue;
         }
         if (kind === "sell") {
-          cash += Math.max(0, qty * price - fees);
+          const proceeds = Math.max(0, qty * price - fees);
+          if (etfCashRoute(item, kind) === "external") {
+            if (isTarget) withdrawals += proceeds;
+          } else cash += proceeds;
           continue;
         }
         if (kind === "dividend") cash += amount;
@@ -1544,7 +1614,7 @@
     }
 
     function moduleHasData(moduleName, raw) {
-      if (moduleName === "etf") return (Array.isArray(raw?.transactions) && raw.transactions.length > 0) || (raw?.quotes && Object.keys(raw.quotes).length > 0) || Boolean(raw?.summary) || (raw?.journey && Object.keys(raw.journey).length > 0) || (Array.isArray(raw?.priceHistory) && raw.priceHistory.length > 0);
+      if (moduleName === "etf") return (Array.isArray(raw?.transactions) && raw.transactions.length > 0) || (raw?.quotes && Object.keys(raw.quotes).length > 0) || (raw?.manualQuotes && Object.keys(raw.manualQuotes).length > 0) || Boolean(raw?.summary) || (raw?.journey && Object.keys(raw.journey).length > 0) || (Array.isArray(raw?.priceHistory) && raw.priceHistory.length > 0);
       if (moduleName === "cfd") return (Array.isArray(raw?.trades) && raw.trades.length > 0) || (Array.isArray(raw?.funding) && raw.funding.length > 0);
       if (moduleName === "cash_savings") return Array.isArray(raw?.records) && raw.records.length > 0;
       return false;
@@ -1555,6 +1625,7 @@
       if (moduleName === MODULE_NAMES.etf) {
         merged.transactions = deepClone(Array.isArray(localRaw?.transactions) ? localRaw.transactions : []);
         merged.quotes = deepClone(localRaw?.quotes && typeof localRaw.quotes === "object" ? localRaw.quotes : {});
+        merged.manualQuotes = deepClone(localRaw?.manualQuotes && typeof localRaw.manualQuotes === "object" ? localRaw.manualQuotes : {});
         merged.summary = deepClone(localRaw?.summary ?? null);
         merged.journey = deepClone(localRaw?.journey && typeof localRaw.journey === "object" ? localRaw.journey : {});
         merged.priceHistory = deepClone(Array.isArray(localRaw?.priceHistory) ? localRaw.priceHistory : []);
@@ -1575,14 +1646,18 @@
       return {
         ...preserved,
         module: moduleName,
-        schemaVersion: 1,
-        bridgeVersion: 3,
+        schemaVersion: moduleName === MODULE_NAMES.etf ? Math.max(9, Number(preserved.schemaVersion) || 0) : Math.max(1, Number(preserved.schemaVersion) || 0),
+        bridgeVersion: moduleName === MODULE_NAMES.etf ? Math.max(8, Number(preserved.bridgeVersion) || 0) : Math.max(3, Number(preserved.bridgeVersion) || 0),
         source: "unified-dashboard-compatibility-bridge",
         legacyScope: state.compatibilityScope,
         raw: authoritativeRawForCloud(moduleName, currentRaw, raw),
         publishedSummary: deepClone(summary),
         updatedAt: isoNow()
       };
+    }
+
+    function cloudSchemaVersion(moduleName) {
+      return moduleName === MODULE_NAMES.etf ? 9 : 1;
     }
 
     function extractCloudRaw(moduleName, cloudState) {
@@ -1593,6 +1668,7 @@
         return {
           transactions: Array.isArray(raw.transactions) ? raw.transactions : Array.isArray(raw.tx) ? raw.tx : [],
           quotes: raw.quotes && typeof raw.quotes === "object" ? raw.quotes : {},
+          manualQuotes: (raw.manualQuotes || raw.manual_quotes) && typeof (raw.manualQuotes || raw.manual_quotes) === "object" ? (raw.manualQuotes || raw.manual_quotes) : {},
           summary: raw.summary || stateObject.publishedSummary || stateObject.summary || null,
           journey: raw.journey && typeof raw.journey === "object" ? raw.journey : {},
           priceHistory: Array.isArray(raw.priceHistory) ? raw.priceHistory : Array.isArray(raw.price_history) ? raw.price_history : []
@@ -1618,6 +1694,7 @@
       const next = merge ? deepMerge(current, raw || {}) : deepClone(raw || {});
       writeJson(moduleStorageKey(MODULE_STORAGE.etfTransactions), Array.isArray(next.transactions) ? next.transactions : []);
       writeJson(moduleStorageKey(MODULE_STORAGE.etfQuotes), next.quotes && typeof next.quotes === "object" ? next.quotes : {});
+      writeJson(moduleStorageKey(MODULE_STORAGE.etfManualQuotes), next.manualQuotes && typeof next.manualQuotes === "object" ? next.manualQuotes : {});
       if (next.summary != null) writeJson(moduleStorageKey(MODULE_STORAGE.etfSummary), next.summary);
       else localStorage.removeItem(moduleStorageKey(MODULE_STORAGE.etfSummary));
       writeJson(moduleStorageKey(MODULE_STORAGE.etfJourney), next.journey && typeof next.journey === "object" ? next.journey : {});
@@ -1654,8 +1731,10 @@
       const bundle = getLocalModuleBundle();
       state.analysisPeriodKey = activeAnalysisMonthKey(bundle);
       const summaries = [calculateEtfSummary(bundle.etf), calculateCfdSummary(bundle.cfd), calculateCashSummary(bundle.cash_savings)];
-      const connected = [moduleHasData("etf", bundle.etf), moduleHasData("cfd", bundle.cfd), moduleHasData("cash_savings", bundle.cash_savings)].filter(Boolean).length;
-      $("dataStoreCount").textContent = `${connected}/3 found`;
+      // This card reports authenticated Supabase stores, not whether a local
+      // module currently contains transactions. Empty modules are still valid
+      // cloud stores and must not make a confirmed 3/3 result fall back to 2/3.
+      renderCloudStoreCount();
       state.currentFlows = calculateCurrentMonthFlows(bundle, state.analysisPeriodKey);
       $("monthDeposits").textContent = formatTwd(state.currentFlows.deposits);
       $("monthWithdrawals").textContent = formatTwd(state.currentFlows.withdrawals);
@@ -1715,7 +1794,17 @@
             found++;
           }
         }
-        $("dataStoreCount").textContent = `${found}/3 cloud store(s)`;
+
+        // The Unified dashboard has its own cloud row and therefore its own
+        // optimistic-concurrency revision. Load it even though its contents
+        // are derived and are not copied into a section ledger. Without this
+        // read, the first Unified save after opening the dashboard can use an
+        // empty/stale base revision and correctly trigger conflict protection.
+        await getCloudModuleEnvelope(MODULE_NAMES.unified);
+
+        state.cloudStoreCount = found;
+        state.cloudStoreCountKnown = true;
+        renderCloudStoreCount();
         await loadMonthlySnapshots();
         const localAfterLoad = getLocalModuleBundle();
         const needsUpload = [MODULE_NAMES.etf, MODULE_NAMES.cfd, MODULE_NAMES.cash].some(moduleName => {
@@ -1761,7 +1850,7 @@
       state.summaries = [etfSummary, cfdSummary, cashSummary];
       renderDashboard(state.summaries);
       state.currentFlows = calculateCurrentMonthFlows(bundle);
-      AurumCloud.module.stage(MODULE_NAMES.etf, buildCloudModuleState(MODULE_NAMES.etf, bundle.etf, etfSummary), { schemaVersion: 1 });
+      AurumCloud.module.stage(MODULE_NAMES.etf, buildCloudModuleState(MODULE_NAMES.etf, bundle.etf, etfSummary), { schemaVersion: cloudSchemaVersion(MODULE_NAMES.etf) });
       AurumCloud.module.stage(MODULE_NAMES.cfd, buildCloudModuleState(MODULE_NAMES.cfd, bundle.cfd, cfdSummary), { schemaVersion: 1 });
       AurumCloud.module.stage(MODULE_NAMES.cash, buildCloudModuleState(MODULE_NAMES.cash, bundle.cash_savings, cashSummary), { schemaVersion: 1 });
       AurumCloud.module.stage(MODULE_NAMES.unified, buildUnifiedCloudState(etfSummary, cfdSummary, cashSummary), { schemaVersion: 1 });
@@ -1794,7 +1883,7 @@
         ];
 
         for (const [moduleName, payload] of jobs) {
-          await AurumCloud.module.save(moduleName, payload, { schemaVersion: 1 });
+          await AurumCloud.module.save(moduleName, payload, { schemaVersion: cloudSchemaVersion(moduleName) });
           if (state.conflictLock) break;
         }
         if (!state.conflictLock) {
@@ -1818,6 +1907,9 @@
             return { conflict: true, modules: deepClone(state.conflictModules) };
           }
           setSyncState("Synced");
+          state.cloudStoreCount = 3;
+          state.cloudStoreCountKnown = true;
+          renderCloudStoreCount();
           $("lastCloudSync").textContent = new Date().toLocaleString();
           if (!options.silent) showToast("Cloud save complete", "ETF, CFD, Cash Savings and Unified analytics were synchronized.");
         } else {
@@ -1991,7 +2083,7 @@
         .filter(item => onOrBeforeMonth(item.date, key))
         .sort((a,b) => String(a.date || "").localeCompare(String(b.date || "")));
       const priceSnapshot = history.at(-1)?.prices || {};
-      let deposits = 0, withdrawals = 0, impliedFunding = 0, cash = 0;
+      let deposits = 0, withdrawals = 0, impliedFunding = 0, cash = 0, externalPurchases = 0, externalSales = 0;
       const holdings = {};
       const lastPrice = {};
       for (const item of transactions) {
@@ -2008,14 +2100,17 @@
           const purchaseCost = qty * price + fees;
           h.qty += qty;
           h.cost += purchaseCost;
-          if (purchaseCost > cash) { impliedFunding += purchaseCost - cash; cash = 0; } else cash -= purchaseCost;
+          if (etfCashRoute(item, "buy") === "external") externalPurchases += purchaseCost;
+          else if (purchaseCost > cash) { impliedFunding += purchaseCost - cash; cash = 0; } else cash -= purchaseCost;
         }
         if (normalizedToken(item.kind) === "sell") {
           const sold = Math.min(qty, h.qty), avg = h.qty ? h.cost / h.qty : 0;
           h.qty -= sold;
           h.cost -= sold * avg;
           h.realised += sold * price - sold * avg - fees;
-          cash += sold * price - fees;
+          const proceeds = Math.max(0, sold * price - fees);
+          if (etfCashRoute(item, "sell") === "external") externalSales += proceeds;
+          else cash += proceeds;
         }
         if (normalizedToken(item.kind) === "dividend") { h.dividends += amount; cash += amount; }
       }
@@ -2027,7 +2122,7 @@
         market += h.qty * p;
       }
       const value = cash + market;
-      const contributed = deposits + impliedFunding - withdrawals;
+      const contributed = deposits + impliedFunding + externalPurchases - withdrawals - externalSales;
       return { value, contributed, profit: value - contributed, exact: Boolean(history.length) };
     }
 
@@ -2517,12 +2612,14 @@
         }
         state.monthlySnapshots = [];
         state.summaries = [];
+        state.cloudStoreCount = 0;
+        state.cloudStoreCountKnown = true;
         state.lastObservedFingerprint = null;
         state.lastSavedFingerprint = null;
         await refreshDashboard({ detectChanges: false, reason: "cloud-data-deleted" });
         state.suppressAutoSave = false;
         setSyncState("Cloud financial data deleted");
-        $("dataStoreCount").textContent = "0/3 cloud store(s)";
+        renderCloudStoreCount();
         showToast("Cloud data deleted", "Cloud financial data and its matching local cache were cleared. The authenticated account remains active.");
         updateStatusFromCloud();
       } catch (error) {
@@ -2603,6 +2700,9 @@
       state.summaries = [];
       state.monthlySnapshots = [];
       state.analysisPeriodKey = "";
+      state.cloudStoreCount = 0;
+      state.cloudStoreCountKnown = false;
+      renderCloudStoreCount();
       showAuth();
       showForm("login");
       setNotice("loginNotice", message, automatic ? "error" : "success");
@@ -2624,6 +2724,9 @@
       $("authUserId").textContent = user.id;
       $("authScreen").hidden = true;
       $("app").hidden = false;
+      state.cloudStoreCount = 0;
+      state.cloudStoreCountKnown = false;
+      renderCloudStoreCount();
       await updateExchangeRates();
 
       let initialLoad = null;
