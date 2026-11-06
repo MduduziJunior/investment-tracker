@@ -194,6 +194,11 @@ button{cursor:pointer}
 .file-pill{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:999px;padding:4px 7px;background:#0a1729;font-size:8px;color:var(--soft)}
 @media(max-width:760px){.attachment-grid{grid-template-columns:1fr}}
 
+.notion-notes-panel{border-color:rgba(105,167,255,.48);background:linear-gradient(180deg,rgba(20,42,73,.8),rgba(12,23,42,.72))}
+.notion-link-layout{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:end}
+.notion-link-actions{display:flex;gap:8px;flex-wrap:wrap}
+@media(max-width:760px){.notion-link-layout{grid-template-columns:1fr}.notion-link-actions .btn{flex:1}}
+
 
 .hub-link{text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
 .module-tag{display:inline-flex;align-items:center;gap:6px;margin-top:7px;font-size:9px;color:var(--muted)}
@@ -239,7 +244,7 @@ button{cursor:pointer}
     <div class="brand">
       <h1>CFD Investment Module</h1>
       <p>A stage-organised CFD journal: enter a trade once, manage only open trades, archive closed trades, and analyse performance monthly.</p>
-      <div class="module-tag"><span>Module: CFD</span><span>Supabase v7.2</span><span>Schema v4</span><span>USD ledger · TWD unified reporting</span></div>
+      <div class="module-tag"><span>Module: CFD</span><span>Supabase v7.3.1</span><span>Schema v5</span><span>USD ledger · TWD unified reporting</span></div>
     </div>
     <div class="top-actions">
       <div class="cloud-cluster" aria-label="Cloud status">
@@ -452,6 +457,49 @@ button{cursor:pointer}
           <button class="stage" data-stage="3"><span class="num">3</span><span class="title">RESULT</span><small>Outcome, MAE/MFE & review</small></button>
         </nav>
 
+        <div class="group notion-notes-panel">
+          <div class="group-title"><h3>Notion Trade Notes</h3><span>One evidence page linked to this trade</span></div>
+          <div class="notion-link-layout">
+            <div class="field">
+              <label class="required">Notion Page Link</label>
+              <input id="notionNotesUrl" type="url" inputmode="url" placeholder="https://www.notion.so/your-trade-note" />
+              <div class="help">Link this trade to its dedicated Notion note containing the entry analysis, management updates, entry screenshots, exit screenshots, and final reflection. The link remains available in Entry, Management, and Result.</div>
+            </div>
+            <div class="notion-link-actions">
+              <button class="btn" id="saveNotionNotesBtn" type="button">Save Link</button>
+              <button class="btn primary" id="openNotionNotesBtn" type="button" disabled>Open Notion Note ↗</button>
+            </div>
+          </div>
+          <div id="notionLinkValidation" class="validation"></div>
+        </div>
+
+        <div id="legacyTradeEvidencePanel" class="group hidden">
+          <div class="group-title"><h3>Legacy Screenshot Proof</h3><span>Preserved read-only historical evidence</span></div>
+          <div class="notice">These screenshots were attached before the Notion-link system was introduced. They remain permanently associated with this trade and can be viewed, but they cannot be replaced or removed here. Add all new entry, management, and exit screenshots to the linked Notion trade note.</div>
+          <div class="attachment-grid">
+            <article class="attachment-card">
+              <h4>Original Pre-Entry Screenshot</h4>
+              <div class="attachment-purpose">Historical chart proof saved before the trade was entered.</div>
+              <div class="attachment-preview" id="legacyEntryScreenshotPreview"><div class="attachment-placeholder"><span class="icon">▧</span>No historical pre-entry screenshot.</div></div>
+              <div class="attachment-meta" id="legacyEntryScreenshotMeta">No file attached.</div>
+              <div class="attachment-actions">
+                <button class="btn" id="viewLegacyEntryScreenshotBtn" type="button" disabled>View Preserved Image</button>
+                <button class="btn hidden" id="legacyEntryScreenshotRemoveStub" type="button" disabled aria-hidden="true">Remove</button>
+              </div>
+            </article>
+            <article class="attachment-card">
+              <h4>Original Result Screenshot</h4>
+              <div class="attachment-purpose">Historical chart or broker proof saved when the trade ended.</div>
+              <div class="attachment-preview" id="legacyResultScreenshotPreview"><div class="attachment-placeholder"><span class="icon">▧</span>No historical result screenshot.</div></div>
+              <div class="attachment-meta" id="legacyResultScreenshotMeta">No file attached.</div>
+              <div class="attachment-actions">
+                <button class="btn" id="viewLegacyResultScreenshotBtn" type="button" disabled>View Preserved Image</button>
+                <button class="btn hidden" id="legacyResultScreenshotRemoveStub" type="button" disabled aria-hidden="true">Remove</button>
+              </div>
+            </article>
+          </div>
+        </div>
+
         <!-- STAGE 1 -->
         <section id="stage1">
           <div class="notice">The original entry layer is preserved as the baseline for later analysis. Management changes are stored separately and never overwrite this plan.</div>
@@ -514,24 +562,7 @@ button{cursor:pointer}
               <div class="field"><label>Market Condition</label><select id="marketCondition"><option value="">Not recorded</option><option>Trending</option><option>Range</option><option>Breakout</option><option>Reversal</option><option>High Volatility</option><option>Low Volatility</option><option>Unclear</option></select></div>
               <div class="field"><label>News / Event Risk</label><input id="newsRisk" placeholder="CPI, NFP, FOMC, earnings, none..." /></div>
               <div class="field full"><label>Trade Thesis</label><textarea id="tradeThesis" placeholder="What must be true for this trade to make sense? What invalidates the idea?"></textarea></div>
-              <div class="field full"><label>Pre-Trade Notes</label><textarea id="preTradeNotes" placeholder="Context, confluences, execution notes, screenshot references..."></textarea></div>
-            </div>
-          </div>
-
-          <div class="group">
-            <div class="group-title"><h3>Pre-Entry Trade Screenshot</h3><span>Visual evidence before entry</span></div>
-            <div class="attachment-card">
-              <h4>Screenshot Before the Trade Was Entered</h4>
-              <div class="attachment-purpose">Attach the chart exactly as it looked before entry. This becomes part of the original entry evidence and is locked once the trade is opened.</div>
-              <div class="attachment-preview" id="entryScreenshotPreview"><div class="attachment-placeholder"><span class="icon">▧</span>No pre-entry screenshot attached.</div></div>
-              <div class="attachment-meta" id="entryScreenshotMeta">No file attached.</div>
-              <input id="entryScreenshotInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif,.png,.jpg,.jpeg,.webp,.gif" hidden />
-              <div class="attachment-actions">
-                <button class="btn primary" id="uploadEntryScreenshotBtn" type="button">Attach / Replace Screenshot</button>
-                <button class="btn" id="viewEntryScreenshotBtn" type="button" disabled>View Image</button>
-                <button class="btn danger" id="removeEntryScreenshotBtn" type="button" disabled>Remove</button>
-              </div>
-              <div class="attachment-lock" id="entryScreenshotLock"></div>
+              <div class="field full"><label>Pre-Trade Notes</label><textarea id="preTradeNotes" placeholder="Context, confluences, execution notes, and references to the linked Notion trade note..."></textarea></div>
             </div>
           </div>
 
@@ -633,23 +664,6 @@ button{cursor:pointer}
               <div class="field"><label>Primary Mistake</label><input id="primaryMistake" placeholder="None, early SL move, FOMO, late entry..." /></div>
               <div class="field"><label>Primary Strength</label><input id="primaryStrength" placeholder="Patience, entry quality, risk discipline..." /></div>
               <div class="field full"><label>Lessons / Review Notes</label><textarea id="reviewNotes" placeholder="What should be repeated? What should change next time?"></textarea></div>
-            </div>
-          </div>
-
-          <div class="group">
-            <div class="group-title"><h3>Result Screenshot</h3><span>Visual evidence at the end</span></div>
-            <div class="attachment-card">
-              <h4>Screenshot When the Trade Ended</h4>
-              <div class="attachment-purpose">Attach the final chart or broker trade view showing how the trade looked at exit. Once the trade is closed, the screenshot becomes read-only evidence.</div>
-              <div class="attachment-preview" id="resultScreenshotPreview"><div class="attachment-placeholder"><span class="icon">▧</span>No result screenshot attached.</div></div>
-              <div class="attachment-meta" id="resultScreenshotMeta">No file attached.</div>
-              <input id="resultScreenshotInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif,.png,.jpg,.jpeg,.webp,.gif" hidden />
-              <div class="attachment-actions">
-                <button class="btn primary" id="uploadResultScreenshotBtn" type="button">Attach / Replace Screenshot</button>
-                <button class="btn" id="viewResultScreenshotBtn" type="button" disabled>View Image</button>
-                <button class="btn danger" id="removeResultScreenshotBtn" type="button" disabled>Remove</button>
-              </div>
-              <div class="attachment-lock" id="resultScreenshotLock"></div>
             </div>
           </div>
 
@@ -782,8 +796,8 @@ const MODULE_CONFIG = Object.freeze({
   id: 'cfd',
   cloudId: CLOUD_MODULE_ID,
   name: 'CFD Investment Module',
-  version: '7.2.0',
-  schemaVersion: 4,
+  version: '7.3.1',
+  schemaVersion: 5,
   bridgeVersion: 2,
   route: './index.html',
   hubPath: ROOT_URL,
@@ -834,7 +848,7 @@ const PUBLIC_MODULE_DESCRIPTOR = Object.freeze({
     'deposits-withdrawals',
     'monthly-analysis',
     'json-import-export',
-    'trade-evidence',
+    'notion-trade-notes',
     'monthly-broker-evidence',
     'supabase-auth-session',
     'supabase-cloud-sync',
@@ -1172,28 +1186,102 @@ async function saveEvidenceFile(ownerType,ownerId,kind,file,expected){
     return false;
   }
 }
-async function refreshTradeEvidence(){
+function normalizeNotionNotesUrl(value){
+  const raw=cleanString(value);
+  if(!raw) return '';
+  try{
+    const url=new URL(raw);
+    if(!['http:','https:'].includes(url.protocol)) return null;
+    return url.href;
+  }catch{
+    return null;
+  }
+}
+function refreshTradeNotionLink(){
   const t=currentTrade();
-  const id=t?.id||'';
-  const entryEditable=!!t&&t.status==='DRAFT';
-  const resultEditable=!!t&&t.status==='OPEN';
+  setValue('notionNotesUrl',t?.notionNotesUrl||'');
+  hideValidation('notionLinkValidation');
+  updateNotionLinkControls();
+}
+function updateNotionLinkControls(){
+  const valid=normalizeNotionNotesUrl(getValue('notionNotesUrl'));
+  $('openNotionNotesBtn').disabled=!valid;
+}
+function saveNotionNotesLink({silent=false}={}){
+  if(!mutationAllowed()) return false;
+  const t=currentTrade();
+  if(!t) return false;
+  const normalized=normalizeNotionNotesUrl(getValue('notionNotesUrl'));
+  if(normalized===null){
+    showValidation('notionLinkValidation',['Enter a complete web link beginning with https:// or http://.']);
+    if(!silent) toast('Notion link needs attention','Enter the complete Notion page URL.');
+    updateNotionLinkControls();
+    return false;
+  }
+  hideValidation('notionLinkValidation');
+  setValue('notionNotesUrl',normalized);
+  updateNotionLinkControls();
+  if(cleanString(t.notionNotesUrl)===normalized){
+    if(!silent) toast(normalized?'Notion link already saved':'No Notion link entered');
+    return true;
+  }
+  t.notionNotesUrl=normalized;
+  t.updatedAt=new Date().toISOString();
+  saveStore();
+  if(!silent) toast(normalized?'Notion link saved':'Notion link cleared',normalized?'This trade now opens its dedicated Notion evidence page.':'The trade no longer has a linked Notion page.');
+  return true;
+}
+function openNotionNotesLink(){
+  const normalized=normalizeNotionNotesUrl(getValue('notionNotesUrl'));
+  if(!normalized){
+    showValidation('notionLinkValidation',[normalized===null?'Enter a valid web link beginning with https:// or http://.':'Add and save this trade’s Notion page link first.']);
+    toast('No Notion note available','Add the link to this trade’s Notion page first.');
+    return;
+  }
+  const t=currentTrade();
+  if(t&&!cloudRuntime.conflictLocked&&cleanString(t.notionNotesUrl)!==normalized) saveNotionNotesLink({silent:true});
+  const opened=window.open(normalized,'_blank');
+  if(opened) opened.opener=null;
+  else toast('Pop-up blocked','Allow pop-ups to open the Notion trade note.');
+}
+function usableEvidenceMeta(ownerType,ownerId,kind){
+  const meta=cloudRuntime.evidenceIndex?.[attachmentKey(ownerType,ownerId,kind)];
+  return meta&&!meta.pendingDelete&&(meta.storagePath||meta.pendingUpload)?meta:null;
+}
+async function refreshLegacyTradeEvidence(){
+  const t=currentTrade();
+  const panel=$('legacyTradeEvidencePanel');
+  if(!t){ panel.classList.add('hidden'); return; }
+  const tradeId=t.id;
 
-  $('uploadEntryScreenshotBtn').disabled=!entryEditable;
-  $('entryScreenshotLock').textContent=!t?'':entryEditable?'This screenshot will lock when the trade is opened.':'Locked with the original entry record.';
-  $('uploadResultScreenshotBtn').disabled=!resultEditable;
-  $('resultScreenshotLock').textContent=!t?'':resultEditable?'Attach or replace the final screenshot before closing the trade.':t.status==='CLOSED'?'Locked with the closed-trade record.':'Open the trade before adding result evidence.';
+  let entryLocal=null,resultLocal=null;
+  try{
+    [entryLocal,resultLocal]=await Promise.all([
+      getAttachment('TRADE',t.id,'entryScreenshot'),
+      getAttachment('TRADE',t.id,'resultScreenshot')
+    ]);
+  }catch(error){
+    console.warn('Legacy trade evidence lookup warning:',error);
+  }
+
+  if(currentTrade()?.id!==tradeId) return;
+
+  const hasEntry=!!entryLocal||!!usableEvidenceMeta('TRADE',tradeId,'entryScreenshot');
+  const hasResult=!!resultLocal||!!usableEvidenceMeta('TRADE',tradeId,'resultScreenshot');
+  panel.classList.toggle('hidden',!hasEntry&&!hasResult);
+  if(!hasEntry&&!hasResult) return;
 
   await renderAttachmentSlot({
-    ownerType:'TRADE',ownerId:id,kind:'entryScreenshot',
-    previewId:'entryScreenshotPreview',metaId:'entryScreenshotMeta',
-    viewBtnId:'viewEntryScreenshotBtn',removeBtnId:'removeEntryScreenshotBtn',
-    editable:entryEditable,image:true,emptyText:'No pre-entry screenshot attached.'
+    ownerType:'TRADE',ownerId:tradeId,kind:'entryScreenshot',
+    previewId:'legacyEntryScreenshotPreview',metaId:'legacyEntryScreenshotMeta',
+    viewBtnId:'viewLegacyEntryScreenshotBtn',removeBtnId:'legacyEntryScreenshotRemoveStub',
+    editable:false,image:true,emptyText:'No historical pre-entry screenshot.'
   });
   await renderAttachmentSlot({
-    ownerType:'TRADE',ownerId:id,kind:'resultScreenshot',
-    previewId:'resultScreenshotPreview',metaId:'resultScreenshotMeta',
-    viewBtnId:'viewResultScreenshotBtn',removeBtnId:'removeResultScreenshotBtn',
-    editable:resultEditable,image:true,emptyText:'No result screenshot attached.'
+    ownerType:'TRADE',ownerId:tradeId,kind:'resultScreenshot',
+    previewId:'legacyResultScreenshotPreview',metaId:'legacyResultScreenshotMeta',
+    viewBtnId:'viewLegacyResultScreenshotBtn',removeBtnId:'legacyResultScreenshotRemoveStub',
+    editable:false,image:true,emptyText:'No historical result screenshot.'
   });
 }
 async function refreshMonthlyEvidence(){
@@ -1638,7 +1726,7 @@ function bindConflictMutationGuard(){
     if(!target) return;
     const allowed=new Set(['loadCloud','staySignedIn']);
     if(allowed.has(target.id)) return;
-    if(target.closest('#fundsModal')||target.closest('#importModal')||['saveDraftBtn','openTradeBtn','addAdjustmentBtn','closeTradeBtn','deleteTradeBtn','dashboardNewBtn','emptyNew','fundsBtn','dashboardFundingBtn','importBtn','uploadEntryScreenshotBtn','removeEntryScreenshotBtn','uploadResultScreenshotBtn','removeResultScreenshotBtn','uploadMonthlyPdfBtn','removeMonthlyPdfBtn','uploadMonthlyAnalyticsBtn','removeMonthlyAnalyticsBtn'].includes(target.id)){
+    if(target.closest('#fundsModal')||target.closest('#importModal')||['saveDraftBtn','openTradeBtn','addAdjustmentBtn','closeTradeBtn','deleteTradeBtn','dashboardNewBtn','emptyNew','fundsBtn','dashboardFundingBtn','importBtn','saveNotionNotesBtn','uploadMonthlyPdfBtn','removeMonthlyPdfBtn','uploadMonthlyAnalyticsBtn','removeMonthlyAnalyticsBtn'].includes(target.id)){
       event.preventDefault(); event.stopImmediatePropagation(); mutationAllowed(true);
     }
   },true);
@@ -1690,7 +1778,7 @@ function toast(title, message=''){
 function currentTrade(){ return trades.find(t=>t.id===currentId) || null; }
 function makeBlankTrade(){
   const n=nowParts();
-  return {schemaVersion:SCHEMA_VERSION,id:uid(),status:'DRAFT',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),entry:{date:n.date,time:n.time,assetType:'',direction:'',session:'',htfBias:'',marketCondition:'',valuePerUnit:null,spreadCost:0,entryCommission:0},management:[],result:null};
+  return {schemaVersion:SCHEMA_VERSION,id:uid(),status:'DRAFT',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),notionNotesUrl:'',entry:{date:n.date,time:n.time,assetType:'',direction:'',session:'',htfBias:'',marketCondition:'',valuePerUnit:null,spreadCost:0,entryCommission:0},management:[],result:null};
 }
 function showDashboard(){
   currentView='DASHBOARD';
@@ -1819,7 +1907,10 @@ function saveEntryToModel(status){
     if(duplicate) errors.push(`Possible duplicate of ${duplicate.id}. The same instrument, direction, date/time and entry price already exists.`);
     if(errors.length){ showValidation('entryValidation', errors); toast('Entry needs attention',errors[0]); return false; }
   }
-  hideValidation('entryValidation'); t.entry={...(isObject(t.entry)?t.entry:{}),...entry}; t.status=status; t.updatedAt=new Date().toISOString(); saveStore(); updateWorkspaceHeader(); updateStages(); return true;
+  const notionUrl=normalizeNotionNotesUrl(getValue('notionNotesUrl'));
+  if(notionUrl===null){ showValidation('notionLinkValidation',['Enter a complete web link beginning with https:// or http://.']); toast('Notion link needs attention','Correct the Notion page URL before saving this trade.'); return false; }
+  if(status==='OPEN'&&!notionUrl){ showValidation('notionLinkValidation',['A Notion trade-note link is required before opening the trade.']); toast('Notion link required','Link this trade to its dedicated Notion note before opening it.'); return false; }
+  hideValidation('entryValidation'); hideValidation('notionLinkValidation'); t.notionNotesUrl=notionUrl; t.entry={...(isObject(t.entry)?t.entry:{}),...entry}; t.status=status; t.updatedAt=new Date().toISOString(); saveStore(); updateWorkspaceHeader(); updateStages(); updateNotionLinkControls(); return true;
 }
 function validateEntry(e){
   const errors=[];
@@ -1991,7 +2082,7 @@ function autoFinalLegPnl(){
 function closeTrade(){
   if(!mutationAllowed()) return;
   const t=currentTrade(); if(!t) return; if(t.status!=='OPEN'){ toast('Cannot close trade',t.status==='DRAFT'?'Open the trade first.':'This trade is already closed.'); return; } const r=collectResult(); const errors=validateResult(r,t); if(errors.length){ showValidation('resultValidation',errors); toast('Result needs attention',errors[0]); return; }
-  hideValidation('resultValidation'); const m=resultMetrics(t,r); if(r.finalLegGrossPnl==null) r.finalLegGrossPnl=m.finalGross; t.result={...(isObject(t.result)?t.result:{}),...r}; t.status='CLOSED'; t.updatedAt=new Date().toISOString(); currentView='CLOSED'; currentStage=3; saveStore(); showTradeShell(); loadTradeIntoUI(); switchStage(3,false); renderJournal(); refreshTradeEvidence(); toast('Trade moved to Closed Trades',`Net result: ${m.pnlKnown?money(m.net):'unavailable'} · ${m.rMult==null?'R unavailable':m.rMult.toFixed(2)+'R'}`);
+  hideValidation('resultValidation'); const m=resultMetrics(t,r); if(r.finalLegGrossPnl==null) r.finalLegGrossPnl=m.finalGross; t.result={...(isObject(t.result)?t.result:{}),...r}; t.status='CLOSED'; t.updatedAt=new Date().toISOString(); currentView='CLOSED'; currentStage=3; saveStore(); showTradeShell(); loadTradeIntoUI(); switchStage(3,false); renderJournal(); toast('Trade moved to Closed Trades',`Net result: ${m.pnlKnown?money(m.net):'unavailable'} · ${m.rMult==null?'R unavailable':m.rMult.toFixed(2)+'R'}`);
 }
 
 function fundingUid(){ return uniqueToken('FUND'); }
@@ -2296,11 +2387,12 @@ function updateStages(){
 }
 function loadTradeIntoUI(){
   const t=currentTrade(); if(!t){closeWorkspace();return;} if(t.status==='OPEN'&&currentView==='OPEN') currentStage=2; if(t.status==='CLOSED'&&currentView==='CLOSED') currentStage=3; if(t.status==='DRAFT') currentStage=1; openWorkspace(); const e=t.entry||{};
+  refreshTradeNotionLink();
   const map={entryDate:e.date,entryTime:e.time,tradeId:t.id,instrument:e.instrument,assetType:e.assetType||'',direction:e.direction??'',broker:e.broker,accountName:e.accountName,session:e.session||'',strategy:e.strategy,htfBias:e.htfBias||'',entryTimeframe:e.entryTimeframe,plannedEntry:e.plannedEntry,actualEntry:e.actualEntry,initialSL:e.initialSL,initialTP:e.initialTP,equityBefore:e.equityBefore,plannedRiskPct:e.plannedRiskPct,positionSize:e.positionSize,valuePerUnit:e.valuePerUnit,pipSize:e.pipSize,leverage:e.leverage,spreadCost:e.spreadCost??0,entryCommission:e.entryCommission??0,entryTrigger:e.entryTrigger,keyLevel:e.keyLevel,marketCondition:e.marketCondition||'',newsRisk:e.newsRisk,tradeThesis:e.tradeThesis,preTradeNotes:e.preTradeNotes}; Object.entries(map).forEach(([id,v])=>setValue(id,v));
   const n=nowParts(); setValue('adjustDate',n.date); setValue('adjustTime',n.time); const r=t.result||{}; const rmap={exitDate:r.exitDate||n.date,exitTime:r.exitTime||n.time,finalExitPrice:r.finalExitPrice,exitReason:r.exitReason||'',finalClosedSize:r.finalClosedSize,finalLegGrossPnl:r.finalLegGrossPnl,exitCommission:r.exitCommission??0,swapFinancing:r.swapFinancing??0,otherCosts:r.otherCosts??0,equityAfter:r.equityAfter,lowestPrice:r.lowestPrice,highestPrice:r.highestPrice,executionQuality:r.executionQuality,planFollowed:r.planFollowed,primaryMistake:r.primaryMistake,primaryStrength:r.primaryStrength,reviewNotes:r.reviewNotes}; Object.entries(rmap).forEach(([id,v])=>setValue(id,v));
   updateWorkspaceHeader(); updateStages(); calculateEntryPreview(); renderManagement(); calculateResultPreview(); switchStage(currentStage,false); renderJournal();
   applyTradeLocks(t);
-  refreshTradeEvidence();
+  refreshLegacyTradeEvidence().catch(error=>console.warn('Legacy trade evidence render warning:',error));
 }
 function setSectionDisabled(sectionId,disabled){
   $$(`#${sectionId} input, #${sectionId} select, #${sectionId} textarea`).forEach(el=>{
@@ -2503,6 +2595,7 @@ function normalizeTradeRecord(raw,index){
     status:validStatus(raw.status,result),
     createdAt:cleanString(raw.createdAt)||new Date().toISOString(),
     updatedAt:cleanString(raw.updatedAt)||cleanString(raw.createdAt)||new Date().toISOString(),
+    notionNotesUrl:normalizeNotionNotesUrl(raw.notionNotesUrl ?? raw.notionUrl ?? e.notionNotesUrl ?? e.notionUrl) ?? '',
     entry, management, result, source
   };
 
@@ -2586,6 +2679,7 @@ function mergeTradeRecord(existing,incoming){
     status,
     createdAt:existing.createdAt||incoming.createdAt,
     updatedAt:new Date().toISOString(),
+    notionNotesUrl:isMeaningful(existing.notionNotesUrl)?existing.notionNotesUrl:cleanString(incoming.notionNotesUrl),
     entry:mergeObjectsPreserveExisting(existing.entry||{},incoming.entry||{}),
     management:mergeManagement(existing.management||[],incoming.management||[]),
     result:(existing.result||incoming.result)
@@ -2782,29 +2876,12 @@ $('staySignedIn').addEventListener('click',resetActivity);
 $$('[data-view]').forEach(b=>b.addEventListener('click',()=>setView(b.dataset.view)));
 $('dashboardFundingBtn').addEventListener('click',openFunding);
 
-$('uploadEntryScreenshotBtn').addEventListener('click',()=>{ if(currentTrade()?.status==='DRAFT') $('entryScreenshotInput').click(); });
-$('entryScreenshotInput').addEventListener('change',async e=>{
-  const t=currentTrade(),file=e.target.files?.[0]; e.target.value='';
-  if(!t||t.status!=='DRAFT') return;
-  if(await saveEvidenceFile('TRADE',t.id,'entryScreenshot',file,'image')) refreshTradeEvidence();
-});
-$('viewEntryScreenshotBtn').addEventListener('click',()=>{ const t=currentTrade(); if(t) viewAttachment('TRADE',t.id,'entryScreenshot'); });
-$('removeEntryScreenshotBtn').addEventListener('click',async()=>{
-  const t=currentTrade(); if(!t||t.status!=='DRAFT') return;
-  if(confirm('Remove the pre-entry screenshot from this draft?')){ await deleteAttachment('TRADE',t.id,'entryScreenshot'); refreshTradeEvidence(); }
-});
-
-$('uploadResultScreenshotBtn').addEventListener('click',()=>{ if(currentTrade()?.status==='OPEN') $('resultScreenshotInput').click(); });
-$('resultScreenshotInput').addEventListener('change',async e=>{
-  const t=currentTrade(),file=e.target.files?.[0]; e.target.value='';
-  if(!t||t.status!=='OPEN') return;
-  if(await saveEvidenceFile('TRADE',t.id,'resultScreenshot',file,'image')) refreshTradeEvidence();
-});
-$('viewResultScreenshotBtn').addEventListener('click',()=>{ const t=currentTrade(); if(t) viewAttachment('TRADE',t.id,'resultScreenshot'); });
-$('removeResultScreenshotBtn').addEventListener('click',async()=>{
-  const t=currentTrade(); if(!t||t.status!=='OPEN') return;
-  if(confirm('Remove the result screenshot before closing this trade?')){ await deleteAttachment('TRADE',t.id,'resultScreenshot'); refreshTradeEvidence(); }
-});
+$('notionNotesUrl').addEventListener('input',()=>{ hideValidation('notionLinkValidation'); updateNotionLinkControls(); });
+$('notionNotesUrl').addEventListener('change',()=>saveNotionNotesLink({silent:true}));
+$('saveNotionNotesBtn').addEventListener('click',()=>saveNotionNotesLink());
+$('openNotionNotesBtn').addEventListener('click',openNotionNotesLink);
+$('viewLegacyEntryScreenshotBtn').addEventListener('click',()=>{ const t=currentTrade(); if(t) viewAttachment('TRADE',t.id,'entryScreenshot'); });
+$('viewLegacyResultScreenshotBtn').addEventListener('click',()=>{ const t=currentTrade(); if(t) viewAttachment('TRADE',t.id,'resultScreenshot'); });
 
 $('evidenceMonth').addEventListener('change',refreshMonthlyEvidence);
 $('uploadMonthlyPdfBtn').addEventListener('click',()=>{ if(evidenceMonthValue()) $('monthlyPdfInput').click(); });
@@ -2838,7 +2915,7 @@ $('deleteTradeBtn').addEventListener('click',deleteCurrentTrade); $('exportBtn')
 $('searchInput').addEventListener('input',renderJournal);
 $$('.stage').forEach(b=>b.addEventListener('click',()=>switchStage(Number(b.dataset.stage)))); $$('[data-go]').forEach(b=>b.addEventListener('click',()=>switchStage(Number(b.dataset.go))));
 $('saveDraftBtn').addEventListener('click',()=>{ if(saveEntryToModel('DRAFT')) toast('Draft saved','The trade remains editable and has not been marked open.'); });
-$('openTradeBtn').addEventListener('click',()=>{ if(saveEntryToModel('OPEN')){ currentView='OPEN'; currentStage=2; showTradeShell(); loadTradeIntoUI(); switchStage(2,false); renderJournal(); refreshTradeEvidence(); toast('Trade moved to Waiting for Management','The original entry and its pre-entry screenshot are locked. All later changes must be recorded as management events.'); } });
+$('openTradeBtn').addEventListener('click',()=>{ if(saveEntryToModel('OPEN')){ currentView='OPEN'; currentStage=2; showTradeShell(); loadTradeIntoUI(); switchStage(2,false); renderJournal(); toast('Trade moved to Waiting for Management','The original entry is locked. The linked Notion trade note remains available throughout management and results.'); } });
 $('addAdjustmentBtn').addEventListener('click',addAdjustment); $('closeTradeBtn').addEventListener('click',closeTrade);
 $('adjustType').addEventListener('change',()=>{ ['newSL','newTP','positionAfter','partialExitPrice','partialRealizedPnl'].forEach(id=>setValue(id,'')); prepareAdjustmentDefaults(); autoPartialPnl(); }); ['positionAfter','partialExitPrice'].forEach(id=>$(id).addEventListener('input',autoPartialPnl));
 ['plannedEntry','actualEntry','initialSL','initialTP','equityBefore','plannedRiskPct','positionSize','valuePerUnit','pipSize','direction'].forEach(id=>$(id).addEventListener('input',calculateEntryPreview)); $('direction').addEventListener('change',calculateEntryPreview);
@@ -2846,7 +2923,7 @@ $('adjustType').addEventListener('change',()=>{ ['newSL','newTP','positionAfter'
 
 function runCriticalSelfCheck(){
   const errors=[];
-  const requiredIds=['sessionGate','cloudStatus','profileChip','loadCloud','saveCloud','dashboardShell','tradeShell','tradeList','fundsModal','fundDate','fundTime','fundAmount','fundFxRate','fundTwdValue','entryDate','entryTime','instrument','direction','plannedEntry','initialSL','initialTP','valuePerUnit','closeTradeBtn'];
+  const requiredIds=['sessionGate','cloudStatus','profileChip','loadCloud','saveCloud','dashboardShell','tradeShell','tradeList','fundsModal','fundDate','fundTime','fundAmount','fundFxRate','fundTwdValue','entryDate','entryTime','instrument','direction','plannedEntry','initialSL','initialTP','valuePerUnit','notionNotesUrl','saveNotionNotesBtn','openNotionNotesBtn','legacyTradeEvidencePanel','viewLegacyEntryScreenshotBtn','viewLegacyResultScreenshotBtn','closeTradeBtn'];
   requiredIds.forEach(id=>{ if(!$(id)) errors.push(`Missing required interface element #${id}.`); });
   if(parseNumeric('3,000')!==3000) errors.push('Numeric parser failed the 3,000 → 3000 integrity check.');
   if(parseNumeric('(1,250.50)')!==-1250.5) errors.push('Numeric parser failed negative formatted-value handling.');
