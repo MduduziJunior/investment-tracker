@@ -1798,12 +1798,12 @@ function getNumber(id){ return nullableNum($(id).value); }
 
 function collectEntry(){
   return {
-    date:getValue('entryDate'), time:getValue('entryTime'), instrument:getValue('instrument').trim().toUpperCase(), assetType:getValue('assetType'), direction:getValue('direction'), broker:getValue('broker').trim(), accountName:getValue('accountName').trim(), session:getValue('session'), strategy:getValue('strategy').trim(), htfBias:getValue('htfBias'), entryTimeframe:getValue('entryTimeframe').trim(),
+    date:getValue('entryDate'), time:getValue('entryTime'), instrument:normalizeInstrumentName(getValue('instrument')), assetType:getValue('assetType'), direction:getValue('direction'), broker:getValue('broker').trim(), accountName:getValue('accountName').trim(), session:getValue('session'), strategy:getValue('strategy').trim(), htfBias:getValue('htfBias'), entryTimeframe:getValue('entryTimeframe').trim(),
     plannedEntry:getNumber('plannedEntry'), actualEntry:getNumber('actualEntry'), initialSL:getNumber('initialSL'), initialTP:getNumber('initialTP'), equityBefore:getNumber('equityBefore'), plannedRiskPct:getNumber('plannedRiskPct'), positionSize:getNumber('positionSize'), valuePerUnit:getNumber('valuePerUnit'), pipSize:getNumber('pipSize'), leverage:getNumber('leverage'), spreadCost:getNumber('spreadCost') ?? 0, entryCommission:getNumber('entryCommission') ?? 0,
     entryTrigger:getValue('entryTrigger').trim(), keyLevel:getValue('keyLevel').trim(), marketCondition:getValue('marketCondition'), newsRisk:getValue('newsRisk').trim(), tradeThesis:getValue('tradeThesis').trim(), preTradeNotes:getValue('preTradeNotes').trim()
   };
 }
-function entryFingerprint(e){ return [e.instrument,e.direction,e.date,e.time,effectiveEntry(e),e.broker,e.accountName].map(v=>String(v??'').trim().toUpperCase()).join('|'); }
+function entryFingerprint(e){ return [normalizeInstrumentName(e.instrument),e.direction,e.date,e.time,effectiveEntry(e),e.broker,e.accountName].map(v=>String(v??'').trim().toUpperCase()).join('|'); }
 function findDuplicateTrade(entry,currentTradeId){
   const fp=entryFingerprint(entry);
   return trades.find(x=>x.id!==currentTradeId && x.status!=='DRAFT' && entryFingerprint(x.entry||{})===fp) || null;
@@ -2202,7 +2202,7 @@ function renderDashboard(){
     }).join('');
   }
 
-  const inst=groupedPerformance(closed,t=>cleanString(t.entry?.instrument).toUpperCase()||'Unknown');
+  const inst=groupedPerformance(closed,t=>normalizeInstrumentName(t.entry?.instrument)||'Unknown');
   $('instrumentBody').innerHTML=inst.length?inst.map(r=>`<tr><td>${escapeHTML(r.name)}</td><td>${r.trades}</td><td>${r.winRate.toFixed(1)}%</td><td class="${r.net>0?'positive':r.net<0?'negative':''}">${money(r.net)}</td><td>${money(r.avg)}</td><td>${r.avgR==null?'—':r.avgR.toFixed(2)+'R'}</td></tr>`).join(''):'<tr><td colspan="6" class="muted" style="text-align:center;padding:18px">No closed trades yet.</td></tr>';
 
   const strat=groupedPerformance(closed,t=>cleanString(t.entry?.strategy)||'Unclassified');
@@ -2368,6 +2368,16 @@ async function exportData(){
 }
 
 function cleanString(v){ return v==null?'':String(v).trim(); }
+const FOREX_CODES=new Set('USD EUR GBP JPY AUD NZD CAD CHF CNH CNY SGD HKD SEK NOK DKK ZAR MXN TRY PLN CZK HUF RON ILS THB TWD KRW INR BRL SZL XAU XAG XPT XPD'.split(' '));
+function normalizeInstrumentName(value){
+  const raw=cleanString(value).toUpperCase().replace(/\s+/g,' ');
+  const compact=raw.replace(/[\s/_.-]+/g,'');
+  if(/^[A-Z]{6}$/.test(compact)){
+    const base=compact.slice(0,3),quote=compact.slice(3);
+    if(FOREX_CODES.has(base)&&FOREX_CODES.has(quote)) return `${base}/${quote}`;
+  }
+  return raw;
+}
 function toNullableNumber(v){
   return parseNumeric(v);
 }
@@ -2409,7 +2419,7 @@ function stableHash(value){
 function importedTradeFingerprint(raw={}){
   const e=isObject(raw.entry)?raw.entry:{},r=isObject(raw.result)?raw.result:{},s=isObject(raw.source)?raw.source:{};
   return [
-    e.instrument??s.instrument??s.symbol, e.direction??s.direction??s.directionRaw,
+    normalizeInstrumentName(e.instrument??s.instrument??s.symbol), e.direction??s.direction??s.directionRaw,
     e.date??s.openDate??s.date, e.time??s.openTime, e.actualEntry??e.plannedEntry??s.openPrice,
     e.positionSize??s.quantity, e.broker??s.broker, e.accountName??s.accountName,
     r.exitDate??s.closeDate, r.exitTime??s.closeTime, r.finalExitPrice??s.closePrice,
@@ -2418,7 +2428,7 @@ function importedTradeFingerprint(raw={}){
 }
 function fallbackTradeFingerprint(t={}){
   const e=t.entry||{},r=t.result||{},s=t.source||{};
-  return [e.instrument,e.direction,e.date,e.time,e.actualEntry??e.plannedEntry,e.positionSize,e.broker,e.accountName,r.exitDate,r.exitTime,r.finalExitPrice,r.finalLegGrossPnl,s.openPrice,s.closePrice,s.quantity].map(v=>String(v??'').trim().toUpperCase()).join('|');
+  return [normalizeInstrumentName(e.instrument??s.instrument??s.symbol),e.direction,e.date,e.time,e.actualEntry??e.plannedEntry,e.positionSize,e.broker,e.accountName,r.exitDate,r.exitTime,r.finalExitPrice,r.finalLegGrossPnl,s.openPrice,s.closePrice,s.quantity].map(v=>String(v??'').trim().toUpperCase()).join('|');
 }
 
 function normalizeTradeRecord(raw,index){
@@ -2433,7 +2443,7 @@ function normalizeTradeRecord(raw,index){
   const entry={
     ...deepClone(e),
     date:cleanString(e.date), time:cleanString(e.time),
-    instrument:cleanString(e.instrument).toUpperCase(),
+    instrument:normalizeInstrumentName(e.instrument??source.instrument??source.symbol),
     assetType:cleanString(e.assetType)||'',
     direction:normalizedDirection(e.direction,source),
     broker:cleanString(e.broker)||cleanString(source.broker),
