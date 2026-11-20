@@ -212,7 +212,7 @@
     .section-heading h3 { margin: 0; font-size: 1.1rem; }
     .section-heading p { margin: 0; color: var(--muted); font-size: .82rem; }
 
-    .modules { display: grid; grid-template-columns: repeat(3, 1fr); gap: 17px; }
+    .modules { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 17px; }
     .module-card {
       position: relative;
       overflow: hidden;
@@ -395,6 +395,7 @@
           <a href="./modules/etf-portfolio/index.html">ETF Portfolio</a>
           <a href="./modules/cfd-journal/index.html">CFD Journal</a>
           <a href="./modules/cash-savings/index.html">Cash Savings</a>
+          <a href="./modules/budgeting/index.html">Budgeting</a>
         </nav>
 
         <div class="status-pill"><i id="cloudDot" class="status-dot"></i><span id="cloudText">Connecting</span></div>
@@ -429,7 +430,7 @@
       <section class="panel data-grid">
         <div>
           <strong>Authenticated Cloud Data</strong>
-          <p class="data-note">Load, save, export or import ETF, CFD, Cash Savings and Unified history from here. Imported module entries are merged back into the section-specific local ledgers and then synchronized to the authenticated Supabase user.</p>
+          <p class="data-note">Load, save, export or import ETF, CFD, Cash Savings, Budgeting and Unified history from here. Imported module entries are merged back into the section-specific local ledgers and then synchronized to the authenticated Supabase user.</p>
           <div class="data-actions">
             <button id="loadCloudButton" class="action-btn primary" type="button">Load All from Cloud</button>
             <button id="saveCloudButton" class="action-btn" type="button">Save All to Cloud</button>
@@ -439,12 +440,12 @@
             <button id="resetLocalButton" class="action-btn danger" type="button">Reset Local Data</button>
             <button id="deleteCloudButton" class="action-btn danger" type="button">Delete Cloud Data</button>
           </div>
-          <p class="data-note">Automatic cloud save: 10 seconds after the latest detected data change. Binary evidence files such as screenshots/PDFs remain in the private Supabase Storage workflow and are not embedded inside JSON exports.</p>
+          <p class="data-note">Automatic cloud save: 10 seconds after the latest detected data change. CFD evidence files stay in private Supabase Storage. Budget transaction proofs stored in the budget are included in its JSON backup.</p>
         </div>
 
         <div class="data-status">
           <div class="item"><span>Cloud state</span><strong id="dataCloudState">Connecting</strong></div>
-          <div class="item"><span>User data stores</span><strong id="dataStoreCount">Checking cloud stores…</strong></div>
+          <div class="item"><span>Module data stores</span><strong id="dataStoreCount">Checking cloud stores…</strong></div>
           <div class="item"><span>Sync state</span><strong id="dataSyncState">Waiting</strong></div>
           <div class="item"><span>Last cloud sync</span><strong id="lastCloudSync">Never</strong></div>
           <div class="item"><span>Auto-save</span><strong id="autoSaveStatus">Idle</strong></div>
@@ -453,7 +454,7 @@
       </section>
 
       <div class="section-heading">
-        <div><h3>Investment sections</h3><p>Each section remains an independent application while sharing one authenticated cloud account.</p></div>
+        <div><h3>Tracker modules</h3><p>Each section remains an independent application while sharing one authenticated cloud account.</p></div>
       </div>
 
       <section class="modules">
@@ -471,6 +472,11 @@
           <span class="module-label">Emergency reserve</span><h4>Cash Savings</h4>
           <div id="cashValue" class="value">NT$0</div><div id="cashSubvalue" class="subvalue">No synchronized summary yet</div>
           <span class="open-module">Enter Cash Savings →</span>
+        </a>
+        <a class="module-card" href="./modules/budgeting/index.html" aria-label="Open Budgeting">
+          <span class="module-label">Personal finance</span><h4>Budgeting</h4>
+          <div class="subvalue"><span id="budgetDetails">Checking this account’s budget…</span></div>
+          <span class="open-module">Enter Budgeting →</span>
         </a>
       </section>
 
@@ -618,6 +624,8 @@
       rates: null,
       summaries: [],
       cloudStoreCount: 0,
+      budgetStatus: "Checking cloud",
+      investmentStores: new Set(),
       cloudStoreCountKnown: false,
       totals: { value: 0, contributed: 0, profit: 0, roi: 0 },
       currentFlows: { deposits: 0, withdrawals: 0, net: 0 },
@@ -648,7 +656,18 @@
     }
 
     function moduleStorageKey(baseKey, username) {
-      const scope = userScope(username);
+      let scope = userScope(username);
+      if (state.session?.userId && [MODULE_STORAGE.cfdTrades, MODULE_STORAGE.cfdFunding].includes(baseKey)) {
+        const keys = [MODULE_STORAGE.cfdTrades, MODULE_STORAGE.cfdFunding];
+        const foreign = token => keys.some(key => {
+          const owner = localStorage.getItem(key + "::user:" + token + "::owner-user-id");
+          return owner && owner !== state.session.userId;
+        });
+        if (foreign(scope)) {
+          scope = userScope(cleanUsername(state.session.username) + "__" + state.session.userId.replace(/-/g, "").slice(0, 16));
+          if (foreign(scope)) throw new Error("CFD device ledger belongs to a different user.");
+        }
+      }
       return scope ? `${baseKey}::user:${scope}` : `${baseKey}::no-active-user`;
     }
 
@@ -848,9 +867,9 @@
     }
 
     function renderCloudStoreCount() {
-      const count = Math.max(0, Math.min(3, Number(state.cloudStoreCount) || 0));
+      const count = Math.max(0, Math.min(4, Number(state.cloudStoreCount) || 0));
       $("dataStoreCount").textContent = state.cloudStoreCountKnown
-        ? `${count}/3 cloud store(s)`
+        ? `${count}/4 module stores`
         : "Checking cloud stores…";
     }
 
@@ -870,6 +889,7 @@
       else if (status.syncing) setCloudStatus("warn", "Synchronizing");
       else if (state.conflictLock) setCloudStatus("warn", "Conflict protected · reload cloud");
       else if (status.queuedChanges > 0) setCloudStatus("warn", `${status.queuedChanges} unsynced change(s)`);
+      else if (!state.cloudStoreCountKnown) setCloudStatus("warn", "Cloud load unverified");
       else setCloudStatus("online", "Cloud connected · synced");
     }
 
@@ -1310,6 +1330,65 @@
       };
     }
 
+    function budgetKey(owner = state.session?.userId) {
+      if (!owner || state.session?.userId !== owner || AurumCloud.auth.getUser()?.id !== owner) {
+        throw new Error("The tracker session changed. Sign in again.");
+      }
+      return "aurum:budgeting:" + owner;
+    }
+
+    function validateBudget(payload, owner) {
+      const store = payload?.store;
+      const profile = store?.profiles?.[0];
+      if (payload?.module !== "budgeting" || payload.ownerId !== owner ||
+          !Array.isArray(store?.profiles) || store.profiles.length !== 1 || !profile?.id ||
+          !Array.isArray(profile.transactions) || !Array.isArray(profile.accounts)) {
+        throw new Error("Budgeting snapshot has a different owner or an unsupported format.");
+      }
+      return store;
+    }
+
+    function deviceBudget(owner = state.session?.userId) {
+      const raw = localStorage.getItem(budgetKey(owner));
+      if (!raw) return null;
+      const payload = { module: "budgeting", ownerId: owner, store: JSON.parse(raw) };
+      validateBudget(payload, owner);
+      return payload;
+    }
+
+    function renderBudgetCard() {
+      if (!state.session || AurumCloud.auth.getUser()?.id !== state.session.userId) return;
+      const key = budgetKey();
+      const profile = deviceBudget()?.store.profiles[0];
+      const status = localStorage.getItem(key + ":conflict") ? "Conflict · open Budgeting to resolve" :
+        localStorage.getItem(key + ":draft") ? "Device changes pending" : state.budgetStatus;
+      $("budgetDetails").textContent = profile
+        ? `${profile.accounts.length} accounts · ${profile.transactions.length} transactions · ${status}` : status;
+    }
+
+    async function loadBudget(owner) {
+      const key = budgetKey(owner);
+      const before = localStorage.getItem(key);
+      const envelope = await AurumCloud.module.load("budgeting");
+      budgetKey(owner);
+      if (localStorage.getItem(key) !== before) throw new Error("Budget changed in another tab. Retry the cloud load.");
+      if (envelope && envelope.source !== "cloud") throw new Error("Budgeting returned a device copy. Open Budgeting to review pending changes.");
+      if (!AurumCloud.getStatus().online) throw new Error("Reconnect to check the budget.");
+      const remote = envelope && validateBudget(envelope.state, owner);
+      const local = deviceBudget(owner)?.store;
+      if (localStorage.getItem(key + ":conflict")) throw new Error("Open Budgeting to resolve its protected conflict.");
+      if (localStorage.getItem(key + ":draft") && (!remote || stableStringify(local) !== stableStringify(remote))) {
+        throw new Error("Budgeting has a pending device edit. Open Budgeting to sync or recover it.");
+      }
+      if (remote) {
+        localStorage.setItem(key, JSON.stringify(remote));
+        localStorage.removeItem(key + ":draft");
+      }
+      state.budgetStatus = remote ? "Loaded from cloud" : "No cloud budget yet";
+      renderBudgetCard();
+      return Boolean(remote);
+    }
+
     function getLocalModuleBundle() {
       return {
         etf: readEtfLocal(),
@@ -1435,12 +1514,25 @@
       if (normalizedToken(trade?.status) !== "closed" || !trade.result) return 0;
       const entry = trade.entry || {}, result = trade.result || {};
       const partial = (Array.isArray(trade.management) ? trade.management : []).reduce((sum, event) => sum + parseStoredAmount(event.partialRealizedPnl), 0);
-      const finalGross = parseStoredAmount(result.finalLegGrossPnl);
+      let finalGross = parseStoredAmount(result.finalLegGrossPnl);
+      if (result.finalLegGrossPnl == null || String(result.finalLegGrossPnl).trim() === "") {
+        let size = parseStoredAmount(entry.positionSize);
+        for (const event of trade.management || []) {
+          if (event.positionAfter != null && event.positionAfter !== "") size = parseStoredAmount(event.positionAfter);
+        }
+        if (result.finalClosedSize != null) size = parseStoredAmount(result.finalClosedSize);
+        const price = Number(entry.actualEntry) > 0 ? Number(entry.actualEntry) : Number(entry.plannedEntry);
+        const exit = Number(result.finalExitPrice);
+        const unit = Number(entry.valuePerUnit);
+        if (size !== 0 && (!(price > 0) || result.finalExitPrice == null || !Number.isFinite(exit) ||
+            !(unit > 0) || size < 0 || !["BUY", "SELL"].includes(entry.direction))) return 0;
+        finalGross = size === 0 ? 0 : (entry.direction === "SELL" ? price - exit : exit - price) * size * unit;
+      }
       const costs = parseStoredAmount(entry.spreadCost) + parseStoredAmount(entry.entryCommission) + parseStoredAmount(result.exitCommission) + parseStoredAmount(result.swapFinancing) + parseStoredAmount(result.otherCosts);
       return partial + finalGross - costs;
     }
 
-    function calculateCfdSummary(raw = readCfdLocal()) {
+    function calculateCfdSummary(raw = readCfdLocal(), native = false) {
       const trades = Array.isArray(raw.trades) ? raw.trades : [];
       const funding = Array.isArray(raw.funding) ? raw.funding : [];
       const depositsUsd = funding.filter(item => normalizedToken(item.type) === "deposit").reduce((sum, item) => sum + Math.abs(parseStoredAmount(item.amount)), 0);
@@ -1449,6 +1541,11 @@
       const open = trades.filter(trade => normalizedToken(trade?.status) === "open").length;
       const realisedUsd = closed.reduce((sum, trade) => sum + cfdTradeNet(trade), 0);
       const accountUsd = depositsUsd - withdrawalsUsd + realisedUsd;
+      if (native) return {
+        module: "cfd", currency: "USD", current_value: accountUsd,
+        total_contributed: depositsUsd - withdrawalsUsd, profit_loss: realisedUsd,
+        detail: `${open} open · ${closed.length} closed`
+      };
       const usdRate = valuationRateForMonth("USD", activeAnalysisMonthKey(), funding, true).rate;
       const currentValueTwd = accountUsd * usdRate;
       let contributedTwd = 0;
@@ -1577,7 +1674,11 @@
     }
 
     function renderDashboard(rows) {
-      const normalized = rows.map(row => ({
+      const local = getLocalModuleBundle();
+      const normalized = rows.filter(row => {
+        const name = row.module === "cash" ? "cash_savings" : row.module;
+        return state.investmentStores.has(name) || moduleHasData(name, local[name]);
+      }).map(row => ({
         ...row,
         module: String(row.module || "").toLowerCase(),
         valueTwd: toTwd(row.current_value, row.currency),
@@ -1595,16 +1696,16 @@
       totals.roi = totals.contributed > ZERO_EPSILON ? normalizeZero(totals.profit / totals.contributed * 100) : 0;
       state.totals = totals;
 
-      $("totalNetWorth").textContent = formatTwd(totals.value);
-      $("totalContributed").textContent = formatTwd(totals.contributed);
-      $("totalProfitLoss").textContent = formatTwd(totals.profit);
-      $("overallRoi").textContent = formatPlainPercent(totals.roi);
+      $("totalNetWorth").textContent = normalized.length === 3 ? formatTwd(totals.value) : "Incomplete";
+      $("totalContributed").textContent = normalized.length === 3 ? formatTwd(totals.contributed) : "—";
+      $("totalProfitLoss").textContent = normalized.length === 3 ? formatTwd(totals.profit) : "—";
+      $("overallRoi").textContent = normalized.length === 3 ? formatPlainPercent(totals.roi) : "—";
 
       ["etf", "cfd", "cash"].forEach(module => {
         const matches = normalized.filter(row => row.module === module || (module === "cash" && row.module === "cash_savings"));
         const value = matches.reduce((sum, row) => sum + row.valueTwd, 0);
         const profit = matches.reduce((sum, row) => sum + row.profitTwd, 0);
-        $(`${module}Value`).textContent = formatTwd(value);
+        $(`${module}Value`).textContent = matches.length ? formatTwd(value) : "Unavailable";
         $(`${module}Subvalue`).textContent = matches.length ? (matches[0].detail || `Profit / loss ${formatTwd(profit)}`) : "No module records found";
       });
     }
@@ -1646,18 +1747,20 @@
       return {
         ...preserved,
         module: moduleName,
-        schemaVersion: moduleName === MODULE_NAMES.etf ? Math.max(9, Number(preserved.schemaVersion) || 0) : Math.max(1, Number(preserved.schemaVersion) || 0),
+        schemaVersion: cloudSchemaVersion(moduleName),
         bridgeVersion: moduleName === MODULE_NAMES.etf ? Math.max(8, Number(preserved.bridgeVersion) || 0) : Math.max(3, Number(preserved.bridgeVersion) || 0),
         source: "unified-dashboard-compatibility-bridge",
         legacyScope: state.compatibilityScope,
         raw: authoritativeRawForCloud(moduleName, currentRaw, raw),
-        publishedSummary: deepClone(summary),
+        publishedSummary: moduleName === "cfd" ? calculateCfdSummary(raw, true) : deepClone(summary),
         updatedAt: isoNow()
       };
     }
 
     function cloudSchemaVersion(moduleName) {
-      return moduleName === MODULE_NAMES.etf ? 9 : 1;
+      const minimum = moduleName === MODULE_NAMES.etf ? 9 : moduleName === MODULE_NAMES.cfd ? 5 : 1;
+      const cache = window.AurumCloud?.module?.getCached?.(moduleName);
+      return Math.max(minimum, Number(cache?.schemaVersion) || 0, Number(cache?.state?.schemaVersion) || 0);
     }
 
     function extractCloudRaw(moduleName, cloudState) {
@@ -1675,6 +1778,7 @@
         };
       }
       if (moduleName === "cfd") {
+        if (raw.ownerUserId && raw.ownerUserId !== state.session?.userId) throw new Error("CFD records belong to a different tracker account.");
         return {
           trades: Array.isArray(raw.trades) ? raw.trades : [],
           funding: Array.isArray(raw.funding) ? raw.funding : []
@@ -1728,6 +1832,7 @@
     }
 
     async function loadModuleSummaries() {
+      renderBudgetCard();
       const bundle = getLocalModuleBundle();
       state.analysisPeriodKey = activeAnalysisMonthKey(bundle);
       const summaries = [calculateEtfSummary(bundle.etf), calculateCfdSummary(bundle.cfd), calculateCashSummary(bundle.cash_savings)];
@@ -1844,6 +1949,9 @@
     async function loadAllFromCloud(options = {}) {
       if (!state.session?.userId) throw new Error("Sign in first.");
       if (!navigator.onLine) throw new Error("Cloud load requires an internet connection.");
+      const owner = state.session.userId;
+      state.cloudStoreCountKnown = false;
+      state.budgetStatus = "Cloud load unverified";
       const merge = options.merge !== false;
       setSyncState("Loading all modules…");
       setCloudStatus("warn", "Loading from cloud");
@@ -1858,13 +1966,17 @@
         }
 
         let found = 0;
+        state.investmentStores.clear();
         const cloudRawByModule = {};
         for (const moduleName of [MODULE_NAMES.etf, MODULE_NAMES.cfd, MODULE_NAMES.cash]) {
           const envelope = await getCloudModuleEnvelope(moduleName, { acceptCloudOnConflict: true });
+          budgetKey(owner);
+          if (envelope && envelope.source !== "cloud") throw new Error(moduleName + " returned a device copy. Retry the cloud load.");
           if (envelope?.state) {
             const cloudRaw = extractCloudRaw(moduleName, envelope.state);
             cloudRawByModule[moduleName] = deepClone(cloudRaw);
             applyCloudModuleToLocal(moduleName, envelope.state, merge);
+            state.investmentStores.add(moduleName);
             found++;
           }
         }
@@ -1876,6 +1988,7 @@
         // empty/stale base revision and correctly trigger conflict protection.
         await getCloudModuleEnvelope(MODULE_NAMES.unified, { acceptCloudOnConflict: true });
 
+        if (await loadBudget(owner)) found++;
         state.cloudStoreCount = found;
         state.cloudStoreCountKnown = true;
         renderCloudStoreCount();
@@ -1893,8 +2006,12 @@
         state.conflictModules = [];
         await refreshDashboard({ detectChanges: false, reason: "cloud-load" });
         setSyncState(needsUpload ? "Loaded · local migration changes pending" : "Loaded from cloud");
-        showToast("Cloud load complete", `${found}/3 module states were found${needsUpload ? " · local module data still needs synchronization" : ""}.`);
+        showToast("Cloud load complete", `${found}/4 module states were found${needsUpload ? " · local module data still needs synchronization" : ""}.`);
         return { found, needsUpload };
+      } catch (error) {
+        state.cloudStoreCountKnown = false;
+        renderCloudStoreCount();
+        throw error;
       } finally {
         state.suppressAutoSave = false;
         updateStatusFromCloud();
@@ -1916,7 +2033,7 @@
     }
 
     function stageAllCurrentModuleStates() {
-      if (!state.session?.userId) return false;
+      if (!state.session?.userId || !state.cloudStoreCountKnown) return false;
       const bundle = getLocalModuleBundle();
       const etfSummary = calculateEtfSummary(bundle.etf);
       const cfdSummary = calculateCfdSummary(bundle.cfd);
@@ -1924,16 +2041,18 @@
       state.summaries = [etfSummary, cfdSummary, cashSummary];
       renderDashboard(state.summaries);
       state.currentFlows = calculateCurrentMonthFlows(bundle);
-      AurumCloud.module.stage(MODULE_NAMES.etf, buildCloudModuleState(MODULE_NAMES.etf, bundle.etf, etfSummary), { schemaVersion: cloudSchemaVersion(MODULE_NAMES.etf) });
-      AurumCloud.module.stage(MODULE_NAMES.cfd, buildCloudModuleState(MODULE_NAMES.cfd, bundle.cfd, cfdSummary), { schemaVersion: 1 });
-      AurumCloud.module.stage(MODULE_NAMES.cash, buildCloudModuleState(MODULE_NAMES.cash, bundle.cash_savings, cashSummary), { schemaVersion: 1 });
-      AurumCloud.module.stage(MODULE_NAMES.unified, buildUnifiedCloudState(etfSummary, cfdSummary, cashSummary), { schemaVersion: 1 });
+      if (state.investmentStores.has("etf") || moduleHasData("etf", bundle.etf)) AurumCloud.module.stage(MODULE_NAMES.etf, buildCloudModuleState(MODULE_NAMES.etf, bundle.etf, etfSummary), { schemaVersion: cloudSchemaVersion(MODULE_NAMES.etf) });
+      if (state.investmentStores.has("cfd") || moduleHasData("cfd", bundle.cfd)) AurumCloud.module.stage(MODULE_NAMES.cfd, buildCloudModuleState(MODULE_NAMES.cfd, bundle.cfd, cfdSummary), { schemaVersion: cloudSchemaVersion(MODULE_NAMES.cfd) });
+      if (state.investmentStores.has("cash_savings") || moduleHasData("cash_savings", bundle.cash_savings)) AurumCloud.module.stage(MODULE_NAMES.cash, buildCloudModuleState(MODULE_NAMES.cash, bundle.cash_savings, cashSummary), { schemaVersion: 1 });
+      if (state.investmentStores.size === 3) AurumCloud.module.stage(MODULE_NAMES.unified, buildUnifiedCloudState(etfSummary, cfdSummary, cashSummary), { schemaVersion: 1 });
       return true;
     }
 
     async function saveAllToCloud(options = {}) {
       if (!state.session?.userId) throw new Error("Sign in first.");
       if (state.conflictLock) throw new Error("A protected cloud revision conflict is pending. Use Load All from Cloud before saving again.");
+      if (!state.cloudStoreCountKnown) throw new Error("Load all modules from cloud before saving.");
+      const owner = state.session.userId;
       if (state.busy) return { busy: true };
       state.busy = true;
       const online = navigator.onLine !== false;
@@ -1957,13 +2076,17 @@
         ];
 
         for (const [moduleName, payload] of jobs) {
-          await AurumCloud.module.save(moduleName, payload, { schemaVersion: cloudSchemaVersion(moduleName) });
+          budgetKey(owner);
+          if (!state.investmentStores.has(moduleName) && !moduleHasData(moduleName, bundle[moduleName])) continue;
+          const result = await AurumCloud.module.save(moduleName, payload, { schemaVersion: cloudSchemaVersion(moduleName) });
+          budgetKey(owner);
+          if (online && !result.queued && !state.conflictLock) state.investmentStores.add(moduleName);
           if (state.conflictLock) break;
         }
-        if (!state.conflictLock) {
+        if (!state.conflictLock && state.investmentStores.size === 3) {
           await AurumCloud.module.save(MODULE_NAMES.unified, buildUnifiedCloudState(etfSummary, cfdSummary, cashSummary), { schemaVersion: 1 });
         }
-        if (!state.conflictLock) await saveCurrentMonthlySnapshot();
+        if (!state.conflictLock && state.investmentStores.size === 3) await saveCurrentMonthlySnapshot();
         if (online && !state.conflictLock) await AurumCloud.sync.flush();
 
         state.lastSavedFingerprint = bundleFingerprint(bundle);
@@ -1980,12 +2103,14 @@
             if (!options.silent) showToast("Cloud conflict protected", "A newer cloud revision was preserved. Load All from Cloud before saving again.");
             return { conflict: true, modules: deepClone(state.conflictModules) };
           }
+          if (AurumCloud.sync.pending().length) throw new Error("Cloud writes are still queued. Retry after synchronization.");
+          // Budgeting stages its own edits. Flush above, then verify its revision without resaving a stale copy.
+          state.cloudStoreCount = state.investmentStores.size + Number(await loadBudget(owner));
           setSyncState("Synced");
-          state.cloudStoreCount = 3;
           state.cloudStoreCountKnown = true;
           renderCloudStoreCount();
           $("lastCloudSync").textContent = new Date().toLocaleString();
-          if (!options.silent) showToast("Cloud save complete", "ETF, CFD, Cash Savings and Unified analytics were synchronized.");
+          if (!options.silent) showToast("Cloud save complete", "Investment modules synchronized. " + state.budgetStatus + ".");
         } else {
           setSyncState("Queued offline · will sync on reconnect");
           setCloudStatus("warn", "Offline · changes safely queued");
@@ -1995,6 +2120,8 @@
         updateStatusFromCloud();
         return online ? { ok: true } : { queued: true, offline: true };
       } catch (error) {
+        state.cloudStoreCountKnown = false;
+        renderCloudStoreCount();
         setSyncState("Save failed");
         setCloudStatus("error", "Cloud save failed");
         if (!options.silent) showToast("Cloud save failed", error?.message || String(error));
@@ -2033,7 +2160,7 @@
       state.autoSaveTimer = setTimeout(async () => {
         clearAutoSaveTimer();
         try { await saveAllToCloud({ reason: "auto", silent: true }); }
-        catch { scheduleAutoSave("Retry pending"); }
+        catch { if (state.cloudStoreCountKnown) scheduleAutoSave("Retry pending"); }
       }, AUTO_SAVE_DELAY_MS);
     }
 
@@ -2453,7 +2580,7 @@
       const bundle = getLocalModuleBundle();
       return {
         application: "Aurum Imperium Investment Tracker",
-        backupVersion: 2,
+        backupVersion: 3,
         appVersion: window.AURUM_SUPABASE_CONFIG?.APP_VERSION || "unknown",
         exportedAt: isoNow(),
         reportingCurrency: "TWD",
@@ -2462,11 +2589,12 @@
           etf: buildCloudModuleState(MODULE_NAMES.etf, bundle.etf, calculateEtfSummary(bundle.etf)),
           cfd: buildCloudModuleState(MODULE_NAMES.cfd, bundle.cfd, calculateCfdSummary(bundle.cfd)),
           cash_savings: buildCloudModuleState(MODULE_NAMES.cash, bundle.cash_savings, calculateCashSummary(bundle.cash_savings)),
+          ...(deviceBudget() ? { budgeting: deviceBudget() } : {}),
           unified: { schemaVersion: 1, calculationVersion: ANALYSIS_CALCULATION_VERSION, analysisPeriodKey: state.analysisPeriodKey || activeAnalysisMonthKey(), totals: deepClone(state.totals), currentMonthFlows: deepClone(state.currentFlows), updatedAt: isoNow() }
         },
         periodSnapshots: deepClone(state.monthlySnapshots),
         security: { credentialsIncluded: false, authenticationTokensIncluded: false },
-        evidence: { binaryFilesIncluded: false, note: "Screenshots and PDFs are stored separately in private Supabase Storage." }
+        evidence: { privateStorageFilesIncluded: false, note: "Budget records retain embedded proof attachments. CFD files remain in private Supabase Storage." }
       };
     }
 
@@ -2481,10 +2609,11 @@
       anchor.click();
       anchor.remove();
       URL.revokeObjectURL(url);
-      showToast("JSON export complete", "All current ETF, CFD, Cash Savings and Unified data was included. Passwords and auth tokens were not exported.");
+      showToast("JSON export complete", "Exported the current device ledgers and Unified history. " + (backup.modules.budgeting ? "Budgeting included." : "No device budget was available."));
     }
 
     function detectImportedModules(payload) {
+      if (payload?.module === "budgeting") return { budgeting: payload };
       if (payload?.modules && typeof payload.modules === "object") return payload.modules;
       if (Array.isArray(payload)) {
         if (payload.some(item => item?.ticker || ["buy","sell","dividend","fee"].includes(item?.kind))) return { etf: { raw: { transactions: payload } } };
@@ -2564,16 +2693,42 @@
     async function importAllJsonFile(file) {
       if (!file) return;
       if (state.conflictLock) throw new Error("A protected cloud revision conflict is pending. Use Load All from Cloud before importing more data.");
+      const owner = state.session?.userId;
       const text = await file.text();
+      budgetKey(owner);
       let payload;
       try { payload = JSON.parse(text); }
       catch { throw new Error("The selected file is not valid JSON."); }
 
       const modules = detectImportedModules(payload);
       const names = Object.keys(modules);
+      const cfdRaw = modules.cfd && extractCloudRaw("cfd", modules.cfd);
+      const cfdEvidence = modules.cfd?.raw?.evidenceIndex;
+      if (cfdEvidence && Object.values(cfdEvidence).some(item => item?.storagePath && !item.storagePath.startsWith(owner + "/"))) {
+        throw new Error("CFD evidence in this backup belongs to a different account.");
+      }
+      if (cfdEvidence && Object.keys(cfdEvidence).length && !state.cloudStoreCountKnown) throw new Error("Load all modules before restoring CFD evidence links.");
       if (!names.length && !Array.isArray(payload?.periodSnapshots)) throw new Error("No recognizable ETF, CFD, Cash Savings or Unified backup data was found.");
       if (!confirm(`Merge data from ${file.name} into the currently signed-in profile? Existing records will be preserved where possible.`)) return;
 
+      let restoredBudget = false;
+      if (modules.budgeting) {
+        const incoming = validateBudget(modules.budgeting, owner);
+        await loadBudget(owner);
+        const key = budgetKey(owner);
+        const existing = deviceBudget(owner)?.store;
+        if (stableStringify(existing) !== stableStringify(incoming)) {
+          if (existing && !confirm("Restore this entire budget snapshot in place of your current budget? Cancel to keep your current records.")) return;
+          const restored = deepClone(incoming);
+          restored.updatedAt = isoNow();
+          // The budget is a linked ledger. Restore its IDs and recorded FX rates together.
+          const payload = { module: "budgeting", ownerId: owner, store: restored };
+          localStorage.setItem(key + ":draft", restored.updatedAt);
+          localStorage.setItem(key, JSON.stringify(restored));
+          AurumCloud.module.autoSave("budgeting", payload, { delayMs: AUTO_SAVE_DELAY_MS });
+          restoredBudget = true;
+        }
+      }
       const beforeFingerprint = bundleFingerprint();
       state.suppressAutoSave = true;
       let importedSnapshots = 0;
@@ -2583,7 +2738,20 @@
           writeEtfLocal(extractCloudRaw("etf", modules.etf) || modules.etf.raw || modules.etf, true);
         }
         if (modules.cfd) {
-          writeCfdLocal(extractCloudRaw("cfd", modules.cfd) || modules.cfd.raw || modules.cfd, true);
+          const ledger = writeCfdLocal(cfdRaw, true);
+          if (cfdEvidence && Object.keys(cfdEvidence).length) {
+            const snapshot = buildCloudModuleState("cfd", ledger, calculateCfdSummary(ledger, true));
+            const currentIndex = snapshot.raw.evidenceIndex || {};
+            // Restore missing references without replaying old uploads or deletions.
+            const additions = Object.entries(cfdEvidence).filter(([key, item]) =>
+              !Object.hasOwn(currentIndex, key) && item?.storagePath && !item.pendingDelete);
+            if (additions.length) {
+              snapshot.raw.evidenceIndex = { ...currentIndex, ...Object.fromEntries(additions.map(([key, item]) =>
+                [key, { ...item, pendingUpload: false, pendingDelete: false }])) };
+              AurumCloud.module.autoSave("cfd", snapshot, { schemaVersion: snapshot.schemaVersion, delayMs: AUTO_SAVE_DELAY_MS });
+              moduleChanged = true;
+            }
+          }
         }
         if (modules.cash_savings || modules.cash) {
           const source = modules.cash_savings || modules.cash;
@@ -2592,7 +2760,7 @@
         importedSnapshots = await importPeriodSnapshots(payload.periodSnapshots || []);
         await loadMonthlySnapshots();
         const afterFingerprint = bundleFingerprint();
-        moduleChanged = beforeFingerprint !== afterFingerprint;
+        moduleChanged = moduleChanged || restoredBudget || beforeFingerprint !== afterFingerprint;
         state.lastObservedFingerprint = afterFingerprint;
         await refreshDashboard({ detectChanges: false, reason: "json-import" });
         if (moduleChanged) {
@@ -2613,12 +2781,19 @@
     function currentUserLocalKeys() {
       const keys = new Set();
       Object.values(MODULE_STORAGE).forEach(base => keys.add(moduleStorageKey(base)));
+      const key = budgetKey();
+      for (const suffix of ["", ":draft", ":conflict", ":backup"]) keys.add(key + suffix);
       return [...keys];
     }
 
     function resetLocalData() {
       if (!state.session?.userId) return;
-      if (!confirm("Reset this profile's LOCAL ETF, CFD and Cash Savings cache? Cloud data will NOT be deleted. You can restore it with Load All from Cloud.")) return;
+      if (!confirm("Reset this profile's LOCAL ETF, CFD, Cash Savings and Budgeting cache? Cloud data will NOT be deleted. You can restore it with Load All from Cloud.")) return;
+      clearAutoSaveTimer();
+      state.cloudStoreCountKnown = false;
+      state.investmentStores.clear();
+      state.budgetStatus = "Load cloud to restore";
+      renderCloudStoreCount();
       currentUserLocalKeys().forEach(key => localStorage.removeItem(key));
       const prefix = window.AURUM_SUPABASE_CONFIG?.LOCAL_PREFIX || "aurum_imperium_cloud_v1";
       const userId = state.session.userId;
@@ -2649,7 +2824,7 @@
       if (!user) throw new Error("Sign in first.");
       const phrase = prompt("This permanently deletes this profile's Investment Tracker cloud financial data while keeping the Supabase account. Type DELETE CLOUD DATA to continue.");
       if (phrase !== "DELETE CLOUD DATA") return;
-      if (!confirm("Final confirmation: permanently delete ETF, CFD, Cash Savings, Unified snapshots, backups and evidence files from cloud storage for this authenticated user? The matching local financial cache will also be cleared so deleted cloud data cannot be uploaded again automatically.")) return;
+      if (!confirm("Final confirmation: permanently delete ETF, CFD, Cash Savings, Budgeting, Unified snapshots, backups and evidence files from cloud storage for this authenticated user? The matching local financial cache will also be cleared so deleted cloud data cannot be uploaded again automatically.")) return;
 
       setSyncState("Deleting cloud data…");
       const client = AurumCloud.getClient();
@@ -2685,6 +2860,8 @@
           if (key && key.startsWith(prefix) && key.includes(userId)) localStorage.removeItem(key);
         }
         state.monthlySnapshots = [];
+        state.investmentStores.clear();
+        state.budgetStatus = "No cloud budget";
         state.summaries = [];
         state.cloudStoreCount = 0;
         state.cloudStoreCountKnown = true;
@@ -2766,6 +2943,8 @@
         console.warn("Logout warning:", error);
       }
       localStorage.removeItem(ACTIVE_USER_KEY);
+      state.budgetStatus = "Checking cloud";
+      state.investmentStores.clear();
       state.session = null;
       state.profile = null;
       state.compatibilityScope = "";
@@ -2790,6 +2969,7 @@
         return;
       }
       const profile = await AurumCloud.profile.load();
+      if (AurumCloud.auth.getUser()?.id !== user.id) { showAuth(); return; }
       state.profile = profile;
       state.session = { userId: user.id, email: user.email || "", username: profile?.username || profile?.display_name || `user_${user.id.slice(0,8)}` };
       retireLegacyLocalAuth();
@@ -2871,6 +3051,14 @@
       ["online", "offline", "sync-start", "sync-end", "sync-error", "queue-changed", "auth-changed", "conflict"].forEach(name => {
         window.addEventListener(`aurum-cloud:${name}`, event => {
           if (name === "conflict") {
+            if (event.detail?.moduleName === "budgeting" && state.session?.userId) {
+              localStorage.setItem(budgetKey() + ":conflict", "1");
+              state.cloudStoreCountKnown = false;
+              renderBudgetCard();
+              renderCloudStoreCount();
+              updateStatusFromCloud();
+              return;
+            }
             state.conflictLock = true;
             const moduleName = event?.detail?.moduleName || "unknown";
             if (!state.conflictModules.includes(moduleName)) state.conflictModules.push(moduleName);
@@ -2933,7 +3121,7 @@
     const saveCloud = async () => {
       setButtonGroupBusy(true);
       try { await saveAllToCloud({ reason: "manual" }); }
-      catch {}
+      catch (error) { showToast("Cloud save incomplete", error.message); }
       finally { setButtonGroupBusy(false); }
     };
 
@@ -2961,6 +3149,7 @@
 
     window.addEventListener("storage", event => {
       if (!state.session?.userId || !event.key) return;
+      if (event.key.startsWith(budgetKey())) renderBudgetCard();
       if (Object.values(MODULE_STORAGE).some(base => event.key === moduleStorageKey(base))) {
         refreshDashboard({ reason: "module storage changed" }).catch(() => null);
       }
