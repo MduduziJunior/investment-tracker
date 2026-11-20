@@ -1,0 +1,1131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PilotProfit — Full Budgeting App</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='15' fill='%230f766e'/%3E%3Ctext x='32' y='44' font-size='35' text-anchor='middle' fill='white' font-family='Arial' font-weight='bold'%3EP%3C/text%3E%3C/svg%3E" />
+  <style>
+    :root{
+      --primary:#0f766e;--primary2:#0ea5e9;--dark:#0f172a;--bg:#eef2f7;--card:#ffffff;--text:#0f172a;--muted:#64748b;--border:#dbe3ea;--danger:#dc2626;--warn:#d97706;--success:#16a34a;--shadow:0 12px 30px rgba(15,23,42,.08);--radius:18px;
+    }
+    *{box-sizing:border-box;font-family:Arial,Helvetica,sans-serif}
+    body{margin:0;background:var(--bg);color:var(--text)}
+    .hidden{display:none!important}
+    button,input,select,textarea{font-size:14px}
+    button{border:0;border-radius:12px;padding:10px 14px;cursor:pointer;background:var(--primary);color:#fff;font-weight:800}
+    button:hover{filter:brightness(.96)} button:disabled{opacity:.55;cursor:not-allowed}
+    .secondary-btn{background:#334155}.danger-btn{background:var(--danger)}.warning-btn{background:var(--warn)}.light-btn{background:#fff;color:var(--primary)}
+    input,select,textarea{width:100%;padding:11px;border:1px solid #cbd5e1;border-radius:12px;background:#fff} textarea{min-height:80px;resize:vertical}
+    label{font-size:13px;font-weight:800;color:#334155}.muted{color:var(--muted);font-size:14px;line-height:1.45}.small{font-size:12px;color:var(--muted)}
+    header{background:linear-gradient(90deg,#157b7f,#1d9bca);color:#fff;padding:16px 18px;position:sticky;top:0;z-index:100;box-shadow:0 10px 20px rgba(15,23,42,.08);display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}.brand{display:flex;align-items:center;gap:12px}.brand img{width:54px;height:54px;object-fit:contain;border-radius:12px;background:rgba(255,255,255,.18);padding:6px}.brand h1{margin:0;font-size:28px}.brand p{margin:4px 0 0;font-size:13px;opacity:.95}.top-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}.top-actions button,.top-actions label{background:#fff;color:#0b6a72;border-radius:14px;padding:10px 13px;font-weight:800;cursor:pointer}.top-actions input[type=file]{display:none}
+    nav{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:12px 16px;background:#fff;border-bottom:1px solid var(--border);position:sticky;top:86px;z-index:90}nav button{background:#dfeaf3;color:#0d4f82;border-radius:14px;padding:10px 14px}nav button.active{background:var(--primary);color:#fff}
+    main{padding:18px 14px 40px}.section{display:none}.section.active{display:block}.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;margin-bottom:18px}.card h2,.card h3{margin-top:0}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}.full{grid-column:1/-1}.metric-card{background:#fff;border:1px solid var(--border);border-radius:18px;padding:18px;min-height:125px;box-shadow:var(--shadow)}.metric-card p{margin:0;color:#374151;font-weight:800}.metric-card h3{margin:16px 0 0;color:#0b1f4d;font-size:25px}.table-wrap{overflow-x:auto;border-radius:16px;border:1px solid var(--border);margin-top:12px}table{width:100%;min-width:1050px;border-collapse:collapse;background:#fff}th,td{padding:10px;border-bottom:1px solid #e2e8f0;text-align:left;vertical-align:top;font-size:13px}th{background:#edf4fa;color:#0f172a}.pill{display:inline-block;border-radius:999px;padding:5px 9px;font-size:12px;font-weight:900;background:#e0f2fe;color:#0369a1}.pill.good{background:#dcfce7;color:#166534}.pill.warn{background:#ffedd5;color:#9a3412}.pill.bad{background:#fee2e2;color:#991b1b}.pill.zero{background:#e2e8f0;color:#334155}.alert{padding:12px;border-radius:14px;background:#eef6ff;border-left:5px solid #0ea5e9;margin:10px 0;font-size:14px;line-height:1.45}.alert.good{background:#ecfdf5;border-left-color:#10b981;color:#166534}.alert.warning{background:#fff7ed;border-left-color:#f97316;color:#9a3412}.alert.danger{background:#fef2f2;border-left-color:#ef4444;color:#991b1b}.small-actions{display:flex;gap:8px;flex-wrap:wrap}.progress{height:14px;background:#e2e8f0;border-radius:999px;overflow:hidden}.progress span{display:block;height:100%;background:linear-gradient(90deg,#0f766e,#0ea5e9)}.bar-row{display:grid;grid-template-columns:160px 1fr 110px;gap:10px;align-items:center;margin:10px 0}.bar-bg{height:16px;background:#e2e8f0;border-radius:999px;overflow:hidden}.bar-fill{height:100%;background:linear-gradient(90deg,#0f766e,#0ea5e9)}.modal{position:fixed;inset:0;display:none;place-items:center;background:rgba(15,23,42,.66);z-index:1000;padding:18px}.modal.show{display:grid}.modal-card{width:100%;max-width:760px;background:#fff;border-radius:24px;padding:24px;box-shadow:0 24px 70px rgba(15,23,42,.28)}.journal-preview{background:#f8fafc;border:1px solid var(--border);border-radius:16px;padding:14px;margin-top:12px}.review-score{font-size:30px;font-weight:900;color:#0b1f4d}
+
+    .brand-badge{display:inline-grid;place-items:center;width:54px;height:54px;border-radius:14px;background:rgba(255,255,255,.18);color:white;font-weight:900;font-size:19px;flex-shrink:0}
+    /* Aurum Imperium visual system */
+    :root{--primary:#0b352c;--primary2:#175b49;--dark:#10221e;--bg:#f4f1e9;--card:#fffdf8;--text:#10221e;--muted:#687871;--border:#ddd8cc;--danger:#b94b45;--warn:#a96f16;--success:#27755f;--shadow:0 12px 30px rgba(10,45,37,.10);--radius:18px}
+    *{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+    body{background:var(--bg)}
+    h1,h2,h3{font-family:Georgia,"Times New Roman",serif;letter-spacing:-.015em}
+    button{background:var(--primary)}
+    .secondary-btn{background:#38554d}.warning-btn{background:#9a6b20}.light-btn{background:#fffdf8;color:var(--primary)}
+    input,select,textarea{border-color:#cfc9bb;background:#fffefb;color:var(--text)}
+    label{color:#324b44}
+    .auth-switch a{color:var(--primary2)}
+    .login-import-label{background:var(--primary)}
+    header{background:linear-gradient(105deg,#071d18,#0b352c 66%,#175b49);box-shadow:0 10px 24px rgba(10,45,37,.18)}
+    .brand-badge{color:#e7bf62;border:1px solid rgba(231,191,98,.38)}
+    .top-actions button,.top-actions label{background:#fffdf8;color:var(--primary)}
+    nav{background:#fffdf8;border-color:var(--border)}
+    nav button{background:#e8e3d7;color:#35544c}
+    nav button.active{background:var(--primary);color:#fff}
+    .card,.metric-card,.modal-card{background:var(--card);border-color:var(--border)}
+    .metric-card h3,.review-score{color:var(--primary)}
+    table{background:#fffdf8}th{background:#e9e4d8;color:#183a31}th,td{border-bottom-color:#e8e2d6}
+    .progress,.bar-bg{background:#e4ded1}.progress span,.bar-fill{background:linear-gradient(90deg,#0b352c,#d9a938)}
+    .pill{background:#e5efe9;color:#175b49}.pill.good{background:#dcece4;color:#175b49}.pill.warn{background:#f5ead1;color:#845f0c}
+    .alert{background:#edf3ef;border-left-color:#175b49}.alert.good{background:#e7f1eb;border-left-color:#27755f;color:#175b49}
+    .tracker-links{position:static;background:#103a30;border-bottom:1px solid #c8a255}
+    .tracker-links a{display:inline-block;color:#fffdf8;padding:6px 10px;border-radius:8px;text-decoration:none}
+    .tracker-links a:hover,.tracker-links a:focus-visible{background:#285447;text-decoration:underline}
+    .tracker-links a[aria-current="page"]{background:#edd8a2;color:#183a31;font-weight:700}
+    @media print{.tracker-links{display:none}}
+  </style>
+</head>
+<body>
+<div id="budgetGate" class="card" role="status"><span id="budgetGateMessage">Opening your budgeting workspace…</span> <a href="../../index.html">Return to Unifier</a></div>
+<div id="app" class="hidden">
+<header><div class="brand"><span class="brand-badge" aria-label="PilotProfit">PP</span><div><h1>PilotProfit</h1><p id="activeProfileText">Personal Budget App — Local Profile</p></div></div><div class="top-actions"><button class="light-btn" onclick="reloadBudget()">Load from Cloud</button><span id="cloudNote" role="status"></span><button class="light-btn" onclick="exportJson()">Export JSON</button><label>Import JSON<input type="file" accept=".json,application/json" onchange="importJson(event)" /></label><button class="light-btn" onclick="exportCsv()">Export CSV</button><button class="light-btn" onclick="window.print()">Print</button><button class="danger-btn" onclick="confirmReset()">Reset Local Data</button></div></header>
+<nav class="tracker-links" aria-label="Investment tracker modules">
+  <a href="../../index.html">Unified Dashboard</a>
+  <a href="../etf-portfolio/index.html">ETF Portfolio</a>
+  <a href="../cfd-journal/index.html">CFD Journal</a>
+  <a href="../cash-savings/index.html">Cash Savings</a>
+  <a href="./index.html" aria-current="page">Budgeting</a>
+</nav>
+<nav id="tabs" aria-label="Budgeting sections"></nav>
+<main>
+<section id="dashboard" class="section active">
+  <div class="grid" id="metricsGrid" style="margin-bottom:18px"></div>
+  <div class="card"><h2>Personal Budget Health</h2><div id="budgetHealth"></div></div>
+  <div class="card"><h2>Monthly Spending Chart</h2><div id="spendingBars"></div></div>
+  <div class="card"><h2>This Month Financial Test Summary</h2><p class="muted">Quick position tests from the Monthly Review section: liquidity, saving strength, budget control, debt pressure, and net-worth direction.</p><div id="dashboardReviewSummary" class="grid"></div></div>
+  <div class="card"><h2>Review & Reminders</h2><div id="reviewCenter"></div></div>
+</section>
+
+<section id="transactions" class="section">
+  <div class="card"><h2>Record Personal Transaction</h2><form class="form-grid" onsubmit="previewTransactionBeforeSave(event)"><input type="hidden" id="transactionId" />
+    <div><label>Date</label><input type="date" id="transactionDate" required /></div>
+    <div><label>Budget Month</label><input type="month" id="transactionMonth" required /></div>
+    <div><label>Type</label><select id="transactionType" required onchange="handleTransactionTypeChange()"><option value="income">Income</option><option value="expense">Expense</option><option value="savings">Savings Transfer</option><option value="debt">Debt Payment</option><option value="investment">Investment Contribution</option></select></div>
+    <div><label>Status</label><select id="transactionStatus" required onchange="updateTransactionFields()"><option value="paid">Paid / Received</option><option value="planned">Planned</option><option value="pending">Pending</option><option value="receivable">Money Expected / Receivable</option><option value="payable">Bill Due / Payable</option></select></div>
+    <div id="standardCategoryFields"><div><label>Category</label><select id="transactionCategorySelect" onchange="syncCategoryInput()"><option value="">Choose category</option></select></div>
+    <div id="transactionCustomCategoryWrap"><label>Custom Category</label><input id="transactionCategory" /></div></div>
+    <div id="expenseCategoryFields" class="hidden"><div><label>Expense Category</label><select id="transactionExpenseCategory" onchange="syncExpenseCategoryFields();updateTransactionFields()"><option value="">Choose category</option><option value="Project Capital">Project Capital</option><option value="General">General</option><option value="AP Payment">AP Payment</option></select></div>
+      <div id="transactionExpenseItemWrap" class="hidden"><label>Item</label><select id="transactionExpenseItem" onchange="syncExpenseCategoryFields()"><option value="">Choose item</option><option>Salary / Allowance</option><option>Food</option><option>Transport</option><option>Rent / Housing</option><option>School / Study</option><option>Phone / Internet</option><option>Church / Giving</option><option>Health</option><option>Shopping</option><option>Entertainment</option><option>Savings</option><option>Debt</option><option>Investment</option><option>Other</option></select></div>
+      <div id="transactionExpenseCustomItemWrap" class="hidden"><label>Custom Item</label><input id="transactionExpenseCustomItem" /></div></div>
+    <div id="transactionProjectLinkFields"><label>Link to Project</label><select id="transactionProjectId" onchange="syncProjectLinkedCategory();updateTransactionFields()"><option value="">No project selected</option></select></div>
+    <div id="transactionProjectImpactFields"><label>Project Effect</label><select id="transactionProjectImpact" onchange="updateTransactionFields()"><option value="none">No project effect</option><option value="funding">Project Funding Added</option><option value="spending">Project Spending / Cost</option></select></div>
+    <div data-show-when-paid><label>Cash / Bank Account Affected</label><select id="transactionAccountId"><option value="">Unassigned / Cash Estimate</option></select></div>
+    <div id="transactionDebtLinkFields" class="hidden"><label>Select Debtor / Debt to Pay</label><select id="transactionDebtId" onchange="renderDebtPaymentInfo()"><option value="">Choose an existing debt or payable</option></select><div id="transactionDebtInfo" class="alert warning">Select an existing debt or unpaid bill. Payments cannot be recorded without an outstanding balance.</div></div>
+    <div id="transactionReceivableLinkFields" class="hidden"><label>Receivable Being Collected</label><select id="transactionReceivableId"><option value="">Regular income / no receivable</option></select><span class="small">Shown when Income category is AR Collection. Choose an open receivable; collections reduce AR, not income.</span></div>
+    <div><label>Amount</label><input type="number" id="transactionAmount" min="0" step="0.01" required /></div>
+    <div><label>Currency</label><select id="transactionCurrency" required><option value="TWD">NTD / TWD</option><option value="USD">USD</option><option value="SZL">E / SZL</option></select></div>
+    <div><label>Rate to Main Currency</label><input type="number" id="transactionRate" min="0" step="0.000001" value="1" required /></div>
+    <div data-show-when-paid><label>Payment Method</label><input id="transactionMethod" placeholder="Cash, card, bank, mobile money" /></div>
+    <div><label>Reference / Receipt No.</label><input id="transactionReference" /></div>
+    <div><label>Picture / PDF Proof Optional</label><input type="file" id="transactionProofFile" accept="image/*,.pdf,application/pdf" onchange="handleTransactionProofFile(event)" /></div>
+    <div><label>Need Review?</label><select id="transactionReview"><option value="ok">OK</option><option value="needs review">Needs Review</option><option value="flagged">Flagged</option></select></div>
+    <div class="full"><div id="transactionProofPreview" class="alert warning">Optional proof: no picture/PDF selected. You can still save without proof.</div></div>
+    <div class="full"><label>Description</label><input id="transactionDescription" required placeholder="Example: Lunch, bus fare, salary, tithe, savings transfer" /></div>
+    <div class="full"><label>Note</label><textarea id="transactionNote"></textarea></div>
+    <div class="full"><button type="submit">Preview Journal Entry</button> <button type="button" class="secondary-btn" onclick="clearTransactionForm()">Clear</button></div>
+  </form>
+  <div class="card" style="box-shadow:none;"><h3>Search & Filters</h3><div class="form-grid"><div><label>Search</label><input id="txSearch" oninput="renderAll()" placeholder="description, category, reference" /></div><div><label>Month</label><input type="month" id="txMonthFilter" onchange="renderAll()" /></div><div><label>Type</label><select id="txTypeFilter" onchange="renderAll()"><option value="">All</option><option value="income">Income</option><option value="expense">Expense</option><option value="savings">Savings</option><option value="debt">Debt</option><option value="apPayment">AP Payment</option><option value="investment">Investment</option></select></div><div><label>Review</label><select id="txReviewFilter" onchange="renderAll()"><option value="">All</option><option value="ok">OK</option><option value="needs review">Needs Review</option><option value="flagged">Flagged</option></select></div></div></div>
+  <div class="table-wrap"><table><thead><tr><th>Date</th><th>Month</th><th>Type</th><th>Status</th><th>Category</th><th>Original</th><th>Currency</th><th>Rate</th><th>Main Currency</th><th>Method</th><th>Reference</th><th>Proof</th><th>Review</th><th>Project</th><th>Description</th><th>Journal Entry</th><th>Note</th><th>Action</th></tr></thead><tbody id="transactionsTable"></tbody></table></div></div>
+
+</section>
+
+<section id="accounts" class="section">
+  <div class="card"><h2>Cash / Bank Account Register</h2><p class="muted">Create your real money locations such as Cash, Bank, Mobile Money, Savings Account, or Investment Wallet. Transactions and transfers can affect these accounts so balances become more realistic.</p>
+    <form class="form-grid" onsubmit="saveAccount(event)"><input type="hidden" id="accountId" />
+      <div><label>Account Name</label><input id="accountName" required placeholder="Cash, Cathay Bank, Mobile Money" /></div>
+      <div><label>Account Type</label><select id="accountType"><option>Cash</option><option>Bank</option><option>Mobile Money</option><option>Savings Account</option><option>Investment Wallet</option><option>Other</option></select></div>
+      <div><label>Opening Balance</label><input id="accountOpening" type="number" step="0.01" value="0" /></div>
+      <div><label>Currency</label><select id="accountCurrency"><option value="TWD">NTD / TWD</option><option value="USD">USD</option><option value="SZL">E / SZL</option></select></div>
+      <div><label>Rate to Main Currency</label><input id="accountRate" type="number" min="0" step="0.000001" value="1" /></div>
+      <div><label>Status</label><select id="accountStatus"><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
+      <div class="full"><label>Note</label><textarea id="accountNote" placeholder="Bank name, card, purpose, or reminder"></textarea></div>
+      <div class="full"><button type="submit">Save Account</button> <button type="button" class="secondary-btn" onclick="clearAccountForm()">Clear</button></div>
+    </form>
+    <div id="accountsSummary" class="grid"></div>
+    <div class="table-wrap"><table><thead><tr><th>Account</th><th>Type</th><th>Opening</th><th>Transaction Effect</th><th>Transfer Effect</th><th>Current Balance</th><th>Status</th><th>Note</th><th>Action</th></tr></thead><tbody id="accountsTable"></tbody></table></div>
+  </div>
+</section>
+
+<section id="transfers" class="section">
+  <div class="card"><h2>Transfer Between Accounts</h2><p class="muted">Use transfers when money moves between your own accounts. The transfer amount moves between your accounts. An optional switching fee is an expense charged on top, in the selected transfer currency.</p>
+    <form class="form-grid" onsubmit="saveTransfer(event)"><input type="hidden" id="transferId" />
+      <div><label>Date</label><input id="transferDate" type="date" required /></div>
+      <div><label>Month</label><input id="transferMonth" type="month" required /></div>
+      <div><label>From Account</label><select id="transferFromAccount" required></select></div>
+      <div><label>To Account</label><select id="transferToAccount" required></select></div>
+      <div><label>Amount to Receive (excluding fee)</label><input id="transferAmount" type="number" min="0" step="0.01" required /></div>
+      <div><label>Currency</label><select id="transferCurrency"><option value="TWD">NTD / TWD</option><option value="USD">USD</option><option value="SZL">E / SZL</option></select></div>
+      <div><label>Rate to Main Currency</label><input id="transferRate" type="number" min="0" step="0.000001" value="1" required /></div>
+      <div><label for="transferFee">Switching / Transfer Fee (optional)</label><input id="transferFee" type="number" min="0" step="0.01" value="0" /><p class="small">Same currency as the transfer. The sender pays the transfer amount plus this fee.</p></div>
+      <div><label>Reference</label><input id="transferReference" placeholder="ATM, bank app, cash withdrawal" /></div>
+      <div class="full"><label>Note</label><textarea id="transferNote"></textarea></div>
+      <div class="full"><button type="submit">Save Transfer</button> <button type="button" class="secondary-btn" onclick="clearTransferForm()">Clear</button></div>
+    </form>
+    <div class="table-wrap"><table><thead><tr><th>Date</th><th>Month</th><th>From</th><th>To</th><th>Amount Received</th><th>Switching Fee</th><th>Total Deducted</th><th>Reference</th><th>Journal Logic</th><th>Note</th><th>Action</th></tr></thead><tbody id="transfersTable"></tbody></table></div>
+  </div>
+</section>
+
+<section id="receivables" class="section">
+  <div class="card"><h2>Trade Receivables Registration</h2><p class="muted">Use this when someone owes you money from a personal sale, small service, refund, support promise, or any amount you expect to collect later. These receivables feed into AR, financial position, and net worth.</p>
+    <form class="form-grid" onsubmit="saveTradeReceivable(event)"><input type="hidden" id="receivableId" />
+      <div><label>Date Recorded</label><input id="receivableDate" type="date" required /></div>
+      <div><label>Month</label><input id="receivableMonth" type="month" required /></div>
+      <div><label>Person / Debtor Name</label><input id="receivableDebtor" required placeholder="Who owes you?" /></div>
+      <div><label>Reason / Category</label><input id="receivableCategory" required placeholder="Sold item, refund, allowance, service" /></div>
+      <div><label>Amount Due</label><input id="receivableAmount" type="number" min="0" step="0.01" required /></div>
+      <div><label>Amount Received</label><input id="receivableReceived" type="number" min="0" step="0.01" value="0" /></div>
+      <div><label>Currency</label><select id="receivableCurrency"><option value="TWD">NTD / TWD</option><option value="USD">USD</option><option value="SZL">E / SZL</option></select></div>
+      <div><label>Rate to Main Currency</label><input id="receivableRate" type="number" min="0" step="0.000001" value="1" required /></div>
+      <div><label>Due Date</label><input id="receivableDueDate" type="date" /></div>
+      <div><label>Status</label><select id="receivableStatus"><option value="open">Open / Uncollected</option><option value="partial">Partly Collected</option><option value="collected">Collected</option><option value="written off">Written Off</option></select></div>
+      <div><label>Reference</label><input id="receivableReference" placeholder="Invoice, message, receipt, agreement" /></div>
+      <div class="full"><label>Description</label><input id="receivableDescription" required placeholder="What is this receivable for?" /></div>
+      <div class="full"><label>Note</label><textarea id="receivableNote" placeholder="Collection plan, proof, contact note"></textarea></div>
+      <div class="full"><button type="submit">Save Trade Receivable</button> <button type="button" class="secondary-btn" onclick="clearTradeReceivableForm()">Clear</button></div>
+    </form>
+    <div id="receivablesSummary" class="grid"></div>
+    <div class="table-wrap"><table><thead><tr><th>Date</th><th>Month</th><th>Debtor</th><th>Category</th><th>Amount Due</th><th>Received</th><th>Outstanding</th><th>Due Date</th><th>Status</th><th>Reference</th><th>Description</th><th>Note</th><th>Action</th></tr></thead><tbody id="receivablesTable"></tbody></table></div>
+  </div>
+</section>
+
+<section id="budgets" class="section"><div class="card"><h2>Monthly Budgets</h2><form class="form-grid" onsubmit="saveBudget(event)"><input type="hidden" id="budgetId" /><div><label>Month</label><input type="month" id="budgetMonth" required /></div><div><label>Category</label><select id="budgetCategorySelect" onchange="syncBudgetCategoryInput()"><option value="">Choose or type below</option><option>Salary / Allowance</option><option>Food</option><option>Transport</option><option>Rent / Housing</option><option>School / Study</option><option>Phone / Internet</option><option>Church / Giving</option><option>Health</option><option>Shopping</option><option>Entertainment</option><option>Savings</option><option>Debt</option><option>Investment</option><option>Other</option></select></div><div><label>Custom Category</label><input id="budgetCategory" required placeholder="Choose above or type your own" /></div><div><label>Budget Amount</label><input type="number" id="budgetAmount" min="0" step="0.01" required /></div><div><label>Currency</label><select id="budgetCurrency"><option value="TWD">NTD / TWD</option><option value="USD">USD</option><option value="SZL">E / SZL</option></select></div><div><label>Rate to Main Currency</label><input type="number" id="budgetRate" min="0" step="0.000001" value="1" required /></div><div class="full"><button type="submit">Save Budget</button> <button type="button" class="secondary-btn" onclick="clearBudgetForm()">Clear</button></div></form><div class="table-wrap"><table><thead><tr><th>Month</th><th>Category</th><th>Budget</th><th>Actual Spending</th><th>Remaining</th><th>Usage</th><th>Action</th></tr></thead><tbody id="budgetsTable"></tbody></table></div></div></section>
+
+<section id="debts" class="section"><div class="card"><h2>Personal Debts</h2><form class="form-grid" onsubmit="saveDebt(event)"><input type="hidden" id="debtId" /><div><label>Debt Name</label><input id="debtName" required placeholder="Student loan, friend, credit card" /></div><div><label>Lender / Person</label><input id="debtLender" /></div><div><label>Original Amount</label><input id="debtOriginal" type="number" min="0" step="0.01" required /></div><div><label>Outstanding Amount</label><input id="debtOutstanding" type="number" min="0" step="0.01" required /></div><div><label>Monthly Payment Plan</label><input id="debtMonthlyPayment" type="number" min="0" step="0.01" /></div><div><label>Currency</label><select id="debtCurrency"><option value="TWD">NTD / TWD</option><option value="USD">USD</option><option value="SZL">E / SZL</option></select></div><div><label>Rate to Main Currency</label><input id="debtRate" type="number" min="0" step="0.000001" value="1" required /></div><div><label>Due Date</label><input id="debtDueDate" type="date" /></div><div><label>Status</label><select id="debtStatus"><option value="active">Active</option><option value="paid">Paid</option><option value="paused">Paused</option></select></div><div class="full"><label>Note</label><textarea id="debtNote"></textarea></div><div class="full"><button type="submit">Save Debt</button> <button type="button" class="secondary-btn" onclick="clearDebtForm()">Clear</button></div></form><div class="table-wrap"><table><thead><tr><th>Debt</th><th>Lender</th><th>Original</th><th>Outstanding</th><th>Monthly Plan</th><th>Due Date</th><th>Status</th><th>Note</th><th>Action</th></tr></thead><tbody id="debtsTable"></tbody></table></div></div></section>
+
+<section id="assets" class="section">
+  <div class="card"><h2>Personal Asset Registration</h2><p class="muted">Register personal assets such as cash, bank balance, laptop, phone, furniture, savings account, or any valuable item. These assets feed into Net Worth and Personal Financial Position.</p><form class="form-grid" onsubmit="saveAsset(event)"><input type="hidden" id="assetId" />
+    <div><label>Date</label><input id="assetDate" type="date" required /></div>
+    <div><label>Asset Name</label><input id="assetName" required placeholder="Laptop, bank balance, cash, phone" /></div>
+    <div><label>Category</label><input id="assetCategory" required placeholder="Cash, device, furniture, savings" /></div>
+    <div><label>Cost / Original Value</label><input id="assetCost" type="number" min="0" step="0.01" required /></div>
+    <div><label>Current Value</label><input id="assetCurrentValue" type="number" min="0" step="0.01" required /></div>
+    <div><label>Currency</label><select id="assetCurrency"><option value="TWD">NTD / TWD</option><option value="USD">USD</option><option value="SZL">E / SZL</option></select></div>
+    <div><label>Rate to Main Currency</label><input id="assetRate" type="number" min="0" step="0.000001" value="1" required /></div>
+    <div><label>Status</label><select id="assetStatus"><option value="active">Active</option><option value="sold">Sold / Removed</option><option value="lost">Lost / Written Off</option></select></div>
+    <div class="full"><label>Note</label><textarea id="assetNote" placeholder="Where it is kept, proof, condition, or reminder"></textarea></div>
+    <div class="full"><button type="submit">Save Asset</button> <button type="button" class="secondary-btn" onclick="clearAssetForm()">Clear</button></div>
+  </form><div id="assetsSummary" class="grid"></div><div class="table-wrap"><table><thead><tr><th>Date</th><th>Name</th><th>Category</th><th>Cost</th><th>Current Value</th><th>Status</th><th>Note</th><th>Action</th></tr></thead><tbody id="assetsTable"></tbody></table></div></div>
+</section>
+
+<section id="projects" class="section">
+  <div class="card"><h2>Personal Project Registration</h2><p class="muted">Track personal projects such as a trip home, school supplies, laptop purchase, emergency move, church contribution, or family support. Projects help you compare budget, available funding, spending, and remaining gap.</p><form class="form-grid" onsubmit="saveProject(event)"><input type="hidden" id="projectId" />
+    <div><label>Date Started</label><input id="projectDate" type="date" required /></div>
+    <div><label>Month</label><input id="projectMonth" type="month" required /></div>
+    <div><label>Project Name</label><input id="projectName" required placeholder="Trip home, laptop, emergency fund" /></div>
+    <div><label>Category</label><input id="projectCategory" required placeholder="Travel, school, family, church, health" /></div>
+    <div><label>Project Budget</label><input id="projectBudget" type="number" min="0" step="0.01" required /></div>
+    <div><label>Funding Available</label><input id="projectFunding" type="number" min="0" step="0.01" required /></div>
+    <div><label>Spent So Far</label><input id="projectSpent" type="number" min="0" step="0.01" required /></div>
+    <div><label>Currency</label><select id="projectCurrency"><option value="TWD">NTD / TWD</option><option value="USD">USD</option><option value="SZL">E / SZL</option></select></div>
+    <div><label>Rate to Main Currency</label><input id="projectRate" type="number" min="0" step="0.000001" value="1" required /></div>
+    <div><label>Deadline</label><input id="projectDeadline" type="date" /></div>
+    <div><label>Status</label><select id="projectStatus"><option value="planning">Planning</option><option value="active">Active</option><option value="paused">Paused</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></div>
+    <div class="full"><label>Note</label><textarea id="projectNote" placeholder="Why this project matters, what remains, proof/reference"></textarea></div>
+    <div class="full"><button type="submit">Save Project</button> <button type="button" class="secondary-btn" onclick="clearProjectForm()">Clear</button></div>
+  </form><div id="projectsSummary" class="grid"></div><div class="table-wrap"><table><thead><tr><th>Month</th><th>Project</th><th>Category</th><th>Budget</th><th>Manual Funding</th><th>Tx Funding</th><th>Total Funding</th><th>Manual Spent</th><th>Tx Spent</th><th>Total Spent</th><th>Remaining Gap</th><th>Progress</th><th>Deadline</th><th>Status</th><th>Note</th><th>Action</th></tr></thead><tbody id="projectsTable"></tbody></table></div></div>
+</section>
+
+
+<section id="monthlyreview" class="section">
+  <div class="card"><h2>Month-to-Month Comparison & Monthly Reviews</h2><p class="muted">This section compares each month and tests your financial position. It is designed for personal budgeting, not business IFRS reporting.</p><div id="monthlyReviewCards" class="grid"></div></div>
+  <div class="card"><h2>Monthly Position Test Table</h2><div class="table-wrap"><table><thead><tr><th>Month</th><th>Income</th><th>Expenses</th><th>Savings + Investments</th><th>Debt Payments</th><th>Net Cash Movement</th><th>Savings Rate</th><th>Liquidity Ratio</th><th>Cash Runway</th><th>Budget Usage</th><th>Net Worth</th><th>Review Score</th></tr></thead><tbody id="monthlyReviewTable"></tbody></table></div></div>
+  <div class="card"><h2>Month-to-Month Movement</h2><div class="table-wrap"><table><thead><tr><th>Month</th><th>Income Change</th><th>Expense Change</th><th>Net Cash Change</th><th>Net Worth Change</th><th>Signal</th><th>Suggested Review</th></tr></thead><tbody id="monthMovementTable"></tbody></table></div></div>
+  <div class="card"><h2>Position Test Meanings</h2><div id="positionTestMeanings" class="grid"></div></div>
+</section>
+
+<section id="statements" class="section">
+  <div class="card"><h2>Statements & Net Worth</h2><p class="muted">Your statements and net worth are presented together so income, spending, assets and liabilities form one complete view of your financial position.</p><div id="statementsBox" class="grid"></div></div>
+  <div class="card" id="investmentTrackerCard"><div class="small-actions" style="justify-content:space-between;align-items:center"><div><h2>Investment Tracker Link</h2><p class="muted">Read-only figures from your signed-in ETF and CFD modules. They update Statements and Net Worth without creating budget transactions.</p></div><button type="button" class="secondary-btn" id="refreshInvestmentTracker">Refresh from Investor App</button></div><div id="investmentTrackerStatus" class="alert warning" style="margin-top:12px">Connecting to the shared Investor App…</div><div id="overlapChoices"></div><div id="investmentTrackerMetrics" class="grid"></div><div style="max-width:320px;margin-top:12px"><label for="investmentTwdRate">TWD to Budget Main Currency Rate</label><input id="investmentTwdRate" type="number" min="0" step="any" placeholder="1.00" style="width:100%"><p class="muted" id="investmentFxNote">Fetched automatically for your budget main currency.</p></div><label style="display:flex;gap:8px;align-items:center;margin-top:12px"><input type="checkbox" id="includeInvestmentPortfolioInNetWorth" style="width:auto"> Include the linked ETF and CFD account value in Net Worth</label><p class="muted">When linking is enabled, selected manual portfolio assets are counted at their linked value. Investment gains stay separate from cash flow because market gains are not automatically spendable cash.</p></div>
+  <div class="card"><h2>Personal Income & Spending Statement</h2><div class="table-wrap"><table><thead><tr><th>Line</th><th>Amount</th><th>Meaning</th></tr></thead><tbody id="incomeStatementTable"></tbody></table></div></div>
+  <div class="card"><h2>Personal Financial Position</h2><div class="table-wrap"><table><thead><tr><th>Line</th><th>Amount</th><th>Meaning</th></tr></thead><tbody id="positionStatementTable"></tbody></table></div></div>
+  <div class="card"><h2>Net Worth Register</h2><p class="muted">Add extra personal assets and liabilities here. Do not register the same bank balance, asset, or debt twice: Accounts, Assets and Debts are already included automatically.</p><form class="form-grid" onsubmit="saveNetWorthItem(event)"><input type="hidden" id="netWorthId" />
+    <div><label>Date</label><input id="netWorthDate" type="date" required /></div>
+    <div><label>Type</label><select id="netWorthType"><option value="asset">Asset</option><option value="liability">Liability</option></select></div>
+    <div><label>Name</label><input id="netWorthName" required placeholder="Bank balance, cash, laptop, loan, amount owed" /></div>
+    <div><label>Category</label><input id="netWorthCategory" placeholder="Cash, bank, device, debt, other" /></div>
+    <div><label>Value</label><input id="netWorthValue" type="number" min="0" step="0.01" required /></div>
+    <div><label>Currency</label><select id="netWorthCurrency"><option value="TWD">NTD / TWD</option><option value="USD">USD</option><option value="SZL">E / SZL</option></select></div>
+    <div><label>Rate to Main Currency</label><input id="netWorthRate" type="number" min="0" step="0.000001" value="1" required /></div>
+    <div class="full"><label>Note</label><textarea id="netWorthNote"></textarea></div>
+    <div class="full"><button type="submit">Save Net Worth Item</button> <button type="button" class="secondary-btn" onclick="clearNetWorthForm()">Clear</button></div>
+  </form><div id="netWorthSummary" class="grid"></div><div class="table-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Name</th><th>Category</th><th>Value</th><th>Note</th><th>Action</th></tr></thead><tbody id="netWorthTable"></tbody></table></div></div>
+</section>
+
+<section id="cashflow" class="section">
+  <div class="card"><h2>Personal Cash Flow</h2><p class="muted">Cash flow separates money coming in, money going out, savings/investments, and debt payments. Planned, receivable, and payable items are shown separately so they do not distort actual cash.</p><div id="cashFlowSummary" class="grid"></div><div class="table-wrap"><table><thead><tr><th>Month</th><th>Cash Inflows</th><th>Cash Expenses</th><th>Savings</th><th>Investments</th><th>Debt Payments</th><th>Net Cash Movement</th><th>Expected / Pending</th></tr></thead><tbody id="cashFlowTable"></tbody></table></div></div>
+</section>
+
+<section id="settings" class="section"><div class="card"><h2>Import an existing budget</h2><p>Select a profile from this browser or from a JSON backup. Review the destination account before importing.</p><button onclick="readLegacy()">Find browser profiles</button><div id="legacyChoices"></div></div><div class="card"><h2>Automatic Exchange Rates</h2><p id="fxStatus" class="muted" role="status">Loading exchange rates…</p><p class="small">Daily reference rates for TWD, USD and SZL. Saved entries keep their recorded rates. When offline, dated cached rates can be used for up to seven days. Backdated new entries use the latest available rate, not a historical lookup.</p><a href="https://www.exchangerate-api.com" target="_blank" rel="noopener noreferrer">Rates By Exchange Rate API</a></div><div class="card"><h2>Budget Settings</h2><form class="form-grid" onsubmit="saveSettings(event)"><div><label>Main Currency</label><select id="settingCurrency"><option value="TWD">NTD / TWD</option><option value="USD">USD</option><option value="SZL">E / SZL</option></select></div><div><label>Monthly Income Target</label><input id="settingIncomeTarget" type="number" min="0" step="0.01" /></div><div><label>Monthly Saving Target</label><input id="settingSavingTarget" type="number" min="0" step="0.01" /></div><div><label>Emergency Fund Target</label><input id="settingEmergencyTarget" type="number" min="0" step="0.01" /></div><div class="full"><button type="submit">Save Settings</button></div></form></div><div class="card"><h2>Backup & Local Storage</h2><p class="muted">Budget records are saved locally; the exchange-rate service receives currency requests only. This app stores your records, including small optional receipt attachments, in this browser only. Closing the tab does not erase saved records, but clearing site data, using private mode, changing the file origin, or reaching your browser storage limit may. Keep full JSON backups outside your browser.</p><div id="settingsStorageHealth" class="alert"></div><div class="small-actions"><button type="button" class="secondary-btn" onclick="runLocalStorageCheck()">Check Storage</button><button onclick="exportJson()">Export Full Backup</button><button class="secondary-btn" onclick="exportCsv()">Export Transactions CSV</button><button class="danger-btn" onclick="confirmReset()">Reset Local Data</button></div></div></section>
+</main>
+</div>
+
+
+<div id="journalPreviewModal" class="modal"><div class="modal-card"><h2>Journal Entry Preview Before Saving</h2><p class="muted">Review the affected accounts before finalising this transaction. This app saves only after you confirm.</p><div id="journalPreviewSummary" class="alert"></div><div class="table-wrap"><table><thead><tr><th>Account</th><th>Debit</th><th>Credit</th><th>Why affected</th></tr></thead><tbody id="journalPreviewTable"></tbody></table></div><div id="journalPreviewBalance" class="alert"></div><br><div class="small-actions"><button onclick="confirmTransactionFromPreview()">Confirm & Save Transaction</button><button class="secondary-btn" onclick="closeJournalPreview()">Go Back and Edit</button></div></div></div>
+
+
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../../shared/supabase-config.js"></script>
+<script src="../../shared/aurum-cloud.js"></script>
+<script>
+const LEGACY_KEY="pilotprofit_personal_budget_account_register_smart_journal_v6";
+let STORE_KEY, BACKUP_KEY, budgetUser, busyLoading=false, conflict=false;
+let store=defaultStore(),activeProfileId=null,pendingTransactionItem=null,currentTransactionProofMeta=null,transactionProofReading=false;
+const tabs=[["dashboard","Dashboard"],["accounts","Accounts"],["transfers","Transfers"],["transactions","Transactions"],["receivables","Trade Receivables"],["budgets","Budgets"],["debts","Debts"],["assets","Assets"],["projects","Projects"],["monthlyreview","Monthly Review"],["statements","Statements & Net Worth"],["cashflow","Cash Flow"],["settings","Settings"]];
+function $(id){return document.getElementById(id)}
+function makeId(){return window.crypto&&crypto.randomUUID?crypto.randomUUID():"id_"+Date.now()+Math.random().toString(16).slice(2)}
+function nowIso(){return new Date().toISOString()}
+function today(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`}
+function thisMonth(){return today().slice(0,7)}
+function parseNum(n){return Number(n||0)}
+function escapeHtml(s){return String(s??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]))}
+function defaultStore(){return{version:"PilotProfit Personal Budget Fully Local Offline Edition",activeProfileId:null,profiles:[],createdAt:nowIso(),updatedAt:nowIso()}}
+function emptyProfile(username,password,currency,q,a,incomeTarget,savingTarget){return{id:makeId(),username,password,mainCurrency:currency||"TWD",monthlyIncomeTarget:parseNum(incomeTarget),monthlySavingTarget:parseNum(savingTarget),emergencyFundTarget:0,recoveryQuestion:q||"",recoveryAnswer:(a||"").trim().toLowerCase(),accounts:[],transfers:[],transactions:[],tradeReceivables:[],budgets:[],goals:[],debts:[],assets:[],projects:[],recurringTemplates:[],closedMonths:[],netWorthItems:[],createdAt:nowIso(),updatedAt:nowIso(),lastLocalSaveAt:nowIso()}}
+function migrateStore(s){s.version="PilotProfit Personal Budget Fully Local Offline Edition";s.profiles=Array.isArray(s.profiles)?s.profiles:[];s.activeProfileId=s.activeProfileId||null;s.createdAt=s.createdAt||nowIso();s.updatedAt=s.updatedAt||nowIso();s.profiles.forEach(p=>{p.id=p.id||makeId();p.username=p.username||"Profile";p.password=p.password||"";p.mainCurrency=p.mainCurrency||p.defaultCurrency||"TWD";p.monthlyIncomeTarget=parseNum(p.monthlyIncomeTarget);p.monthlySavingTarget=parseNum(p.monthlySavingTarget);p.emergencyFundTarget=parseNum(p.emergencyFundTarget);p.recoveryQuestion=p.recoveryQuestion||"";p.recoveryAnswer=p.recoveryAnswer||"";["accounts","transfers","transactions","tradeReceivables","budgets","goals","debts","assets","projects","recurringTemplates","closedMonths","netWorthItems"].forEach(k=>{p[k]=Array.isArray(p[k])?p[k]:[]});p.transactions.forEach(x=>{if(x.entryKind==="apPayment"||x.type==="apPayment"){x.type="expense";x.expenseCategory="AP Payment";x.category="AP Payment";}});p.createdAt=p.createdAt||nowIso();p.updatedAt=p.updatedAt||nowIso();p.lastLocalSaveAt=p.lastLocalSaveAt||nowIso()});return s}
+function saveStore(){
+  checkOwner();
+  if(busyLoading || conflict || $('app').querySelector('main').inert)throw Error("Load the current budget before editing.");
+  const previous=readDraft();
+  if(previous&&previous.updatedAt!==store.updatedAt){
+    $('app').querySelector('main').inert=true;note('Device budget changed · Load from Cloud to continue');throw Error('A newer budget is on this device.');
+  }
+  store.updatedAt=nowIso();store.activeProfileId=activeProfileId;
+  try{
+    localStorage.setItem(STORE_KEY,JSON.stringify(store));
+    window.__lastLocalSaveError="";
+  }catch(e){
+    const msg="Local browser storage could not save these changes. Your storage may be full or blocked. Reduce receipt sizes, enable website storage, or export an existing JSON backup before making more changes.";
+    window.__lastLocalSaveError=msg;
+    try{const previous=JSON.parse(localStorage.getItem(STORE_KEY));if(previous&&Array.isArray(previous.profiles)){store=migrateStore(previous);activeProfileId=store.activeProfileId||null}}catch(ignore){}
+    alert(msg);throw new Error(msg);
+  }
+  stageBudget(); return true;
+}
+function currentProfile(){return store.profiles.find(p=>p.id===activeProfileId)||null}
+function localStorageStatus(){
+  try{
+    const probe="__pilotprofit_local_probe__";
+    localStorage.setItem(probe,"test");
+    if(localStorage.getItem(probe)!=="test")throw new Error("Write/read check failed");
+    localStorage.removeItem(probe);
+    const raw=localStorage.getItem(STORE_KEY)||"";
+    const bytes=new Blob([raw]).size;
+    const proofCount=(store.profiles||[]).reduce((sum,p)=>sum+(p.transactions||[]).filter(t=>t.proofMeta?.dataUrl).length,0);
+    return {ok:true,bytes,proofCount,description:`Browser write/read check passed. Stored budget data: ${(bytes/1024).toFixed(1)} KB. Embedded proofs: ${proofCount}. Use a full JSON backup regularly.`};
+  }catch(e){return {ok:false,bytes:0,proofCount:0,description:"Browser storage is blocked or full: "+(e.message||e)+". Data may not survive a reload!"}}
+}
+function runLocalStorageCheck(){const h=localStorageStatus();["storageHealth","settingsStorageHealth"].forEach(id=>{const el=$(id);if(el){el.className="alert "+(h.ok?"good":"danger");el.textContent=h.description}});return h.ok}
+
+function markLocalSave(){const p=currentProfile();if(p){p.updatedAt=nowIso();p.lastLocalSaveAt=nowIso()}saveStore();renderAll();return true}
+function money(n,currency){const p=currentProfile();const cur=currency||p?.mainCurrency||"TWD";const prefix=cur==="TWD"?"NT$ ":cur==="USD"?"US$ ":"E ";return prefix+Number(n||0).toLocaleString(undefined,{maximumFractionDigits:2})}
+function pct(n){return Number(n||0).toFixed(1)+"%"}
+function openApp(){$("app").classList.remove("hidden");document.querySelectorAll(".section").forEach(section=>section.classList.remove("active"));$("dashboard").classList.add("active");renderTabs();document.querySelectorAll("#tabs button").forEach(button=>button.classList.toggle("active",button.dataset.tab==="dashboard"));setDefaultDates();loadSettingsIntoForm();renderAll()}
+function renderTabs(){$("tabs").innerHTML=tabs.map(([id,label])=>`<button data-tab="${id}" onclick="showTab('${id}')">${label}</button>`).join("");const btn=document.querySelector('button[data-tab="dashboard"]');if(btn)btn.classList.add("active")}
+function showTab(id){document.querySelectorAll(".section").forEach(s=>s.classList.remove("active"));$(id).classList.add("active");document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("active",b.dataset.tab===id));renderAll()}
+function setDefaultDates(){["transactionDate","receivableDate","assetDate","projectDate","netWorthDate","transferDate"].forEach(id=>$(id)&&($(id).value=today()));["transactionMonth","receivableMonth","budgetMonth","projectMonth","transferMonth","templateGenerateMonth","closeMonthInput"].forEach(id=>$(id)&&($(id).value=thisMonth()))}
+function renderProjectOptions(){const p=currentProfile();const select=$("transactionProjectId");if(!select)return;const current=select.value;const projects=(p?.projects||[]).filter(x=>!["completed","cancelled"].includes(x.status));select.innerHTML='<option value="">No project selected</option>'+projects.map(x=>`<option value="${escapeHtml(x.id)}">${escapeHtml(x.name)} (${escapeHtml(x.status||"active")})</option>`).join("");if(current&&projects.some(x=>x.id===current))select.value=current}
+function selectedTransactionProject(){const p=currentProfile();const id=$("transactionProjectId")?.value||"";return (p?.projects||[]).find(x=>x.id===id)||null}
+function syncProjectLinkedCategory(){const proj=selectedTransactionProject();if(!proj)return;const type=$("transactionType")?.value||"income";if(type==="expense"){if($("transactionExpenseCategory"))$("transactionExpenseCategory").value="Project Capital";syncExpenseCategoryFields();if($("transactionProjectImpact")&&$("transactionProjectImpact").value==="none")$("transactionProjectImpact").value="spending";}else{const impact=$("transactionProjectImpact")?.value||"none";if(impact==="none")$("transactionProjectImpact").value="funding";if(!$("transactionCategory")?.value.trim())$("transactionCategory").value="Project — "+proj.name;}if(!$("transactionDescription")?.value.trim())$("transactionDescription").value=(type==="expense"?"Spending for project: ":"Funding for project: ")+proj.name}
+function projectTransactionTotals(projectId){const p=currentProfile();const tx=(p?.transactions||[]).filter(x=>x.projectId===projectId&&x.status!=="planned");return{funding:tx.filter(x=>x.projectImpact==="funding").reduce((a,b)=>a+parseNum(b.mainAmount),0),spent:tx.filter(x=>x.projectImpact==="spending").reduce((a,b)=>a+parseNum(b.mainAmount),0)}}
+function handleTransactionTypeChange(){if($("transactionProjectId"))$("transactionProjectId").value="";if($("transactionProjectImpact"))$("transactionProjectImpact").value="none";const categoryInput=$("transactionCategory"),categorySelect=$("transactionCategorySelect");if(categoryInput)categoryInput.value="";if(categorySelect)categorySelect.value="";if($("transactionType")?.value!=="income"&&$("transactionReceivableId"))$("transactionReceivableId").value="";if($("transactionExpenseCategory"))$("transactionExpenseCategory").value="";if($("transactionExpenseItem"))$("transactionExpenseItem").value="";if($("transactionExpenseCustomItem"))$("transactionExpenseCustomItem").value="";if($("transactionDebtId"))$("transactionDebtId").value="";updateTransactionFields()}
+function syncCategoryInput(){const v=$("transactionCategorySelect")?.value||"";const categoryInput=$("transactionCategory");if(categoryInput)categoryInput.value=v==="Other"?"":v;if(v!=="AR Collection"&&$("transactionReceivableId"))$("transactionReceivableId").value="";updateTransactionFields()}
+function expenseItemValue(){const item=$("transactionExpenseItem")?.value||"";return item==="Other"?($("transactionExpenseCustomItem")?.value.trim()||""):item}
+function syncExpenseCategoryValue(){const group=$("transactionExpenseCategory")?.value||"";const item=expenseItemValue();if($("transactionCategory"))$("transactionCategory").value=group==="Project Capital"?"Project Capital":group==="AP Payment"?"AP Payment":group==="General"?item:""}
+function transactionCategoryValue(){if($("transactionType")?.value==="expense"){const group=$("transactionExpenseCategory")?.value||"";return group==="Project Capital"?"Project Capital":group==="AP Payment"?"AP Payment":group==="General"?expenseItemValue():""}if($("transactionType")?.value==="debt")return "Debt Payment";return $("transactionCategory")?.value.trim()||""}
+function transactionCategoryDisplay(x){if(x?.receivableId)return "AR Collection";if(x?.type==="expense"&&x.expenseCategory==="AP Payment")return `AP Payment${x.payableName?" — "+x.payableName:""}`;return x?.type==="expense"&&x.expenseCategory==="General"?`General — ${x.expenseItem||x.category||"Unspecified item"}`:x?.type==="expense"&&x.expenseCategory==="Project Capital"?"Project Capital":x?.category||""}
+function syncExpenseCategoryFields(){const group=$("transactionExpenseCategory")?.value||"",isExpense=$("transactionType")?.value==="expense",showItem=isExpense&&group==="General",showCustom=showItem&&$("transactionExpenseItem")?.value==="Other",isProjectCapital=isExpense&&group==="Project Capital";$("transactionExpenseItemWrap")?.classList.toggle("hidden",!showItem);$("transactionExpenseItem")?.toggleAttribute("required",showItem);$("transactionExpenseCustomItemWrap")?.classList.toggle("hidden",!showCustom);$("transactionExpenseCustomItem")?.toggleAttribute("required",showCustom);$("transactionProjectLinkFields")?.classList.toggle("hidden",isExpense&&!isProjectCapital);$("transactionProjectImpactFields")?.classList.toggle("hidden",isExpense&&!isProjectCapital);$("transactionProjectId")?.toggleAttribute("required",isProjectCapital);if(!showItem){if($("transactionExpenseItem"))$("transactionExpenseItem").value="";if($("transactionExpenseCustomItem"))$("transactionExpenseCustomItem").value=""}else if(!showCustom&&$("transactionExpenseCustomItem"))$("transactionExpenseCustomItem").value="";if(isProjectCapital&&$("transactionProjectImpact")?.value==="none")$("transactionProjectImpact").value="spending";if(isExpense&&group!=="AP Payment"&&$("transactionDebtId"))$("transactionDebtId").value="";syncExpenseCategoryValue()}
+function updateTransactionFields(){const type=$("transactionType")?.value||"income",status=$("transactionStatus")?.value||"paid",categoryInput=$("transactionCategory"),categorySelect=$("transactionCategorySelect"),isExpense=type==="expense",isDebt=type==="debt";const categories={income:["Salary","Stipend","AR Collection","Other"],expense:["Food","Transport","Rent / Housing","School / Study","Phone / Internet","Church / Giving","Health","Shopping","Entertainment","AP Payment","Other"],savings:["Savings","Other"],debt:["Debt","Other"],investment:["Investment","Other"]};const current=categoryInput?.value?.trim()||"",selected=categorySelect?.value||"",choices=categories[type]||["Other"];if(categorySelect){categorySelect.innerHTML='<option value="">Choose category</option>'+choices.map(x=>`<option value="${escapeHtml(x)}">${escapeHtml(x)}</option>`).join("");if(choices.includes(current))categorySelect.value=current;else if(choices.includes(selected))categorySelect.value=selected;}const chosen=categorySelect?.value||current,customCategory=categorySelect?.value==="Other"||(!categorySelect?.value&&!!current&&!choices.includes(current)),isAPPayment=isExpense&&$("transactionExpenseCategory")?.value==="AP Payment",isARCollection=type==="income"&&chosen==="AR Collection";if(categoryInput){categoryInput.required=!isExpense&&!isDebt&&customCategory;if(!customCategory&&categorySelect?.value)categoryInput.value=categorySelect.value;}$("standardCategoryFields")?.classList.toggle("hidden",isExpense||isDebt);const customWrap=$("transactionCustomCategoryWrap");if(customWrap)customWrap.hidden=!customCategory||isExpense||isDebt;$("expenseCategoryFields")?.classList.toggle("hidden",!isExpense);$("transactionDebtLinkFields")?.classList.toggle("hidden",!(isDebt||isAPPayment));$("transactionDebtId")?.toggleAttribute("required",isDebt||isAPPayment);$("transactionCategory")?.toggleAttribute("required",!isExpense&&!isDebt&&customCategory);$("transactionProjectLinkFields")?.classList.toggle("hidden",isDebt);$("transactionProjectImpactFields")?.classList.toggle("hidden",isDebt);if(isExpense)syncExpenseCategoryFields();else{$("transactionProjectId")?.toggleAttribute("required",false);const projectId=$("transactionProjectId")?.value||"";$("transactionProjectLinkFields")?.classList.toggle("hidden",isDebt);$("transactionProjectImpactFields")?.classList.toggle("hidden",isDebt||!projectId)}if($("transactionReceivableId")){const showReceivable=isARCollection&&status==="paid";$("transactionReceivableLinkFields")?.classList.toggle("hidden",!showReceivable);$("transactionReceivableId").toggleAttribute("required",showReceivable);if(!isARCollection)$("transactionReceivableId").value=""}document.querySelectorAll("[data-show-for]").forEach(el=>{const allowed=(el.dataset.showFor||"").split(",");el.hidden=!allowed.includes(type)});document.querySelectorAll("[data-show-when-paid]").forEach(el=>{el.hidden=status!=="paid"});const statusSelect=$("transactionStatus");if(statusSelect){const statusOptions={income:isARCollection?[["paid","Received / Collected"]]:[["paid","Paid / Received"],["planned","Planned"],["pending","Pending"],["receivable","Money Expected / Receivable"]],expense:isAPPayment?[["paid","Paid / Cleared"],["planned","Planned"]]:[["paid","Paid"],["planned","Planned"],["pending","Pending"],["payable","Bill Due / Payable"]],savings:[["paid","Completed"],["planned","Planned"],["pending","Pending"]],debt:[["paid","Paid"],["planned","Planned"],["pending","Pending"]],investment:[["paid","Invested"],["planned","Planned"],["pending","Pending"]]};const available=statusOptions[type]||statusOptions.income;let value=status;if(!available.some(x=>x[0]===value))value="paid";statusSelect.innerHTML=available.map(([v,label])=>`<option value="${v}">${label}</option>`).join("");statusSelect.value=value;}renderGoalDebtOptions();renderDebtPaymentInfo();const paidNow=$("transactionStatus").value==="paid";document.querySelectorAll("[data-show-when-paid]").forEach(el=>el.hidden=!paidNow);$("transactionReceivableLinkFields")?.classList.toggle("hidden",!(isARCollection&&paidNow));$("transactionReceivableId")?.toggleAttribute("required",isARCollection&&paidNow);if(!isExpense){$("transactionProjectLinkFields")?.classList.add("hidden");$("transactionProjectImpactFields")?.classList.add("hidden");}}
+
+function syncBudgetCategoryInput(){const v=$("budgetCategorySelect").value;if(v)$("budgetCategory").value=v}
+function setSelectIfOption(selectId,value){const el=$(selectId);if(!el)return;const found=Array.from(el.options).some(o=>o.value===value||o.text===value);el.value=found?value:""}
+function convert(amount,rate){return parseNum(amount)*parseNum(rate)}
+function totals(){const p=currentProfile();if(!p)return{};const tx=p.transactions;const sum=arr=>arr.reduce((a,b)=>a+parseNum(b.mainAmount),0);const month=thisMonth();const monthTx=tx.filter(x=>x.month===month);const income=sum(monthTx.filter(x=>x.type==="income"&&x.status!=="planned"));const expenses=sum(monthTx.filter(x=>x.type==="expense"&&x.expenseCategory!=="AP Payment"&&x.status!=="planned"))+transferFees(month);const savings=sum(monthTx.filter(x=>x.type==="savings"&&x.status!=="planned"));const debtPayments=sum(monthTx.filter(x=>(x.type==="debt"||(x.type==="expense"&&x.expenseCategory==="AP Payment"))&&x.status!=="planned"));const investments=sum(monthTx.filter(x=>x.type==="investment"&&x.status!=="planned"));const allIncome=sum(tx.filter(x=>x.type==="income"&&x.status!=="planned"));const allOut=sum(tx.filter(x=>["expense","savings","debt","investment"].includes(x.type)&&x.status!=="planned"));const cash=allIncome-allOut-transferFees();const debtOutstanding=p.debts.filter(d=>d.status!=="paid").reduce((a,b)=>a+parseNum(b.outstandingMain),0);const goalsSaved=p.goals.reduce((a,b)=>a+parseNum(b.savedMain),0);const monthlyNet=income-expenses-savings-debtPayments-investments;const savingRate=income?((savings+investments)/income*100):0;const avgDaily=expenses/30;const runway=avgDaily?cash/avgDaily:0;return{month,income,expenses,savings,debtPayments,investments,monthlyNet,savingRate,cash,debtOutstanding,goalsSaved,runway}}
+function renderAll(){const p=currentProfile();if(!p)return;renderProfileText();renderStatus();renderAccountOptions();renderProjectOptions();renderGoalDebtOptions();updateTransactionFields();renderMetrics();renderBudgetHealth();renderSpendingBars();renderReviewCenter();renderAccounts();renderTransfers();renderTables();renderTradeReceivables();renderAssetProjectSections();renderFinanceFixtures();renderMonthlyReviews();loadSettingsIntoForm(false)}
+function trackerUsername(){
+  const profile=AurumCloud.profile.get();
+  return (profile?.user_id===budgetUser.id && (profile.username||profile.display_name)) ||
+    budgetUser.user_metadata?.username || ('user_'+budgetUser.id.slice(0,8));
+}
+function renderProfileText(){$("activeProfileText").textContent=trackerUsername()+" | Personal Budget";}
+function renderStatus(){runLocalStorageCheck()}
+function renderMetrics(){const t=totals();const cards=[["This Month Income",money(t.income)],["This Month Expenses",money(t.expenses)],["Savings + Investments",money((t.savings||0)+(t.investments||0))],["Debt Payments",money(t.debtPayments)],["Month Net Balance",money(t.monthlyNet)],["Cash Estimate",money(t.cash)],["Saving Rate",pct(t.savingRate)],["Cash Runway",`${(t.runway||0).toFixed(1)} days`],["Outstanding Debts",money(t.debtOutstanding)]];$("metricsGrid").innerHTML=cards.map(c=>`<div class="metric-card"><p>${c[0]}</p><h3>${c[1]}</h3></div>`).join("")}
+function renderBudgetHealth(){const t=totals(),p=currentProfile();const incomeTarget=parseNum(p.monthlyIncomeTarget),savingTarget=parseNum(p.monthlySavingTarget),emergencyTarget=parseNum(p.emergencyFundTarget);let messages=[];messages.push(`<div class="alert ${t.monthlyNet>=0?'good':'danger'}"><strong>Monthly balance:</strong> ${money(t.monthlyNet)} ${t.monthlyNet>=0?'remaining this month.':'deficit this month. Reduce spending or increase income.'}</div>`);if(incomeTarget)messages.push(`<div class="alert ${t.income>=incomeTarget?'good':'warning'}"><strong>Income target:</strong> ${money(t.income)} of ${money(incomeTarget)}.</div>`);if(savingTarget)messages.push(`<div class="alert ${((t.savings||0)+(t.investments||0))>=savingTarget?'good':'warning'}"><strong>Saving target:</strong> ${money((t.savings||0)+(t.investments||0))} of ${money(savingTarget)}.</div>`);if(emergencyTarget)messages.push(`<div class="alert ${t.goalsSaved>=emergencyTarget?'good':'warning'}"><strong>Emergency fund target:</strong> ${money(t.goalsSaved)} of ${money(emergencyTarget)}.</div>`);if(!currentProfile().transactions.length)messages.push(`<div class="alert warning"><strong>Start empty:</strong> No transactions yet. Add your first income or expense from the Transactions tab.</div>`);$("budgetHealth").innerHTML=messages.join("")}
+function spendingByCategory(){const p=currentProfile();const m=new Map();p.transactions.filter(x=>x.month===thisMonth()&&x.type==="expense"&&x.expenseCategory!=="AP Payment"&&x.status!=="planned").forEach(x=>m.set(x.category,(m.get(x.category)||0)+parseNum(x.mainAmount)));const fees=transferFees(thisMonth());if(fees)m.set("Switching / Transfer Fees",(m.get("Switching / Transfer Fees")||0)+fees);return Array.from(m.entries()).sort((a,b)=>b[1]-a[1])}
+function renderSpendingBars(){const rows=spendingByCategory();const max=Math.max(...rows.map(r=>r[1]),1);$("spendingBars").innerHTML=rows.length?rows.map(([cat,amt])=>`<div class="bar-row"><strong>${escapeHtml(cat)}</strong><div class="bar-bg"><div class="bar-fill" style="width:${Math.min(100,amt/max*100)}%"></div></div><span>${money(amt)}</span></div>`).join(""):'<div class="alert warning">No spending recorded for this month yet.</div>'}
+function reviewIssues(){const p=currentProfile();let issues=[];const seen=new Map();p.transactions.forEach((x,i)=>{const key=[x.date,x.type,x.category,x.mainAmount,x.description].join("|").toLowerCase();if(seen.has(key))issues.push(["Warning","Possible duplicate",`Transaction ${i+1} looks similar to transaction ${seen.get(key)+1}.`,"Review and delete duplicate if needed."]);else seen.set(key,i);if(x.reviewStatus==="needs review"||x.reviewStatus==="flagged")issues.push([x.reviewStatus==="flagged"?"Error":"Warning","Transaction review",`Transaction ${i+1} is ${x.reviewStatus}.`,"Edit it or change review status to OK."]);if(!x.reference&&x.type==="expense")issues.push(["Info","Missing receipt/reference",`Expense ${i+1} has no reference.`,"Add receipt number or note if important."])});currentProfile().budgets.forEach(b=>{const actual=p.transactions.filter(t=>t.month===b.month&&t.category.toLowerCase()===b.category.toLowerCase()&&t.type==="expense"&&t.expenseCategory!=="AP Payment").reduce((a,x)=>a+parseNum(x.mainAmount),0);if(actual>parseNum(b.mainAmount))issues.push(["Warning","Budget exceeded",`${b.category} in ${b.month} is over budget by ${money(actual-b.mainAmount)}.`,"Reduce spending or increase the budget intentionally."])});currentProfile().debts.forEach(d=>{if(d.status!=="paid"&&d.dueDate&&d.dueDate<today())issues.push(["Warning","Debt due date passed",`${d.name} due date was ${d.dueDate}.`,"Update payment plan or mark as paid."])});return issues}
+function renderReviewCenter(){const issues=reviewIssues();$("reviewCenter").innerHTML=issues.length?`<div class="table-wrap"><table><thead><tr><th>Level</th><th>Area</th><th>Issue</th><th>Suggested Action</th></tr></thead><tbody>${issues.map(i=>`<tr><td><span class="pill ${i[0]==='Error'?'bad':i[0]==='Warning'?'warn':'zero'}">${i[0]}</span></td><td>${escapeHtml(i[1])}</td><td>${escapeHtml(i[2])}</td><td>${escapeHtml(i[3])}</td></tr>`).join("")}</tbody></table></div>`:'<div class="alert good">No major review issues found.</div>'}
+function recordSave(collection,item,idField){const p=currentProfile();const id=$(idField).value;if(id){const i=p[collection].findIndex(x=>x.id===id);if(i>=0)p[collection][i]=item}else{p[collection].push(item)}markLocalSave();setDefaultDates()}
+function removeRecord(collection,id){
+  const p=currentProfile();const old=(p[collection]||[]).find(x=>x.id===id);
+  if(!old)return;
+  if(collection==="debts"&&(p.transactions||[]).some(x=>x.type==="debt"&&x.debtId===id&&x.status==="paid"))return alert("This debt has linked payments. Keep it in the tracker so the payment history and balance remain correct.");
+  if(collection==="tradeReceivables"&&(p.transactions||[]).some(x=>x.receivableId===id&&x.status==="paid"))return alert("This receivable has linked collections. Keep it in the tracker so the collection history and balance remain correct.");
+  if(collection==="transactions"&&(p.transactions||[]).some(x=>x.payableId===id))return alert("This bill has linked payments. Delete its payment records first.");
+  if(old.month&&isMonthClosed(old.month)&&!confirm(`The month ${old.month} is closed. Delete this record anyway?`))return;
+  if(!confirm("Delete this local record? Export backup first if needed."))return;
+  if(collection==="transactions")applyTransactionLinkedUpdates(old,-1);
+  p[collection]=p[collection].filter(x=>x.id!==id);markLocalSave();
+}
+function handleTransactionProofFile(event){
+  const file=event.target.files&&event.target.files[0];
+  const box=$("transactionProofPreview");
+  currentTransactionProofMeta=null;transactionProofReading=false;
+  if(!file){if(box){box.className="alert warning";box.textContent="Optional proof: no picture/PDF selected. You can still save without proof.";}return;}
+  const maxBytes=1024*1024*1.5;
+  const baseMeta={fileName:file.name,mimeType:file.type||"unknown",size:file.size,storedAt:nowIso(),status:file.size<=maxBytes?"stored locally":"metadata only"};
+  if(file.size>maxBytes){currentTransactionProofMeta={...baseMeta,dataUrl:""};if(box){box.className="alert warning";box.innerHTML=`Proof selected: <strong>${escapeHtml(file.name)}</strong><br>File is larger than 1.5MB, so this local version saves metadata only. Keep the original file safely.`;}return;}
+  transactionProofReading=true; if(box){box.className="alert";box.textContent="Reading optional proof on this device…";}
+  const reader=new FileReader();
+  reader.onload=()=>{transactionProofReading=false;currentTransactionProofMeta={...baseMeta,dataUrl:reader.result};if(box){box.className="alert good";box.innerHTML=`Optional proof attached: <strong>${escapeHtml(file.name)}</strong><br>This proof will be stored locally inside the browser/JSON backup.`;}};
+  reader.onerror=()=>{transactionProofReading=false;currentTransactionProofMeta={...baseMeta,status:"metadata only",dataUrl:""};if(box){box.className="alert warning";box.textContent="Proof could not be previewed, but metadata will be saved.";}};
+  reader.readAsDataURL(file);
+}
+function clearTransactionProof(){currentTransactionProofMeta=null;transactionProofReading=false;if($("transactionProofFile"))$("transactionProofFile").value="";if($("transactionProofPreview")){ $("transactionProofPreview").className="alert warning"; $("transactionProofPreview").textContent="Optional proof: no picture/PDF selected. You can still save without proof."; }}
+function transactionProofHtml(x){const proof=x.proofMeta;if(!proof)return '<span class="pill zero">Optional / None</span>';const safeName=escapeHtml(proof.fileName||"Proof file");const status=escapeHtml(proof.status||"saved");const btn=proof.dataUrl?`<br><button type="button" class="secondary-btn" onclick="viewTransactionProof('${x.id}')">View Proof</button>`:"";return `<span class="pill ${proof.dataUrl?'good':'warn'}">${status}</span><br>${safeName}${btn}`;}
+function viewTransactionProof(id){
+  const tx=(currentProfile()?.transactions||[]).find(x=>x.id===id);
+  if(!tx?.proofMeta?.dataUrl){alert("The original proof was not stored in this browser. Only its file details are available.");return;}
+  try{
+    const raw=tx.proofMeta.dataUrl;
+    const parts=raw.split(",");
+    if(parts.length!==2||!parts[0].includes(";base64"))throw new Error("Unsupported attachment format");
+    const mime=(tx.proofMeta.mimeType||"application/octet-stream");
+    const binary=atob(parts[1]);
+    const bytes=Uint8Array.from(binary,c=>c.charCodeAt(0));
+    const url=URL.createObjectURL(new Blob([bytes],{type:mime}));
+    const win=window.open(url,"_blank");
+    if(!win){URL.revokeObjectURL(url);alert("Allow pop-ups to open your stored picture/PDF proof.");return;}
+    setTimeout(()=>URL.revokeObjectURL(url),60000);
+  }catch(e){alert("Could not open this proof: "+(e.message||e))}
+}
+function buildTransactionItemFromForm(){const amount=parseNum($("transactionAmount").value),rate=parseNum($("transactionRate").value),type=$("transactionType").value,status=$("transactionStatus").value,expenseCategory=type==="expense"?($("transactionExpenseCategory")?.value||""):"",expenseItem=type==="expense"&&expenseCategory==="General"?expenseItemValue():"",isAPPayment=type==="expense"&&expenseCategory==="AP Payment",projectId=type==="income"?($("transactionProjectId")?.value||""):type==="expense"&&expenseCategory==="Project Capital"?($("transactionProjectId")?.value||""):"",accountId=status==="paid"?($("transactionAccountId")?.value||""):"",target=type==="debt"||isAPPayment?selectedDebtTarget():null,receivableId=type==="income"&&status==="paid"&&$("transactionCategorySelect")?.value==="AR Collection"?($("transactionReceivableId")?.value||""):"",existing=(currentProfile()?.transactions||[]).find(r=>r.id===$("transactionId").value);return{id:$("transactionId").value||makeId(),date:$("transactionDate").value,month:$("transactionMonth").value,type,status,category:transactionCategoryValue(),expenseCategory,expenseItem,originalAmount:amount,currency:$("transactionCurrency").value,rateToMain:rate,mainAmount:convert(amount,rate),method:status==="paid"?$("transactionMethod").value.trim():"",reference:$("transactionReference").value.trim(),proofMeta:currentTransactionProofMeta||(existing?existing.proofMeta:null)||null,reviewStatus:$("transactionReview").value,projectId,projectName:projectId?(selectedTransactionProject()?.name||""):"",projectImpact:projectId?($("transactionProjectImpact")?.value||"none"):"none",accountId,accountName:accountId?selectedAccountName(accountId):"",goalId:$("transactionGoalId")?.value||"",goalName:selectedGoalName($("transactionGoalId")?.value||""),debtId:target?.kind==="debt"?target.id:"",debtName:target?.kind==="debt"?target.name:"",payableId:target?.kind==="ap"?target.id:"",payableName:target?.kind==="ap"?target.name:"",receivableId,receivableDebtor:receivableId?selectedReceivableDebtor(receivableId):"",description:$("transactionDescription").value.trim(),note:$("transactionNote").value.trim(),updatedAt:nowIso()}}
+function tradeReceivableOutstanding(r,excludeTransactionId=""){if(!r)return 0;const p=currentProfile();const linked=(p?.transactions||[]).filter(x=>x.id!==excludeTransactionId&&x.type==="income"&&x.status==="paid"&&x.receivableId===r.id).reduce((a,x)=>a+parseNum(x.mainAmount),0);return Math.max(0,parseNum(r.amountMain)-parseNum(r.receivedMain)-linked)}
+function selectedReceivableDebtor(id){const r=(currentProfile()?.tradeReceivables||[]).find(x=>x.id===id);return r?.debtor||""}
+function validateLinkedTransaction(item){const p=currentProfile();const payments=(p.transactions||[]).filter(x=>x.payableId===item.id);if(payments.length){if(item.type!=="expense"||!["payable","pending"].includes(item.status)||item.expenseCategory==="AP Payment")return "This bill has linked payments. Keep it as an unpaid bill; its remaining balance is calculated automatically.";const paid=payments.filter(x=>x.status==="paid").reduce((s,x)=>s+parseNum(x.mainAmount),0);if(item.mainAmount+0.005<paid)return "The bill amount cannot be less than its linked payments.";}if(item.type==="income"&&item.category==="AR Collection"&&!item.receivableId)return"Choose the open receivable you are collecting.";if(item.receivableId){if(item.type!=="income"||item.status!=="paid")return"A receivable can only be selected for money received now.";const receivable=(p?.tradeReceivables||[]).find(r=>r.id===item.receivableId);if(!receivable||["collected","written off"].includes(receivable.status))return"That receivable is closed. Choose an open debtor balance.";const available=tradeReceivableOutstanding(receivable,item.id);if(available<=0)return"That receivable has no outstanding balance.";if(item.mainAmount>available+0.005)return`Collection exceeds this debtor’s remaining AR of ${money(available)}.`}return""}
+function accountNameForCategory(type,category){const c=(category||"").trim();if(type==="income")return c?`Income — ${c}`:"Income";if(type==="expense")return c?`Expense — ${c}`:"Expenses";if(type==="savings")return c?`Savings Goal — ${c}`:"Savings";if(type==="debt")return c?`Debt / Loan — ${c}`:"Debt Payments";if(type==="investment")return c?`Investment — ${c}`:"Investments";return c||"Personal Account"}
+function transactionJournalEntries(x){const a=parseNum(x.mainAmount);const rows=[];const cashAccount=x.accountName?`Cash / Bank — ${x.accountName}`:(x.method?`Cash / Bank — ${x.method}`:"Cash / Bank / Unassigned");const mainAccount=accountNameForCategory(x.type,x.category);const projectLabel=x.projectName||"Selected Project";const isPlanned=x.status==="planned";if(isPlanned){rows.push({account:"Planned Budget Memo",debit:a,credit:0,why:"Planned transaction recorded for review only; it does not affect actual cash until paid/received."});rows.push({account:mainAccount,debit:0,credit:a,why:"Planning offset so the preview stays balanced."});return rows}
+if(x.projectId&&x.projectImpact==="funding"&&!x.receivableId){rows.push({account:`Project Funding Reserve — ${projectLabel}`,debit:a,credit:0,why:"This transaction increases funding available for the selected project."});rows.push({account:cashAccount,debit:0,credit:a,why:"Cash/bank decreases because money is allocated to the project."});return rows}
+if(x.projectId&&x.projectImpact==="spending"){rows.push({account:`Project Cost / Spending — ${projectLabel}`,debit:a,credit:0,why:"This transaction increases spending/cost recorded against the selected project."});rows.push({account:(x.status==="payable"||x.status==="pending")?"Accounts Payable / Bills Due":cashAccount,debit:0,credit:a,why:(x.status==="payable"||x.status==="pending")?"You still owe this project cost.":"Cash/bank decreases because this project cost was paid."});return rows}
+if(x.type==="income"){if(x.receivableId&&x.status==="paid"){rows.push({account:cashAccount,debit:a,credit:0,why:"Cash/bank increases because you collected an existing receivable."});rows.push({account:`Accounts Receivable — ${x.receivableDebtor||"Selected debtor"}`,debit:0,credit:a,why:"The debtor’s outstanding AR decreases by the amount collected."});}else if(x.status==="receivable"||x.status==="pending"){rows.push({account:"Accounts Receivable / Money Expected",debit:a,credit:0,why:"You expect to receive this money later."});rows.push({account:mainAccount,debit:0,credit:a,why:"Income is recognised as expected/earned."});}else{rows.push({account:cashAccount,debit:a,credit:0,why:"Cash/bank increases because money was received."});rows.push({account:mainAccount,debit:0,credit:a,why:"Income increases your personal surplus."});}}
+else if(x.type==="expense"){if(x.expenseCategory==="AP Payment"&&x.payableId){rows.push({account:`Accounts Payable — ${x.payableName||"Selected bill"}`,debit:a,credit:0,why:"Payment reduces the selected bill’s outstanding Accounts Payable balance."});rows.push({account:cashAccount,debit:0,credit:a,why:"Cash/bank decreases because the bill payment was made."});}else if(x.status==="payable"||x.status==="pending"){rows.push({account:mainAccount,debit:a,credit:0,why:"Expense/bill is recognised even though not yet paid."});rows.push({account:"Accounts Payable / Bills Due",debit:0,credit:a,why:"You still owe this amount."});}else{rows.push({account:mainAccount,debit:a,credit:0,why:"Expense increases spending for the month."});rows.push({account:cashAccount,debit:0,credit:a,why:"Cash/bank decreases because you paid."});}}
+else if(x.type==="savings"){rows.push({account:x.goalName?`Savings Goal — ${x.goalName}`:mainAccount,debit:a,credit:0,why:"Money is moved toward a savings goal or reserve."});rows.push({account:cashAccount,debit:0,credit:a,why:"Spendable cash decreases after the savings transfer."});}
+else if(x.type==="debt"){const liabilityAccount=x.payableId?`Accounts Payable — ${x.payableName||"Selected bill"}`:x.debtName?`Debt / Loan — ${x.debtName}`:mainAccount;rows.push({account:liabilityAccount,debit:a,credit:0,why:x.payableId?"Payment reduces the selected bill’s outstanding Accounts Payable balance.":"Payment reduces the selected registered debt balance."});rows.push({account:cashAccount,debit:0,credit:a,why:"Cash/bank decreases because the payment was made."});}
+else if(x.type==="investment"){rows.push({account:mainAccount,debit:a,credit:0,why:"Investment contribution increases long-term financial position."});rows.push({account:cashAccount,debit:0,credit:a,why:"Cash/bank decreases because money was invested."});}
+return rows}
+function journalHtml(x){const rows=x.journalEntries||transactionJournalEntries(x);return rows.map(r=>`${escapeHtml(r.account)}: Dr ${money(r.debit)} / Cr ${money(r.credit)}`).join("<br>")}
+function validateDebtPayment(item){const apPayment=item.type==="expense"&&item.expenseCategory==="AP Payment";if(item.type!=="debt"&&!apPayment)return true;const target=selectedDebtTarget();if(!target){alert(apPayment?"Choose an existing unpaid Accounts Payable bill before recording this payment.":"You cannot record a debt payment without selecting an existing registered debt or unpaid Accounts Payable bill.");return false}if(apPayment&&target.kind!=="ap"){alert("AP Payment must be linked to an unpaid Accounts Payable bill.");return false}if(target.outstanding<=0){alert("The selected debt has no outstanding balance to pay.");return false}if(item.mainAmount>target.outstanding+0.005){alert(`Payment exceeds the selected balance of ${money(target.outstanding)}.`);return false}return true}
+function previewTransactionBeforeSave(e){e.preventDefault();if(transactionProofReading){alert("The optional proof is still being read. Preview again when it is ready.");return;}const item=buildTransactionItemFromForm();if(!item.category||!item.description||!Number.isFinite(item.mainAmount)||item.mainAmount<=0||!Number.isFinite(item.rateToMain)||item.rateToMain<=0){alert("Please choose a category and any required item, complete the description, enter a positive amount, and use an exchange rate above zero before preview.");return}if(item.type==="expense"&&item.expenseCategory==="Project Capital"&&!item.projectId){alert("Choose the project this Project Capital expense belongs to.");return}if(!validateDebtPayment(item))return;const linkedValidation=validateLinkedTransaction(item);if(linkedValidation){alert(linkedValidation);return}item.journalEntries=transactionJournalEntries(item);pendingTransactionItem=item;const dr=item.journalEntries.reduce((a,b)=>a+parseNum(b.debit),0),cr=item.journalEntries.reduce((a,b)=>a+parseNum(b.credit),0);$("journalPreviewSummary").className="alert";$("journalPreviewSummary").innerHTML=`<strong>${escapeHtml(item.type.toUpperCase())}</strong> | ${escapeHtml(item.status)} | ${escapeHtml(transactionCategoryDisplay(item))} | ${money(item.mainAmount)}<br>${escapeHtml(item.description)}<br><strong>Proof:</strong> ${item.proofMeta?escapeHtml(item.proofMeta.fileName+" ("+(item.proofMeta.status||"attached")+")"):"No proof attached — optional"}`;$("journalPreviewTable").innerHTML=item.journalEntries.map(r=>`<tr><td>${escapeHtml(r.account)}</td><td>${money(r.debit)}</td><td>${money(r.credit)}</td><td>${escapeHtml(r.why)}</td></tr>`).join("");$("journalPreviewBalance").className="alert "+(Math.abs(dr-cr)<0.01?"good":"danger");$("journalPreviewBalance").innerHTML=`Debit total: <strong>${money(dr)}</strong> | Credit total: <strong>${money(cr)}</strong> | ${Math.abs(dr-cr)<0.01?"Balanced preview.":"Not balanced — go back and edit."}`;$("journalPreviewModal").classList.add("show")}
+function closeJournalPreview(){pendingTransactionItem=null;$("journalPreviewModal").classList.remove("show")}
+function confirmTransactionFromPreview(){
+ if(!pendingTransactionItem)return;
+ if(!validateDebtPayment(pendingTransactionItem))return;
+ const linkedValidation=validateLinkedTransaction(pendingTransactionItem);if(linkedValidation){alert(linkedValidation);return}
+ if(isMonthClosed(pendingTransactionItem.month)&&!confirm("This month is closed. Save this transaction anyway?"))return;
+ const p=currentProfile();const item={...pendingTransactionItem,linkEffectVersion:1};
+ const oldIndex=p.transactions.findIndex(x=>x.id===item.id);
+ if(oldIndex>=0)applyTransactionLinkedUpdates(p.transactions[oldIndex],-1);
+ if(oldIndex>=0)p.transactions[oldIndex]=item;else p.transactions.push(item);
+ applyTransactionLinkedUpdates(item,1);
+ markLocalSave();pendingTransactionItem=null;
+ $("journalPreviewModal").classList.remove("show");clearTransactionForm();
+ alert("Transaction saved on this device with a balanced journal-entry preview.");
+}
+function saveTransaction(e){previewTransactionBeforeSave(e)}
+function clearTransactionForm(){["transactionId","transactionCategory","transactionAmount","transactionMethod","transactionReference","transactionDescription","transactionNote"].forEach(id=>$(id).value="");$("transactionCategorySelect").value="";if($("transactionExpenseCategory"))$("transactionExpenseCategory").value="";if($("transactionExpenseItem"))$("transactionExpenseItem").value="";if($("transactionExpenseCustomItem"))$("transactionExpenseCustomItem").value="";if($("transactionType"))$("transactionType").value="income";if($("transactionStatus"))$("transactionStatus").value="paid";if($("transactionProjectId"))$("transactionProjectId").value="";if($("transactionProjectImpact"))$("transactionProjectImpact").value="none";if($("transactionAccountId"))$("transactionAccountId").value="";if($("transactionGoalId"))$("transactionGoalId").value="";if($("transactionDebtId"))$("transactionDebtId").value="";if($("transactionReceivableId"))$("transactionReceivableId").value="";$("transactionRate").value=1;$("transactionReview").value="ok";clearTransactionProof();setDefaultDates();updateTransactionFields()}
+function editTransaction(id){const x=currentProfile().transactions.find(r=>r.id===id);if(!x)return;$("transactionId").value=x.id;$("transactionType").value=x.type;$("transactionCategory").value=x.receivableId?"AR Collection":x.category;$("transactionExpenseCategory").value=x.expenseCategory||"";updateTransactionFields();Object.entries({transactionId:x.id,transactionDate:x.date,transactionMonth:x.month,transactionType:x.type,transactionStatus:x.status,transactionCategory:x.receivableId?"AR Collection":x.category,transactionAmount:x.originalAmount,transactionCurrency:x.currency,transactionRate:x.rateToMain,transactionMethod:x.method,transactionReference:x.reference,transactionReview:x.reviewStatus||"ok",transactionProjectId:x.projectId||"",transactionProjectImpact:x.projectImpact||"none",transactionAccountId:x.accountId||"",transactionDebtId:x.payableId?"ap:"+x.payableId:x.debtId?"debt:"+x.debtId:"",transactionReceivableId:x.receivableId||"",transactionDescription:x.description,transactionNote:x.note}).forEach(([k,v])=>$(k).value=v??"");if(x.type==="expense"){$("transactionExpenseCategory").value=x.expenseCategory||(x.category==="Project Capital"?"Project Capital":"General");const savedItem=x.expenseItem||(x.category==="Project Capital"?"":x.category||"");const itemOptions=Array.from($("transactionExpenseItem").options).map(o=>o.value);if(itemOptions.includes(savedItem)){$("transactionExpenseItem").value=savedItem;$("transactionExpenseCustomItem").value=""}else{$("transactionExpenseItem").value=savedItem?"Other":"";$("transactionExpenseCustomItem").value=savedItem}}currentTransactionProofMeta=x.proofMeta||null;if($("transactionProofPreview")){if(x.proofMeta){$("transactionProofPreview").className="alert good";$("transactionProofPreview").innerHTML=`Existing optional proof: <strong>${escapeHtml(x.proofMeta.fileName||"Proof file")}</strong>. Choose a new file only if you want to replace it.`}else clearTransactionProof()}updateTransactionFields();showTab("transactions")}
+function clearTradeReceivableForm(){["receivableId","receivableDebtor","receivableCategory","receivableAmount","receivableReceived","receivableDueDate","receivableReference","receivableDescription","receivableNote"].forEach(id=>$(id)&&($(id).value=""));if($("receivableRate"))$("receivableRate").value=1;if($("receivableReceived"))$("receivableReceived").value=0;if($("receivableStatus"))$("receivableStatus").value="open";setDefaultDates()}
+function editTradeReceivable(id){const x=(currentProfile().tradeReceivables||[]).find(r=>r.id===id);if(!x)return;Object.entries({receivableId:x.id,receivableDate:x.date,receivableMonth:x.month,receivableDebtor:x.debtor,receivableCategory:x.category,receivableAmount:x.amount,receivableReceived:x.received,receivableCurrency:x.currency,receivableRate:x.rateToMain,receivableDueDate:x.dueDate,receivableStatus:x.status,receivableReference:x.reference,receivableDescription:x.description,receivableNote:x.note}).forEach(([k,v])=>$(k).value=v??"");showTab("receivables")}
+function saveTradeReceivable(e){e.preventDefault();const rate=parseNum($("receivableRate").value);const amount=convert($("receivableAmount").value,rate);const received=convert($("receivableReceived").value,rate);const existingId=$("receivableId").value;const linkedReceived=(currentProfile()?.transactions||[]).filter(x=>x.receivableId===existingId&&x.status==="paid").reduce((a,x)=>a+parseNum(x.mainAmount),0);if(amount+0.005<received+linkedReceived){alert("Amount due cannot be reduced below the amount already received and linked collections.");return;}const item={id:$("receivableId").value||makeId(),date:$("receivableDate").value,month:$("receivableMonth").value,debtor:$("receivableDebtor").value.trim(),category:$("receivableCategory").value.trim(),amount:parseNum($("receivableAmount").value),received:parseNum($("receivableReceived").value),currency:$("receivableCurrency").value,rateToMain:rate,amountMain:amount,receivedMain:received,outstandingMain:Math.max(amount-received,0),dueDate:$("receivableDueDate").value,status:$("receivableStatus").value,reference:$("receivableReference").value.trim(),description:$("receivableDescription").value.trim(),note:$("receivableNote").value.trim(),updatedAt:nowIso()};recordSave("tradeReceivables",item,"receivableId");clearTradeReceivableForm()}
+function renderTradeReceivables(){const p=currentProfile();if(!p)return;const rows=(p.tradeReceivables||[]);const openRows=rows.filter(x=>!["collected","written off"].includes(x.status));const totalDue=rows.reduce((a,b)=>a+parseNum(b.amountMain),0);const received=rows.reduce((a,b)=>a+parseNum(b.receivedMain),0)+(p.transactions||[]).filter(x=>x.receivableId&&x.status==="paid").reduce((a,b)=>a+parseNum(b.mainAmount),0);const outstanding=openRows.reduce((a,b)=>a+tradeReceivableOutstanding(b),0);if($("receivablesSummary"))$("receivablesSummary").innerHTML=[["Total Receivables",money(totalDue)],["Received",money(received)],["Outstanding AR",money(outstanding)],["Open Receivables",openRows.length]].map(c=>`<div class="metric-card"><p>${escapeHtml(c[0])}</p><h3>${c[1]}</h3></div>`).join("");if($("receivablesTable"))$("receivablesTable").innerHTML=rows.map(x=>`<tr><td>${escapeHtml(x.date)}</td><td>${escapeHtml(x.month)}</td><td>${escapeHtml(x.debtor)}</td><td>${escapeHtml(x.category)}</td><td>${money(x.amountMain)}</td><td>${money(parseNum(x.receivedMain)+(p.transactions||[]).filter(t=>t.receivableId===x.id&&t.status==="paid").reduce((a,t)=>a+parseNum(t.mainAmount),0))}</td><td>${money(tradeReceivableOutstanding(x))}</td><td>${escapeHtml(x.dueDate)}</td><td><span class="pill ${x.status==='collected'?'good':x.status==='written off'?'bad':x.status==='partial'?'warn':'zero'}">${escapeHtml(x.status)}</span></td><td>${escapeHtml(x.reference)}</td><td>${escapeHtml(x.description)}</td><td>${escapeHtml(x.note)}</td><td><button onclick="editTradeReceivable('${x.id}')">Edit</button> <button class="danger-btn" onclick="removeRecord('tradeReceivables','${x.id}')">Delete</button></td></tr>`).join("")||'<tr><td colspan="13">No trade receivables registered yet.</td></tr>'}
+function saveBudget(e){e.preventDefault();const item={id:$("budgetId").value||makeId(),month:$("budgetMonth").value,category:$("budgetCategory").value.trim(),originalAmount:parseNum($("budgetAmount").value),currency:$("budgetCurrency").value,rateToMain:parseNum($("budgetRate").value),mainAmount:convert($("budgetAmount").value,$("budgetRate").value),updatedAt:nowIso()};recordSave("budgets",item,"budgetId");clearBudgetForm()}function clearBudgetForm(){$("budgetId").value="";$("budgetCategorySelect").value="";$("budgetCategory").value="";$("budgetAmount").value="";$("budgetRate").value=1;setDefaultDates()}function editBudget(id){const x=currentProfile().budgets.find(r=>r.id===id);Object.entries({budgetId:x.id,budgetMonth:x.month,budgetCategory:x.category,budgetAmount:x.originalAmount,budgetCurrency:x.currency,budgetRate:x.rateToMain}).forEach(([k,v])=>$(k).value=v??"");setSelectIfOption("budgetCategorySelect",x.category);showTab("budgets")}
+function saveGoal(e){e.preventDefault();const target=convert($("goalTarget").value,$("goalRate").value),saved=convert($("goalSaved").value,$("goalRate").value);const item={id:$("goalId").value||makeId(),name:$("goalName").value.trim(),target:parseNum($("goalTarget").value),saved:parseNum($("goalSaved").value),currency:$("goalCurrency").value,rateToMain:parseNum($("goalRate").value),targetMain:target,savedMain:saved,deadline:$("goalDeadline").value,note:$("goalNote").value.trim(),updatedAt:nowIso()};recordSave("goals",item,"goalId");clearGoalForm()}function clearGoalForm(){["goalId","goalName","goalTarget","goalSaved","goalDeadline","goalNote"].forEach(id=>$(id).value="");$("goalRate").value=1}function editGoal(id){const x=currentProfile().goals.find(r=>r.id===id);Object.entries({goalId:x.id,goalName:x.name,goalTarget:x.target,goalSaved:x.saved,goalCurrency:x.currency,goalRate:x.rateToMain,goalDeadline:x.deadline,goalNote:x.note}).forEach(([k,v])=>$(k).value=v??"");showTab("goals")}
+function saveDebt(e){e.preventDefault();const item={id:$("debtId").value||makeId(),name:$("debtName").value.trim(),lender:$("debtLender").value.trim(),original:parseNum($("debtOriginal").value),outstanding:parseNum($("debtOutstanding").value),monthlyPayment:parseNum($("debtMonthlyPayment").value),currency:$("debtCurrency").value,rateToMain:parseNum($("debtRate").value),originalMain:convert($("debtOriginal").value,$("debtRate").value),outstandingMain:convert($("debtOutstanding").value,$("debtRate").value),monthlyPaymentMain:convert($("debtMonthlyPayment").value,$("debtRate").value),dueDate:$("debtDueDate").value,status:$("debtStatus").value,note:$("debtNote").value.trim(),updatedAt:nowIso()};recordSave("debts",item,"debtId");clearDebtForm()}function clearDebtForm(){["debtId","debtName","debtLender","debtOriginal","debtOutstanding","debtMonthlyPayment","debtDueDate","debtNote"].forEach(id=>$(id).value="");$("debtRate").value=1}function editDebt(id){const x=currentProfile().debts.find(r=>r.id===id);Object.entries({debtId:x.id,debtName:x.name,debtLender:x.lender,debtOriginal:x.original,debtOutstanding:x.outstanding,debtMonthlyPayment:x.monthlyPayment,debtCurrency:x.currency,debtRate:x.rateToMain,debtDueDate:x.dueDate,debtStatus:x.status,debtNote:x.note}).forEach(([k,v])=>$(k).value=v??"");showTab("debts")}
+function renderTables(){const p=currentProfile();if(!p)return;const q=($("txSearch")?.value||"").toLowerCase(),mf=$("txMonthFilter")?.value||"",tf=$("txTypeFilter")?.value||"",rf=$("txReviewFilter")?.value||"";let tx=[...p.transactions].sort((a,b)=>(a.date||"").localeCompare(b.date||""));tx=tx.filter(x=>(!q||[x.description,x.category,x.expenseItem,x.expenseCategory,x.reference,x.note,x.projectName,x.proofMeta&&x.proofMeta.fileName].join(" ").toLowerCase().includes(q))&&(!mf||x.month===mf)&&(!tf||x.type===tf||(tf==="apPayment"&&x.expenseCategory==="AP Payment"))&&(!rf||(x.reviewStatus||"")===rf));$("transactionsTable").innerHTML=tx.map(x=>`<tr><td>${escapeHtml(x.date)}</td><td>${escapeHtml(x.month)}</td><td>${escapeHtml(x.type)}</td><td>${escapeHtml(x.status)}</td><td>${escapeHtml(transactionCategoryDisplay(x))}${x.debtName?`<br><span class="small">Debt paid: ${escapeHtml(x.debtName)}</span>`:""}${x.payableName?`<br><span class="small">Bill paid: ${escapeHtml(x.payableName)}</span>`:""}${x.receivableDebtor?`<br><span class="small">Collected from: ${escapeHtml(x.receivableDebtor)}</span>`:""}</td><td>${Number(x.originalAmount).toLocaleString()}</td><td>${escapeHtml(x.currency)}</td><td>${x.rateToMain}</td><td>${money(x.mainAmount)}</td><td>${escapeHtml(x.method)}</td><td>${escapeHtml(x.reference)}</td><td>${transactionProofHtml(x)}</td><td><span class="pill ${(x.reviewStatus==='ok')?'good':x.reviewStatus==='flagged'?'bad':'warn'}">${escapeHtml(x.reviewStatus||'ok')}</span></td><td>${x.projectId?`<span class="pill good">${escapeHtml(x.projectName||"Project")}</span><br>${escapeHtml(x.projectImpact||"")}`:"—"}</td><td>${escapeHtml(x.description)}</td><td>${journalHtml(x)}</td><td>${escapeHtml(x.note)}</td><td><button onclick="editTransaction('${x.id}')">Edit</button> <button class="danger-btn" onclick="removeRecord('transactions','${x.id}')">Delete</button></td></tr>`).join("")||'<tr><td colspan="18">No transactions recorded.</td></tr>';
+$("budgetsTable").innerHTML=p.budgets.map(x=>{const actual=p.transactions.filter(t=>t.month===x.month&&t.category.toLowerCase()===x.category.toLowerCase()&&t.type==="expense"&&t.expenseCategory!=="AP Payment").reduce((a,b)=>a+parseNum(b.mainAmount),0);const usage=x.mainAmount?actual/x.mainAmount*100:0;return `<tr><td>${escapeHtml(x.month)}</td><td>${escapeHtml(x.category)}</td><td>${money(x.mainAmount)}</td><td>${money(actual)}</td><td>${money(x.mainAmount-actual)}</td><td><span class="pill ${usage<=80?'good':usage<=100?'warn':'bad'}">${pct(usage)}</span></td><td><button onclick="editBudget('${x.id}')">Edit</button> <button class="danger-btn" onclick="removeRecord('budgets','${x.id}')">Delete</button></td></tr>`}).join("")||'<tr><td colspan="7">No budgets recorded.</td></tr>';
+$("debtsTable").innerHTML=p.debts.map(x=>`<tr><td>${escapeHtml(x.name)}</td><td>${escapeHtml(x.lender)}</td><td>${money(x.originalMain)}</td><td>${money(x.outstandingMain)}</td><td>${money(x.monthlyPaymentMain)}</td><td>${escapeHtml(x.dueDate)}</td><td><span class="pill ${x.status==='paid'?'good':x.status==='paused'?'warn':'zero'}">${escapeHtml(x.status)}</span></td><td>${escapeHtml(x.note)}</td><td><button onclick="editDebt('${x.id}')">Edit</button> <button class="danger-btn" onclick="removeRecord('debts','${x.id}')">Delete</button></td></tr>`).join("")||'<tr><td colspan="9">No debts recorded.</td></tr>'}
+function renderGoals(){const p=currentProfile();$("goalsList").innerHTML=p.goals.length?p.goals.map(g=>{const progress=g.targetMain?Math.min(100,g.savedMain/g.targetMain*100):0;return `<div class="metric-card"><p>${escapeHtml(g.name)}</p><h3>${pct(progress)}</h3><div class="progress"><span style="width:${progress}%"></span></div><p class="small">Saved ${money(g.savedMain)} of ${money(g.targetMain)}</p></div>`}).join(""):"";$("goalsTable").innerHTML=p.goals.map(x=>{const progress=x.targetMain?Math.min(100,x.savedMain/x.targetMain*100):0;return `<tr><td>${escapeHtml(x.name)}</td><td>${money(x.targetMain)}</td><td>${money(x.savedMain)}</td><td>${money(Math.max(x.targetMain-x.savedMain,0))}</td><td>${pct(progress)}</td><td>${escapeHtml(x.deadline)}</td><td>${escapeHtml(x.note)}</td><td><button onclick="editGoal('${x.id}')">Edit</button> <button class="danger-btn" onclick="removeRecord('goals','${x.id}')">Delete</button></td></tr>`}).join("")||'<tr><td colspan="8">No savings goals recorded.</td></tr>'}
+
+function arapRows(){const p=currentProfile();if(!p)return[];const rows=[];(p.transactions||[]).forEach(x=>{if(x.status==="receivable"||(x.type==="income"&&x.status==="pending")){rows.push({...x,arapType:"AR - Money Expected",sourceType:"transaction"})}if(x.status==="payable"||(x.type==="expense"&&x.status==="pending")){const remaining=payableOutstanding(x.id);if(remaining>0)rows.push({...x,mainAmount:remaining,originalBillAmount:x.mainAmount,amountPaid:Math.max(0,parseNum(x.mainAmount)-remaining),arapType:"AP - Bill Due",sourceType:"transaction"})}});(p.tradeReceivables||[]).filter(x=>!["collected","written off"].includes(x.status)&&tradeReceivableOutstanding(x)>0).forEach(x=>rows.push({id:x.id,date:x.date,month:x.month,arapType:"AR - Trade Receivable",category:x.category,mainAmount:tradeReceivableOutstanding(x),reference:x.reference,description:`${x.debtor}: ${x.description}`,sourceType:"tradeReceivable"}));(p.debts||[]).filter(x=>x.status!=="paid"&&parseNum(x.outstandingMain)>0).forEach(x=>rows.push({id:x.id,date:x.dueDate||"",month:"",arapType:"AP - Personal Debt",category:"Debt / Loan",mainAmount:x.outstandingMain,reference:"",description:`${x.lender||"Lender"}: ${x.name}`,sourceType:"debt"}));return rows.sort((a,b)=>(a.date||"").localeCompare(b.date||""))}
+function financeSummary(){const p=currentProfile();const t=totals();const nw=p?.netWorthItems||[];const registeredAssets=(p?.assets||[]).filter(x=>x.status==="active").reduce((a,b)=>a+parseNum(b.currentMain),0);const netWorthManualAssets=nw.filter(x=>x.type==="asset").reduce((a,b)=>a+parseNum(b.mainValue),0);const netAssets=registeredAssets+netWorthManualAssets;const netLiabilities=nw.filter(x=>x.type==="liability").reduce((a,b)=>a+parseNum(b.mainValue),0);const debts=(p?.debts||[]).filter(d=>d.status!=="paid").reduce((a,b)=>a+parseNum(b.outstandingMain),0);const ar=arapRows().filter(x=>x.arapType.startsWith("AR")).reduce((a,b)=>a+parseNum(b.mainAmount),0);const ap=arapRows().filter(x=>x.arapType.startsWith("AP")).reduce((a,b)=>a+parseNum(b.mainAmount),0);const activeProjects=(p?.projects||[]).filter(x=>!["completed","cancelled"].includes(x.status));const projectBudget=activeProjects.reduce((a,b)=>a+parseNum(b.budgetMain),0);const projectFunding=activeProjects.reduce((a,b)=>a+parseNum(b.fundingMain)+projectTransactionTotals(b.id).funding,0);const projectSpent=activeProjects.reduce((a,b)=>a+parseNum(b.spentMain)+projectTransactionTotals(b.id).spent,0);const totalAssets=t.cash+netAssets+ar+(t.goalsSaved||0);const totalLiabilities=netLiabilities+debts+ap;const netWorth=totalAssets-totalLiabilities;return{...t,registeredAssets,netWorthManualAssets,netAssets,netLiabilities,debts,ar,ap,projectBudget,projectFunding,projectSpent,totalAssets,totalLiabilities,netWorth}}
+function monthlyCashFlowRows(){const p=currentProfile();if(!p)return[];const months=[...new Set([...(p.transactions||[]).map(x=>x.month),...(p.tradeReceivables||[]).map(x=>x.month),...(p.transfers||[]).map(x=>x.month)].filter(Boolean))].sort();return months.map(m=>{const tx=p.transactions.filter(x=>x.month===m);const rec=(p.tradeReceivables||[]).filter(x=>x.month===m);const sum=arr=>arr.reduce((a,b)=>a+parseNum(b.mainAmount),0);const cashIn=sum(tx.filter(x=>x.type==="income"&&x.status==="paid"))+rec.reduce((a,b)=>a+parseNum(b.receivedMain),0);const expenses=sum(tx.filter(x=>x.type==="expense"&&x.status==="paid"))+transferFees(m);const savings=sum(tx.filter(x=>x.type==="savings"&&x.status==="paid"));const investments=sum(tx.filter(x=>x.type==="investment"&&x.status==="paid"));const debt=sum(tx.filter(x=>x.type==="debt"&&x.status==="paid"));const expected=sum(tx.filter(x=>x.status!=="paid"))+rec.filter(x=>!["collected","written off"].includes(x.status)).reduce((a,b)=>a+parseNum(b.outstandingMain),0);return{month:m,transfers:(p.transfers||[]).filter(t=>t.month===m).reduce((a,t)=>a+parseNum(t.mainAmount),0),cashIn,expenses,savings,investments,dedebt:debt,debt,net:cashIn-expenses-savings-investments-debt,expected}})}
+function renderFinanceFixtures(){renderStatementsFixture();renderCashFlowFixture();renderNetWorthFixture()}
+function renderStatementsFixture(){const f=financeSummary();if($("statementsBox"))$("statementsBox").innerHTML=[["Personal Net Worth",money(f.netWorth)],["Total Personal Assets",money(f.totalAssets)],["Total Personal Liabilities",money(f.totalLiabilities)],["Money Expected (AR)",money(f.ar)],["Bills Due (AP)",money(f.ap)],["Current Cash Estimate",money(f.cash)]].map(c=>`<div class="metric-card"><p>${c[0]}</p><h3>${c[1]}</h3></div>`).join("");if($("incomeStatementTable"))$("incomeStatementTable").innerHTML=`<tr><td>Income this month</td><td>${money(f.income)}</td><td>Money received or earned this month.</td></tr><tr><td>Expenses this month</td><td>${money(f.expenses)}</td><td>Personal spending recorded this month.</td></tr><tr><td>Savings and investments</td><td>${money((f.savings||0)+(f.investments||0))}</td><td>Money moved toward future goals.</td></tr><tr><td>Debt and AP payments</td><td>${money(f.debtPayments)}</td><td>Debt repayments and AP bill payments recorded as cash outflows.</td></tr><tr><td>Monthly surplus / deficit</td><td>${money(f.monthlyNet)}</td><td>Income minus expenses, savings, investments, and debt payments.</td></tr>`;if($("positionStatementTable"))$("positionStatementTable").innerHTML=`<tr><td>Cash estimate</td><td>${money(f.cash)}</td><td>All-time cash inflows minus outflows.</td></tr><tr><td>Saved toward goals</td><td>${money(f.goalsSaved)}</td><td>Total amounts saved in your goals.</td></tr><tr><td>Assets registered</td><td>${money(f.registeredAssets)}</td><td>Assets entered in the Assets page.</td></tr><tr><td>Other net-worth assets</td><td>${money(f.netWorthManualAssets)}</td><td>Extra assets manually entered in Net Worth.</td></tr><tr><td>Active project funding</td><td>${money(f.projectFunding)}</td><td>Funding currently allocated to active personal projects.</td></tr><tr><td>Money expected / AR</td><td>${money(f.ar)}</td><td>Money expected but not yet received.</td></tr><tr><td>Money expected / AR</td><td>${money(f.ar)}</td><td>Money expected but not yet received.</td></tr><tr><td>Debts outstanding</td><td>${money(f.debts)}</td><td>Outstanding debts from the Debts page.</td></tr><tr><td>Bills due / AP</td><td>${money(f.ap)}</td><td>Remaining balance on unpaid bills after linked payments.</td></tr><tr><td>Other liabilities</td><td>${money(f.netLiabilities)}</td><td>Liabilities manually entered in Net Worth.</td></tr><tr><td>Bills due / AP</td><td>${money(f.ap)}</td><td>Personal bills or obligations not yet paid.</td></tr><tr><td><strong>Net worth</strong></td><td><strong>${money(f.netWorth)}</strong></td><td>Assets minus liabilities.</td></tr>`}
+function renderCashFlowFixture(){const rows=monthlyCashFlowRows();const f=financeSummary();if($("cashFlowSummary"))$("cashFlowSummary").innerHTML=[["Cash In This Month",money(f.income)],["Cash Out This Month",money((f.expenses||0)+(f.savings||0)+(f.investments||0)+(f.debtPayments||0))],["Net Cash Movement",money(f.monthlyNet)],["Cash Runway",`${(f.runway||0).toFixed(1)} days`]].map(c=>`<div class="metric-card"><p>${c[0]}</p><h3>${c[1]}</h3></div>`).join("");if($("cashFlowTable"))$("cashFlowTable").innerHTML=rows.map(r=>`<tr><td>${escapeHtml(r.month)}</td><td>${money(r.cashIn)}</td><td>${money(r.expenses)}</td><td>${money(r.savings)}</td><td>${money(r.investments)}</td><td>${money(r.debt)}</td><td>${money(r.net)}</td><td>${money(r.expected)}</td></tr>`).join("")||'<tr><td colspan="8">No cash flow data yet.</td></tr>'}
+function renderArapFixture(){const rows=arapRows();const ar=rows.filter(x=>x.arapType.startsWith("AR")).reduce((a,b)=>a+parseNum(b.mainAmount),0),ap=rows.filter(x=>x.arapType.startsWith("AP")).reduce((a,b)=>a+parseNum(b.mainAmount),0);if($("arapSummary"))$("arapSummary").innerHTML=[["Money Expected / AR",money(ar)],["Bills Due / AP",money(ap)],["Net Expected Position",money(ar-ap)]].map(c=>`<div class="metric-card"><p>${c[0]}</p><h3>${c[1]}</h3></div>`).join("");if($("arapTable"))$("arapTable").innerHTML=rows.map(x=>{const action=x.sourceType==="tradeReceivable"?`<button onclick="editTradeReceivable('${x.id}')">Open Receivable</button>`:x.sourceType==="debt"?`<button onclick="editDebt('${x.id}')">Open Debt</button>`:`<button onclick="editTransaction('${x.id}')">Open Transaction</button>`;return `<tr><td>${escapeHtml(x.date)}</td><td>${escapeHtml(x.month)}</td><td><span class="pill ${x.arapType.startsWith('AR')?'good':'warn'}">${escapeHtml(x.arapType)}</span></td><td>${escapeHtml(x.category)}</td><td>${money(x.mainAmount)}${x.arapType.startsWith("AP")&&x.amountPaid?`<br><span class="small">Paid: ${money(x.amountPaid)}</span>`:""}</td><td>${escapeHtml(x.reference)}</td><td>${escapeHtml(x.description)}</td><td>${action}</td></tr>`}).join("")||'<tr><td colspan="8">No receivables or payables yet. Add Trade Receivables or mark a transaction as Money Expected / Receivable or Bill Due / Payable.</td></tr>'}
+function saveAsset(e){e.preventDefault();const current=convert($("assetCurrentValue").value,$("assetRate").value);const cost=convert($("assetCost").value,$("assetRate").value);const item={id:$("assetId").value||makeId(),date:$("assetDate").value,name:$("assetName").value.trim(),category:$("assetCategory").value.trim(),cost:parseNum($("assetCost").value),currentValue:parseNum($("assetCurrentValue").value),currency:$("assetCurrency").value,rateToMain:parseNum($("assetRate").value),costMain:cost,currentMain:current,status:$("assetStatus").value,note:$("assetNote").value.trim(),updatedAt:nowIso()};recordSave("assets",item,"assetId");clearAssetForm()}
+function clearAssetForm(){["assetId","assetName","assetCategory","assetCost","assetCurrentValue","assetNote"].forEach(id=>$(id)&&($(id).value=""));if($("assetRate"))$("assetRate").value=1;if($("assetStatus"))$("assetStatus").value="active";setDefaultDates()}
+function editAsset(id){const x=(currentProfile().assets||[]).find(r=>r.id===id);if(!x)return;Object.entries({assetId:x.id,assetDate:x.date,assetName:x.name,assetCategory:x.category,assetCost:x.cost,assetCurrentValue:x.currentValue,assetCurrency:x.currency,assetRate:x.rateToMain,assetStatus:x.status,assetNote:x.note}).forEach(([k,v])=>$(k).value=v??"");showTab("assets")}
+function saveProject(e){e.preventDefault();const rate=parseNum($("projectRate").value);const budget=convert($("projectBudget").value,rate),funding=convert($("projectFunding").value,rate),spent=convert($("projectSpent").value,rate);const item={id:$("projectId").value||makeId(),date:$("projectDate").value,month:$("projectMonth").value,name:$("projectName").value.trim(),category:$("projectCategory").value.trim(),budget:parseNum($("projectBudget").value),funding:parseNum($("projectFunding").value),spent:parseNum($("projectSpent").value),currency:$("projectCurrency").value,rateToMain:rate,budgetMain:budget,fundingMain:funding,spentMain:spent,gapMain:Math.max(budget-funding,0),remainingToSpendMain:Math.max(budget-spent,0),deadline:$("projectDeadline").value,status:$("projectStatus").value,note:$("projectNote").value.trim(),updatedAt:nowIso()};recordSave("projects",item,"projectId");clearProjectForm()}
+function clearProjectForm(){["projectId","projectName","projectCategory","projectBudget","projectFunding","projectSpent","projectDeadline","projectNote"].forEach(id=>$(id)&&($(id).value=""));if($("projectRate"))$("projectRate").value=1;if($("projectStatus"))$("projectStatus").value="planning";setDefaultDates()}
+function editProject(id){const x=(currentProfile().projects||[]).find(r=>r.id===id);if(!x)return;Object.entries({projectId:x.id,projectDate:x.date,projectMonth:x.month,projectName:x.name,projectCategory:x.category,projectBudget:x.budget,projectFunding:x.funding,projectSpent:x.spent,projectCurrency:x.currency,projectRate:x.rateToMain,projectDeadline:x.deadline,projectStatus:x.status,projectNote:x.note}).forEach(([k,v])=>$(k).value=v??"");showTab("projects")}
+function renderAssetProjectSections(){const p=currentProfile();if(!p)return;const activeAssets=(p.assets||[]).filter(x=>x.status==="active");const assetCost=activeAssets.reduce((a,b)=>a+parseNum(b.costMain),0);const assetValue=activeAssets.reduce((a,b)=>a+parseNum(b.currentMain),0);if($("assetsSummary"))$("assetsSummary").innerHTML=[["Active Assets",activeAssets.length],["Asset Cost",money(assetCost)],["Current Asset Value",money(assetValue)],["Gain / Loss",money(assetValue-assetCost)]].map(c=>`<div class="metric-card"><p>${escapeHtml(c[0])}</p><h3>${c[1]}</h3></div>`).join("");if($("assetsTable"))$("assetsTable").innerHTML=(p.assets||[]).map(x=>`<tr><td>${escapeHtml(x.date)}</td><td>${escapeHtml(x.name)}</td><td>${escapeHtml(x.category)}</td><td>${money(x.costMain)}</td><td>${money(x.currentMain)}</td><td><span class="pill ${x.status==='active'?'good':'warn'}">${escapeHtml(x.status)}</span></td><td>${escapeHtml(x.note)}</td><td><button onclick="editAsset('${x.id}')">Edit</button> <button class="danger-btn" onclick="removeRecord('assets','${x.id}')">Delete</button></td></tr>`).join("")||'<tr><td colspan="8">No assets registered yet.</td></tr>';const activeProjects=(p.projects||[]).filter(x=>!["completed","cancelled"].includes(x.status));const projectBudget=activeProjects.reduce((a,b)=>a+parseNum(b.budgetMain),0);const projectFunding=activeProjects.reduce((a,b)=>a+parseNum(b.fundingMain)+projectTransactionTotals(b.id).funding,0);const projectSpent=activeProjects.reduce((a,b)=>a+parseNum(b.spentMain)+projectTransactionTotals(b.id).spent,0);if($("projectsSummary"))$("projectsSummary").innerHTML=[["Active Projects",activeProjects.length],["Total Project Budget",money(projectBudget)],["Funding Available",money(projectFunding)],["Spent So Far",money(projectSpent)],["Funding Gap",money(Math.max(projectBudget-projectFunding,0))]].map(c=>`<div class="metric-card"><p>${escapeHtml(c[0])}</p><h3>${c[1]}</h3></div>`).join("");if($("projectsTable"))$("projectsTable").innerHTML=(p.projects||[]).map(x=>{const txp=projectTransactionTotals(x.id);const totalFunding=parseNum(x.fundingMain)+txp.funding;const totalSpent=parseNum(x.spentMain)+txp.spent;const progress=x.budgetMain?Math.min(totalSpent/parseNum(x.budgetMain)*100,100):0;return `<tr><td>${escapeHtml(x.month)}</td><td>${escapeHtml(x.name)}</td><td>${escapeHtml(x.category)}</td><td>${money(x.budgetMain)}</td><td>${money(x.fundingMain)}</td><td>${money(txp.funding)}</td><td>${money(totalFunding)}</td><td>${money(x.spentMain)}</td><td>${money(txp.spent)}</td><td>${money(totalSpent)}</td><td>${money(Math.max(parseNum(x.budgetMain)-totalFunding,0))}</td><td>${pct(progress)}</td><td>${escapeHtml(x.deadline)}</td><td><span class="pill ${x.status==='completed'?'good':x.status==='cancelled'?'bad':'warn'}">${escapeHtml(x.status)}</span></td><td>${escapeHtml(x.note)}</td><td><button onclick="editProject('${x.id}')">Edit</button> <button class="danger-btn" onclick="removeRecord('projects','${x.id}')">Delete</button></td></tr>`}).join("")||'<tr><td colspan="16">No projects registered yet.</td></tr>'}
+function saveNetWorthItem(e){e.preventDefault();const val=convert($("netWorthValue").value,$("netWorthRate").value);const item={id:$("netWorthId").value||makeId(),date:$("netWorthDate").value,type:$("netWorthType").value,name:$("netWorthName").value.trim(),category:$("netWorthCategory").value.trim(),value:parseNum($("netWorthValue").value),currency:$("netWorthCurrency").value,rateToMain:parseNum($("netWorthRate").value),mainValue:val,note:$("netWorthNote").value.trim(),updatedAt:nowIso()};recordSave("netWorthItems",item,"netWorthId");clearNetWorthForm()}
+function clearNetWorthForm(){["netWorthId","netWorthName","netWorthCategory","netWorthValue","netWorthNote"].forEach(id=>$(id)&&($(id).value=""));if($("netWorthRate"))$("netWorthRate").value=1;setDefaultDates()}
+function editNetWorthItem(id){const x=currentProfile().netWorthItems.find(r=>r.id===id);if(!x)return;Object.entries({netWorthId:x.id,netWorthDate:x.date,netWorthType:x.type,netWorthName:x.name,netWorthCategory:x.category,netWorthValue:x.value,netWorthCurrency:x.currency,netWorthRate:x.rateToMain,netWorthNote:x.note}).forEach(([k,v])=>$(k).value=v??"");showTab("statements")}
+function renderNetWorthFixture(){const p=currentProfile();if(!p)return;const f=financeSummary();if($("netWorthSummary"))$("netWorthSummary").innerHTML=[["Assets",money(f.totalAssets)],["Liabilities",money(f.totalLiabilities)],["Net Worth",money(f.netWorth)]].map(c=>`<div class="metric-card"><p>${c[0]}</p><h3>${c[1]}</h3></div>`).join("");if($("netWorthTable"))$("netWorthTable").innerHTML=(p.netWorthItems||[]).map(x=>`<tr><td>${escapeHtml(x.date)}</td><td><span class="pill ${x.type==='asset'?'good':'warn'}">${escapeHtml(x.type)}</span></td><td>${escapeHtml(x.name)}</td><td>${escapeHtml(x.category)}</td><td>${money(x.mainValue)}</td><td>${escapeHtml(x.note)}</td><td><button onclick="editNetWorthItem('${x.id}')">Edit</button> <button class="danger-btn" onclick="removeRecord('netWorthItems','${x.id}')">Delete</button></td></tr>`).join("")||'<tr><td colspan="7">No net-worth items recorded yet.</td></tr>'}
+function allMonths(){const p=currentProfile();if(!p)return[];const months=new Set();[...(p.transactions||[]),...(p.tradeReceivables||[]),...(p.budgets||[]),...(p.projects||[])].forEach(x=>{if(x.month)months.add(x.month)});return Array.from(months).sort()}
+function monthFinance(month){const p=currentProfile();const tx=(p.transactions||[]).filter(x=>x.month===month);const rec=(p.tradeReceivables||[]).filter(x=>x.month===month);const budgets=(p.budgets||[]).filter(x=>x.month===month);const sum=arr=>arr.reduce((a,b)=>a+parseNum(b.mainAmount),0);const paidIncome=sum(tx.filter(x=>x.type==="income"&&x.status==="paid"));const income=sum(tx.filter(x=>x.type==="income"&&x.status!=="planned"));const expenses=sum(tx.filter(x=>x.type==="expense"&&x.expenseCategory!=="AP Payment"&&x.status!=="planned"))+transferFees(month);const paidExpenses=sum(tx.filter(x=>x.type==="expense"&&x.expenseCategory!=="AP Payment"&&x.status==="paid"))+transferFees(month);const savings=sum(tx.filter(x=>x.type==="savings"&&x.status!=="planned"));const investments=sum(tx.filter(x=>x.type==="investment"&&x.status!=="planned"));const debtPayments=sum(tx.filter(x=>(x.type==="debt"||(x.type==="expense"&&x.expenseCategory==="AP Payment"))&&x.status!=="planned"));const ar=sum(tx.filter(x=>x.status==="receivable"||(x.type==="income"&&x.status==="pending")))+rec.filter(x=>!["collected","written off"].includes(x.status)).reduce((a,b)=>a+parseNum(b.outstandingMain),0);const ap=arapRows().filter(x=>x.arapType.startsWith("AP")&&x.month===month).reduce((a,b)=>a+parseNum(b.mainAmount),0);const budgetTotal=budgets.reduce((a,b)=>a+parseNum(b.mainAmount),0);const budgetUsage=budgetTotal?paidExpenses/budgetTotal*100:0;const netCash=paidIncome-paidExpenses-savings-investments-debtPayments;const cashRunway=paidExpenses?Math.max(netCash,0)/(paidExpenses/30):0;const savingsRate=income?((savings+investments)/income*100):0;const futureAllocationRate=income?((savings+investments+debtPayments)/income*100):0;const f=financeSummary();const liquid=Math.max(f.cash,0)+(f.goalsSaved||0)+ar;const shortObligations=ap+(f.debts||0);const liquidityRatio=shortObligations?liquid/shortObligations:liquid>0?99:0;const debtToAssets=f.totalAssets?((f.totalLiabilities||0)/f.totalAssets*100):0;const netWorth=f.netWorth||0;let score=0;score+=netCash>=0?18:0;score+=savingsRate>=20?18:savingsRate>=10?12:savingsRate>0?6:0;score+=liquidityRatio>=1.5?18:liquidityRatio>=1?12:liquidityRatio>0?6:0;score+=cashRunway>=30?16:cashRunway>=14?10:cashRunway>0?5:0;score+=budgetTotal?(budgetUsage<=90?15:budgetUsage<=100?10:4):8;score+=debtToAssets<=30?15:debtToAssets<=60?8:3;score=Math.min(100,Math.round(score));return{month,income,paidIncome,expenses,paidExpenses,savings,investments,debtPayments,ar,ap,budgetTotal,budgetUsage,netCash,cashRunway,savingsRate,futureAllocationRate,liquidityRatio,debtToAssets,netWorth,score}}
+function monthlyReviewRows(){return allMonths().map(monthFinance)}
+function scorePill(score){return score>=75?"good":score>=50?"warn":"bad"}
+function renderMonthlyReviews(){if(!$("monthlyReviewCards"))return;const rows=monthlyReviewRows();const current=rows.find(r=>r.month===thisMonth())||rows[rows.length-1];if(!rows.length){$("monthlyReviewCards").innerHTML='<div class="alert warning">No monthly data yet. Add transactions first.</div>';$("monthlyReviewTable").innerHTML='<tr><td colspan="12">No monthly review data yet.</td></tr>';$("monthMovementTable").innerHTML='<tr><td colspan="7">No month-to-month movement yet.</td></tr>';renderPositionTestMeanings();renderDashboardReviewSummary(null);return}$("monthlyReviewCards").innerHTML=[
+["Review Score",current.score+"/100"],["Liquidity Ratio",current.liquidityRatio>=90?"No short debt":current.liquidityRatio.toFixed(2)+"x"],["Savings Rate",pct(current.savingsRate)],["Cash Runway",current.cashRunway.toFixed(1)+" days"],["Budget Usage",pct(current.budgetUsage)],["Debt-to-Assets",pct(current.debtToAssets)]
+].map(c=>`<div class="metric-card"><p>${c[0]}</p><h3>${c[1]}</h3></div>`).join("");$("monthlyReviewTable").innerHTML=rows.map(r=>`<tr><td>${escapeHtml(r.month)}</td><td>${money(r.income)}</td><td>${money(r.expenses)}</td><td>${money(r.savings+r.investments)}</td><td>${money(r.debtPayments)}</td><td>${money(r.netCash)}</td><td>${pct(r.savingsRate)}</td><td>${r.liquidityRatio>=90?"No short debt":r.liquidityRatio.toFixed(2)+"x"}</td><td>${r.cashRunway.toFixed(1)} days</td><td>${pct(r.budgetUsage)}</td><td>${money(r.netWorth)}</td><td><span class="pill ${scorePill(r.score)}">${r.score}/100</span></td></tr>`).join("");$("monthMovementTable").innerHTML=rows.map((r,i)=>{const prev=rows[i-1];const inc=prev?r.income-prev.income:0,exp=prev?r.expenses-prev.expenses:0,net=prev?r.netCash-prev.netCash:0,nw=prev?r.netWorth-prev.netWorth:0;const good=(net>=0&&nw>=0&&exp<=0)||r.score>=75;const signal=i===0?"Baseline":good?"Improving / stable":"Needs review";const suggestion=i===0?"Use this month as the starting comparison.":good?"Keep the current pattern and review categories with high spending.":"Check spending increases, unpaid bills, low savings, or weak liquidity.";return `<tr><td>${escapeHtml(r.month)}</td><td>${prev?money(inc):"—"}</td><td>${prev?money(exp):"—"}</td><td>${prev?money(net):"—"}</td><td>${prev?money(nw):"—"}</td><td><span class="pill ${good?'good':i===0?'zero':'warn'}">${signal}</span></td><td>${suggestion}</td></tr>`}).join("");renderPositionTestMeanings();renderDashboardReviewSummary(current)}
+function renderDashboardReviewSummary(current){if(!$("dashboardReviewSummary"))return;if(!current){$("dashboardReviewSummary").innerHTML='<div class="alert warning">Add transactions to generate position tests.</div>';return}$("dashboardReviewSummary").innerHTML=[
+["Monthly Review Score",current.score+"/100",scorePill(current.score)],["Liquidity",current.liquidityRatio>=90?"No short debt":current.liquidityRatio.toFixed(2)+"x",current.liquidityRatio>=1?"good":"warn"],["Savings Strength",pct(current.savingsRate),current.savingsRate>=10?"good":"warn"],["Budget Control",pct(current.budgetUsage),current.budgetUsage<=100?"good":"bad"]
+].map(c=>`<div class="metric-card"><p>${c[0]}</p><h3>${c[1]}</h3><span class="pill ${c[2]}">${c[2]==='good'?'OK':c[2]==='bad'?'Risk':'Review'}</span></div>`).join("")}
+function renderPositionTestMeanings(){if(!$("positionTestMeanings"))return;const items=[
+["ROI / Future Allocation", "In this personal budget version, ROI is treated as the portion of income moved toward savings, investments, and debt reduction. It shows whether income is building future value."],
+["Liquidity Ratio", "Liquid resources divided by short obligations. Above 1.0x means available resources can cover short-term obligations."],
+["Cash Runway", "Estimated days you can cover expenses using available monthly cash movement. Higher is safer."],
+["Budget Usage", "Actual paid expenses compared with budget. Over 100% means the month exceeded planned spending."],
+["Debt-to-Assets", "Total liabilities compared with assets. Lower pressure gives a stronger personal financial position."]
+];$("positionTestMeanings").innerHTML=items.map(i=>`<div class="metric-card"><p>${escapeHtml(i[0])}</p><div class="muted">${escapeHtml(i[1])}</div></div>`).join("")}
+
+function selectedAccountName(id){const p=currentProfile();const a=(p?.accounts||[]).find(x=>x.id===id);return a?a.name:""}
+function selectedGoalName(id){const p=currentProfile();const g=(p?.goals||[]).find(x=>x.id===id);return g?g.name:""}
+function selectedDebtName(id){const p=currentProfile();const d=(p?.debts||[]).find(x=>x.id===id);return d?d.name:""}
+function renderAccountOptions(){const p=currentProfile();const accounts=(p?.accounts||[]).filter(x=>x.status!=="inactive");const opts='<option value="">Unassigned / Cash Estimate</option>'+accounts.map(a=>`<option value="${escapeHtml(a.id)}">${escapeHtml(a.name)} (${escapeHtml(a.type||"Account")})</option>`).join("");["transactionAccountId","templateAccountId"].forEach(id=>{const el=$(id);if(el){const cur=el.value;el.innerHTML=opts;if(cur)el.value=cur;}});["transferFromAccount","transferToAccount"].forEach(id=>{const el=$(id);if(el){const cur=el.value;el.innerHTML=accounts.map(a=>`<option value="${escapeHtml(a.id)}">${escapeHtml(a.name)}</option>`).join("");if(cur)el.value=cur;}})}
+function payableOutstanding(payableId,ignoreTransactionId=""){const p=currentProfile();const bill=(p?.transactions||[]).find(x=>x.id===payableId&&x.type==="expense"&&(x.status==="payable"||x.status==="pending"));if(!bill)return 0;const paid=(p?.transactions||[]).filter(x=>x.id!==ignoreTransactionId&&x.status==="paid"&&x.payableId===payableId&&(x.type==="debt"||(x.type==="expense"&&x.expenseCategory==="AP Payment"))).reduce((a,x)=>a+parseNum(x.mainAmount),0);return Math.max(0,parseNum(bill.mainAmount)-paid)}
+function debtOutstandingForPayment(debtId,ignoreTransactionId=""){const debt=(currentProfile()?.debts||[]).find(x=>x.id===debtId);if(!debt)return 0;const current=(currentProfile()?.transactions||[]).find(x=>x.id===ignoreTransactionId&&x.type==="debt"&&x.status==="paid"&&x.debtId===debtId);return Math.max(0,parseNum(debt.outstandingMain)+(current?parseNum(current.mainAmount):0))}
+function selectedDebtTarget(){const value=$("transactionDebtId")?.value||"",ignore=$("transactionId")?.value||"";if(value.startsWith("debt:")){const id=value.slice(5),d=(currentProfile()?.debts||[]).find(x=>x.id===id);return d?{kind:"debt",id,name:d.name,outstanding:debtOutstandingForPayment(id,ignore)}:null}if(value.startsWith("ap:")){const id=value.slice(3),bill=(currentProfile()?.transactions||[]).find(x=>x.id===id);return bill?{kind:"ap",id,name:bill.description||bill.category||"Unlabelled bill",outstanding:payableOutstanding(id,ignore)}:null}return null}
+function renderDebtPaymentInfo(){const box=$("transactionDebtInfo");if(!box)return;const target=selectedDebtTarget();if(!target){box.className="alert warning";box.textContent="Select an existing debt or unpaid bill. Payments cannot be recorded without an outstanding balance.";return}box.className="alert good";box.innerHTML=`Selected ${target.kind==="ap"?"Accounts Payable bill":"registered debt"}: <strong>${escapeHtml(target.name)}</strong><br>Outstanding balance: <strong>${money(target.outstanding)}</strong>. The payment cannot exceed this amount.`}
+function renderGoalDebtOptions(){const p=currentProfile();const goalOpts='<option value="">No savings goal</option>'+(p?.goals||[]).map(g=>`<option value="${escapeHtml(g.id)}">${escapeHtml(g.name)}</option>`).join("");const cur=$("transactionDebtId")?.value||"",ignore=$("transactionId")?.value||"",apOnly=$("transactionType")?.value==="expense"&&$("transactionExpenseCategory")?.value==="AP Payment";let debtOpts='<option value="">Choose an existing debt or payable</option>';if(!apOnly)debtOpts+='<optgroup label="Registered debts / loans">'+(p?.debts||[]).filter(d=>debtOutstandingForPayment(d.id,ignore)>0).map(d=>`<option value="debt:${escapeHtml(d.id)}">${escapeHtml(d.lender?d.lender+" — ":"")}${escapeHtml(d.name)} · ${money(debtOutstandingForPayment(d.id,ignore))} outstanding</option>`).join("")+'</optgroup>';const bills=(p?.transactions||[]).filter(x=>x.type==="expense"&&(x.status==="payable"||x.status==="pending")&&payableOutstanding(x.id,ignore)>0);debtOpts+='<optgroup label="Unpaid Accounts Payable bills">'+bills.map(x=>`<option value="ap:${escapeHtml(x.id)}">${escapeHtml(x.description||x.category||"Unlabelled bill")} · ${money(payableOutstanding(x.id,ignore))} outstanding</option>`).join("")+'</optgroup>';const receivableOpts='<option value="">Choose an open receivable</option>'+(p?.tradeReceivables||[]).filter(r=>!["collected","written off"].includes(r.status)&&tradeReceivableOutstanding(r,ignore)>0).map(r=>`<option value="${escapeHtml(r.id)}">${escapeHtml(r.debtor)} — ${escapeHtml(r.category)} — ${money(tradeReceivableOutstanding(r,ignore))} outstanding</option>`).join("");if($("transactionGoalId")){const goalCur=$("transactionGoalId").value;$("transactionGoalId").innerHTML=goalOpts;if(goalCur)$("transactionGoalId").value=goalCur}if($("transactionDebtId")){ $("transactionDebtId").innerHTML=debtOpts;if(cur&&Array.from($("transactionDebtId").options).some(o=>o.value===cur))$("transactionDebtId").value=cur;else $("transactionDebtId").value=""}if($("transactionReceivableId")){const recvCur=$("transactionReceivableId").value;$("transactionReceivableId").innerHTML=receivableOpts;if(recvCur)$("transactionReceivableId").value=recvCur}}
+function accountEffects(){const p=currentProfile();const effects={};(p?.accounts||[]).forEach(a=>effects[a.id]={tx:0,transfer:0});(p?.transactions||[]).filter(x=>x.status!=="planned"&&x.accountId).forEach(x=>{if(!effects[x.accountId])effects[x.accountId]={tx:0,transfer:0};const amt=parseNum(x.mainAmount);if(x.type==="income"&&x.status!=="receivable"&&x.status!=="pending")effects[x.accountId].tx+=amt;else if(["expense","savings","debt","investment"].includes(x.type)&&!["payable","pending"].includes(x.status))effects[x.accountId].tx-=amt;});(p?.transfers||[]).forEach(t=>{if(!effects[t.fromAccountId])effects[t.fromAccountId]={tx:0,transfer:0};if(!effects[t.toAccountId])effects[t.toAccountId]={tx:0,transfer:0};effects[t.fromAccountId].transfer-=parseNum(t.mainAmount)+transferFeeMain(t);effects[t.toAccountId].transfer+=parseNum(t.mainAmount);});return effects}
+function accountBalances(){const p=currentProfile();const effects=accountEffects();return (p?.accounts||[]).map(a=>{const e=effects[a.id]||{tx:0,transfer:0};const opening=parseNum(a.openingMain);return{...a,txEffect:e.tx,transferEffect:e.transfer,balance:opening+e.tx+e.transfer};})}
+function saveAccount(e){e.preventDefault();const rate=parseNum($("accountRate").value)||1;const opening=convert($("accountOpening").value,rate);const item={id:$("accountId").value||makeId(),name:$("accountName").value.trim(),type:$("accountType").value,opening:parseNum($("accountOpening").value),currency:$("accountCurrency").value,rateToMain:rate,openingMain:opening,status:$("accountStatus").value,note:$("accountNote").value.trim(),updatedAt:nowIso()};recordSave("accounts",item,"accountId");clearAccountForm()}
+function clearAccountForm(){["accountId","accountName","accountOpening","accountNote"].forEach(id=>$(id)&&($(id).value=""));if($("accountRate"))$("accountRate").value=1;if($("accountStatus"))$("accountStatus").value="active";renderAccountOptions()}
+function editAccount(id){const x=(currentProfile().accounts||[]).find(a=>a.id===id);if(!x)return;Object.entries({accountId:x.id,accountName:x.name,accountType:x.type,accountOpening:x.opening,accountCurrency:x.currency,accountRate:x.rateToMain,accountStatus:x.status,accountNote:x.note}).forEach(([k,v])=>$(k).value=v??"");showTab("accounts")}
+function renderAccounts(){if(!$("accountsTable"))return;const rows=accountBalances();const total=rows.filter(x=>x.status!=="inactive").reduce((a,b)=>a+parseNum(b.balance),0);if($("accountsSummary"))$("accountsSummary").innerHTML=[["Total Account Balance",money(total)],["Active Accounts",rows.filter(x=>x.status!=="inactive").length],["Accounts Registered",rows.length]].map(c=>`<div class="metric-card"><p>${c[0]}</p><h3>${c[1]}</h3></div>`).join("");$("accountsTable").innerHTML=rows.map(x=>`<tr><td>${escapeHtml(x.name)}</td><td>${escapeHtml(x.type)}</td><td>${money(x.openingMain)}</td><td>${money(x.txEffect)}</td><td>${money(x.transferEffect)}</td><td>${money(x.balance)}</td><td><span class="pill ${x.status==='active'?'good':'zero'}">${escapeHtml(x.status)}</span></td><td>${escapeHtml(x.note)}</td><td><button onclick="editAccount('${x.id}')">Edit</button> <button class="danger-btn" onclick="removeRecord('accounts','${x.id}')">Delete</button></td></tr>`).join("")||'<tr><td colspan="9">No accounts registered yet.</td></tr>';}
+function transferFeeMain(t){const fee=Number(t?.feeMain||0);return Number.isFinite(fee)&&fee>0?fee:0}
+function transferFees(month){return (currentProfile()?.transfers||[]).filter(t=>!month||t.month===month).reduce((sum,t)=>sum+transferFeeMain(t),0)}
+function saveTransfer(e){e.preventDefault();if($("transferFromAccount").value===$("transferToAccount").value)return alert("Choose two different accounts for a transfer.");const rate=parseNum($("transferRate").value)||1;const item={id:$("transferId").value||makeId(),date:$("transferDate").value,month:$("transferMonth").value,fromAccountId:$("transferFromAccount").value,fromAccountName:selectedAccountName($("transferFromAccount").value),toAccountId:$("transferToAccount").value,toAccountName:selectedAccountName($("transferToAccount").value),amount:parseNum($("transferAmount").value),currency:$("transferCurrency").value,rateToMain:rate,mainAmount:convert($("transferAmount").value,rate),fee:parseNum($("transferFee").value),feeMain:convert($("transferFee").value,rate),reference:$("transferReference").value.trim(),note:$("transferNote").value.trim(),updatedAt:nowIso()};if(isMonthClosed(item.month)&&!confirm("This month is closed. Save this transfer anyway?"))return;
+if(!Number.isFinite(item.mainAmount)||item.mainAmount<=0||!Number.isFinite(item.fee)||item.fee<0||!Number.isFinite(item.feeMain)||!Number.isFinite(item.mainAmount+item.feeMain)||!Number.isFinite(rate)||rate<=0||!item.fromAccountId||!item.toAccountId)return alert("Enter a positive transfer, a fee of zero or more, and choose two accounts.");
+if(![item.fromAccountId,item.toAccountId].every(id=>(currentProfile().accounts||[]).some(a=>a.id===id)))return alert("Choose existing accounts for this transfer.");
+if(!confirm(`TRANSFER JOURNAL PREVIEW\n\nDebit: ${item.toAccountName} — ${money(item.mainAmount)}\nDebit: Switching / Transfer Fee Expense — ${money(item.feeMain)}\nCredit: ${item.fromAccountName} — ${money(item.mainAmount+item.feeMain)}\n\nRecipient receives ${money(item.mainAmount)}. Sender pays ${money(item.mainAmount+item.feeMain)}, including the fee.\n\nConfirm and save locally?`))return;
+recordSave("transfers",item,"transferId");clearTransferForm()}
+function clearTransferForm(){["transferId","transferAmount","transferFee","transferReference","transferNote"].forEach(id=>$(id)&&($(id).value=""));if($("transferRate"))$("transferRate").value=1;setDefaultDates();renderAccountOptions()}
+function editTransfer(id){const x=(currentProfile().transfers||[]).find(t=>t.id===id);if(!x)return;Object.entries({transferId:x.id,transferDate:x.date,transferMonth:x.month,transferFromAccount:x.fromAccountId,transferToAccount:x.toAccountId,transferAmount:x.amount,transferFee:x.fee||0,transferCurrency:x.currency,transferRate:x.rateToMain,transferReference:x.reference,transferNote:x.note}).forEach(([k,v])=>$(k).value=v??"");showTab("transfers")}
+function renderTransfers(){if(!$("transfersTable"))return;const rows=currentProfile().transfers||[];$("transfersTable").innerHTML=rows.map(x=>`<tr><td>${escapeHtml(x.date)}</td><td>${escapeHtml(x.month)}</td><td>${escapeHtml(x.fromAccountName)}</td><td>${escapeHtml(x.toAccountName)}</td><td>${money(x.mainAmount)}</td><td>${money(transferFeeMain(x))}</td><td>${money(parseNum(x.mainAmount)+transferFeeMain(x))}</td><td>${escapeHtml(x.reference)}</td><td>Dr ${escapeHtml(x.toAccountName)} ${money(x.mainAmount)}${transferFeeMain(x)?`<br>Dr Switching / Transfer Fee Expense ${money(transferFeeMain(x))}`:""}<br>Cr ${escapeHtml(x.fromAccountName)} ${money(parseNum(x.mainAmount)+transferFeeMain(x))}</td><td>${escapeHtml(x.note)}</td><td><button onclick="editTransfer('${x.id}')">Edit</button> <button class="danger-btn" onclick="removeRecord('transfers','${x.id}')">Delete</button></td></tr>`).join("")||'<tr><td colspan="11">No transfers recorded.</td></tr>';}
+
+function applyTransactionLinkedUpdates(x,sign=1){
+ const p=currentProfile();if(!p||!x)return;
+ // Old records lack this marker; reverse their original effect on edit/delete.
+ // New pending/planned entries must not affect actual goal or debt balances.
+ if(x.linkEffectVersion===1&&x.status!=="paid")return;
+ if(x.linkEffectVersion!==1&&sign>0&&x.status!=="paid")return;
+ const amount=parseNum(x.mainAmount)*sign;
+ if(x.type==="savings"&&x.goalId){
+   const g=p.goals.find(g=>g.id===x.goalId);
+   if(g){g.savedMain=Math.max(0,parseNum(g.savedMain)+amount);
+     if(x.currency===g.currency)g.saved=Math.max(0,parseNum(g.saved)+parseNum(x.originalAmount)*sign);
+     g.updatedAt=nowIso();}
+ }
+ if(x.type==="debt"&&x.debtId){
+   const d=p.debts.find(d=>d.id===x.debtId);
+   if(d){d.outstandingMain=Math.max(0,parseNum(d.outstandingMain)-amount);
+     if(x.currency===d.currency)d.outstanding=Math.max(0,parseNum(d.outstanding)-parseNum(x.originalAmount)*sign);
+     if(d.outstandingMain<=0)d.status="paid";else if(d.status==="paid")d.status="outstanding";
+     d.updatedAt=nowIso();}
+ }
+}
+function isMonthClosed(month){return false}
+function closeMonth(){const p=currentProfile();const m=$("closeMonthInput").value||thisMonth();if(!m)return alert("Choose a month.");if(isMonthClosed(m))return alert("This month is already closed.");p.closedMonths.push({id:makeId(),month:m,closedAt:nowIso(),note:$("closeMonthNote").value.trim()||"Reviewed and closed",status:"closed"});markLocalSave();}
+function reopenMonth(){const p=currentProfile();const m=$("closeMonthInput").value||thisMonth();const row=(p.closedMonths||[]).find(x=>x.month===m&&x.status==="closed");if(!row)return alert("This month is not closed.");if(!confirm("Reopen this month for editing?"))return;row.status="reopened";row.reopenedAt=nowIso();markLocalSave();}
+function renderClosingStatus(){if(!$("closedMonthsTable"))return;const p=currentProfile();const rows=p.closedMonths||[];$("closingStatus").innerHTML=isMonthClosed(thisMonth())?'<div class="alert good">This month is closed. Changes will trigger a warning.</div>':'<div class="alert warning">This month is open. Close it after review and JSON backup.</div>';$("closedMonthsTable").innerHTML=rows.map(x=>`<tr><td>${escapeHtml(x.month)}</td><td>${escapeHtml(x.closedAt||"")}</td><td>${escapeHtml(x.note||"")}</td><td><span class="pill ${x.status==='closed'?'good':'zero'}">${escapeHtml(x.status)}</span></td></tr>`).join("")||'<tr><td colspan="4">No closed months yet.</td></tr>';}
+function saveRecurringTemplate(e){e.preventDefault();const rate=parseNum($("templateRate").value)||1;const item={id:$("templateId").value||makeId(),name:$("templateName").value.trim(),type:$("templateType").value,status:$("templateStatus").value,category:$("templateCategory").value.trim(),amount:parseNum($("templateAmount").value),currency:$("templateCurrency").value,rateToMain:rate,mainAmount:convert($("templateAmount").value,rate),accountId:$("templateAccountId").value,accountName:selectedAccountName($("templateAccountId").value),description:$("templateDescription").value.trim(),note:$("templateNote").value.trim(),updatedAt:nowIso()};recordSave("recurringTemplates",item,"templateId");clearRecurringTemplateForm()}
+function clearRecurringTemplateForm(){["templateId","templateName","templateCategory","templateAmount","templateDescription","templateNote"].forEach(id=>$(id)&&($(id).value=""));if($("templateRate"))$("templateRate").value=1;if($("templateAccountId"))$("templateAccountId").value="";setDefaultDates()}
+function editRecurringTemplate(id){const x=(currentProfile().recurringTemplates||[]).find(t=>t.id===id);if(!x)return;Object.entries({templateId:x.id,templateName:x.name,templateType:x.type,templateStatus:x.status,templateCategory:x.category,templateAmount:x.amount,templateCurrency:x.currency,templateRate:x.rateToMain,templateAccountId:x.accountId,templateDescription:x.description,templateNote:x.note}).forEach(([k,v])=>$(k).value=v??"");showTab("recurring")}
+function renderRecurringTemplates(){if(!$("templatesTable"))return;const rows=currentProfile().recurringTemplates||[];$("templatesTable").innerHTML=rows.map(x=>`<tr><td>${escapeHtml(x.name)}</td><td>${escapeHtml(x.type)}</td><td>${escapeHtml(x.status)}</td><td>${escapeHtml(x.category)}</td><td>${money(x.mainAmount)}</td><td>${escapeHtml(x.accountName||"Unassigned")}</td><td>${escapeHtml(x.description)}</td><td><button onclick="editRecurringTemplate('${x.id}')">Edit</button> <button class="danger-btn" onclick="removeRecord('recurringTemplates','${x.id}')">Delete</button></td></tr>`).join("")||'<tr><td colspan="8">No recurring templates yet.</td></tr>';}
+function generateTransactionsFromTemplates(){const p=currentProfile();const m=$("templateGenerateMonth").value||thisMonth();const templates=p.recurringTemplates||[];if(!templates.length)return alert("No templates saved yet.");if(isMonthClosed(m)&&!confirm("This month is closed. Generate planned transactions anyway?"))return;let created=0;templates.forEach(t=>{if(p.transactions.some(x=>x.originTemplateId===t.id&&x.month===m))return;const item={id:makeId(),originTemplateId:t.id,date:m+"-01",month:m,type:t.type,status:t.status,category:t.category,originalAmount:t.amount,currency:t.currency,rateToMain:t.rateToMain,mainAmount:t.mainAmount,method:t.accountName||"",reference:"Recurring template",reviewStatus:"needs review",projectId:"",projectName:"",projectImpact:"none",accountId:t.accountId||"",accountName:t.accountName||"",goalId:"",goalName:"",debtId:"",debtName:"",description:t.description||t.name,note:t.note||"Generated from recurring template",updatedAt:nowIso()};item.journalEntries=transactionJournalEntries(item);p.transactions.push(item);created++;});if(created){markLocalSave();alert("Generated "+created+" template transaction(s) for "+m+".")}else alert("All templates have already been generated for "+m+". No duplicates added.")}
+function renderImprovementProgress(){const p=currentProfile();const checks=[["Local-only standalone storage",true],["No remote services or external assets",!document.querySelector("script[src],link[href^='http'],img[src^='http']")],["Account register",(p.accounts||[]).length>0],["Transfer workflow",true],["Savings goals",true],["Debt tracker",true],["Budget warnings",true],["Month closing lock",true],["Recurring templates",true],["Statements + cash flow",true],["AR/AP + net worth",true],["Journal preview before save",true],["Project-linked transactions",true]];const done=checks.filter(x=>x[1]).length;const pctDone=Math.round(done/checks.length*100);const html=`<h2>${pctDone}% implemented</h2><div class="progress"><span style="width:${pctDone}%"></span></div>`+checks.map(c=>`<div class="alert ${c[1]?'good':'warning'}"><strong>${c[1]?'Done':'Pending'}:</strong> ${escapeHtml(c[0])}</div>`).join("");if($("progressChecklist"))$("progressChecklist").innerHTML=html;if($("improvementProgress"))$("improvementProgress").innerHTML=html;}
+function saveSettings(e){e.preventDefault();const p=currentProfile();p.mainCurrency=$("settingCurrency").value;p.monthlyIncomeTarget=parseNum($("settingIncomeTarget").value);p.monthlySavingTarget=parseNum($("settingSavingTarget").value);p.emergencyFundTarget=parseNum($("settingEmergencyTarget").value);markLocalSave();alert("Settings saved locally.")}
+function loadSettingsIntoForm(force=true){const p=currentProfile();if(!p||!$("settingCurrency"))return;if(force||document.activeElement?.id?.startsWith("setting")===false){$("settingCurrency").value=p.mainCurrency||"TWD";$("settingIncomeTarget").value=p.monthlyIncomeTarget||"";$("settingSavingTarget").value=p.monthlySavingTarget||"";$("settingEmergencyTarget").value=p.emergencyFundTarget||""}}
+function exportJson(){checkOwner();downloadJson("pilotprofit-personal-budget-local-backup.json",store);localStorage.setItem(BACKUP_KEY,nowIso());renderAll()}
+function exportCsv(){checkOwner();const p=currentProfile();if(!p)return;const rows=[["Type","Date","Month","Category/Name","Amount Main Currency","Description/Note"]];p.transactions.forEach(x=>rows.push([x.type,x.date,x.month,x.projectId?`${x.category} | Project: ${x.projectName} (${x.projectImpact})`:x.category,x.mainAmount,x.description]));(p.tradeReceivables||[]).forEach(x=>rows.push(["trade receivable",x.date,x.month,x.debtor+" - "+x.category,x.outstandingMain,x.description]));p.budgets.forEach(x=>rows.push(["budget","",x.month,x.category,x.mainAmount,""]));p.goals.forEach(x=>rows.push(["goal","","",x.name,x.savedMain,x.note]));p.debts.forEach(x=>rows.push(["debt","","",x.name,x.outstandingMain,x.note]));(p.assets||[]).forEach(x=>rows.push(["asset",x.date,"",x.name,x.currentMain,x.note]));(p.projects||[]).forEach(x=>rows.push(["project",x.date,x.month,x.name,x.budgetMain,x.note]));(p.netWorthItems||[]).forEach(x=>rows.push(["net worth item",x.date,"",x.name,x.mainValue,x.note]));(p.transfers||[]).forEach(t=>{rows.push(["transfer",t.date,t.month,t.fromAccountName+" → "+t.toAccountName,t.mainAmount,t.note]);if(transferFeeMain(t))rows.push(["expense",t.date,t.month,"Switching / Transfer Fees",transferFeeMain(t),"Fee for transfer "+t.id]);});downloadCsv("pilotprofit-personal-budget-records.csv",rows)}
+function downloadJson(name,data){const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();URL.revokeObjectURL(a.href)}
+function downloadCsv(name,rows){const csv=rows.map(r=>r.map(v=>`"${String(v??"").replace(/"/g,'""')}"`).join(",")).join("\n");const blob=new Blob([csv],{type:"text/csv"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();URL.revokeObjectURL(a.href)}
+const BUDGET_MODULE='budgeting';
+const unifier='../../index.html';
+let leaving=false, lastActivity=Date.now();
+function note(message){$('cloudNote').textContent=message;}
+function checkOwner(){
+  if(leaving||!budgetUser||AurumCloud.auth.getUser()?.id!==budgetUser.id)throw Error('Tracker session ended.');
+}
+function lockPage(){
+  $('app').classList.add('hidden'); $('budgetGate').hidden=false;
+}
+function stageBudget(){
+  try{
+    checkOwner();
+    localStorage.setItem(STORE_KEY+':draft',store.updatedAt);
+    const payload={module:BUDGET_MODULE,ownerId:budgetUser.id,store};
+    AurumCloud.module.autoSave(BUDGET_MODULE,payload,{delayMs:10000});
+    const cached=AurumCloud.module.getCached(BUDGET_MODULE);
+    if(cached?.state?.store?.updatedAt!==store.updatedAt)throw Error('Cloud queue could not retain this edit. Export JSON and free device storage.');
+    note('Saved on this device · cloud sync pending');
+  }catch(error){note('Device copy retained · '+error.message);}
+}
+function freshBudget(){
+  const fresh=defaultStore();
+  const profile=emptyProfile('Personal Budget','','TWD','','',0,0);
+  fresh.profiles=[profile]; fresh.activeProfileId=profile.id; return fresh;
+}
+function validStore(value){
+  return value && Array.isArray(value.profiles)&&value.profiles.length===1&&value.profiles[0]?.id;
+}
+function showBudget(value){
+  if(!validStore(value))throw Error('Unsupported budget snapshot. Your saved copy has been preserved.');
+  store=migrateStore(value); activeProfileId=store.profiles[0].id;store.activeProfileId=activeProfileId;
+  $('budgetGate').hidden=true;openApp();window.BudgetFX.paintAll();
+}
+function readDraft(){
+  const raw=localStorage.getItem(STORE_KEY);
+  if(!raw)return null;
+  const result=JSON.parse(raw);
+  if(!validStore(result))throw Error('The device budget needs recovery from a JSON backup.');
+  return result;
+}
+function syncStatus(){
+  if(!budgetUser||leaving||busyLoading||conflict)return;
+  const cache=AurumCloud.module.getCached(BUDGET_MODULE);
+  const pending=AurumCloud.sync.pending().find(x=>x.moduleName===BUDGET_MODULE);
+  if(pending){note(pending.lastError?'Cloud save pending · '+pending.lastError:'Cloud sync pending');return;}
+  if(cache?.dirty){protectDraft();return;}
+  if(cache?.state?.ownerId===budgetUser.id && cache.state.store?.updatedAt===store.updatedAt){
+    localStorage.removeItem(STORE_KEY+':draft');
+    note('Saved to cloud');
+  }
+}
+function protectDraft(){
+  conflict=true;localStorage.setItem(STORE_KEY+':conflict','1');
+  $('app').querySelector('main').inert=true;
+  note('Conflicting revisions · export JSON or load the cloud copy');
+}
+async function reloadBudget(initial=false){
+  if(busyLoading)return;
+  checkOwner();
+  if(!initial&&!confirm('Load the current saved budget? Any unsubmitted form input will be cleared.'))return;
+  busyLoading=true; $('app').inert=true;
+  try{
+    const local=readDraft();
+    if(conflict){
+      if(initial||!confirm('Export your local budget and accept the current cloud revision?')){showBudget(local);protectDraft();return;}
+      if(!AurumCloud.getStatus().online||AurumCloud.getStatus().syncing||AurumCloud.sync.pending().some(x=>x.moduleName===BUDGET_MODULE))throw Error('Wait for the pending cloud operation and retry.');
+      downloadJson('budget-conflict-backup.json',local);
+      localStorage.removeItem(AURUM_SUPABASE_CONFIG.LOCAL_PREFIX+':module:'+budgetUser.id+':'+BUDGET_MODULE);
+    }
+    const env=await AurumCloud.module.load(BUDGET_MODULE);
+    checkOwner();
+    if(readDraft()?.updatedAt!==local?.updatedAt)throw Error('Another tab updated this budget during loading.');
+    if(env && (env.state?.ownerId!==budgetUser.id||!validStore(env.state.store)))throw Error('Cloud budget does not match the current user or expected format.');
+    if(conflict&&env?.source!=='cloud')throw Error('Current cloud revision unavailable.');
+    const remote=env?.state?.store;
+    const draft=localStorage.getItem(STORE_KEY+':draft');
+    if(!conflict&&local&&draft&&remote?.updatedAt!==draft){
+      showBudget(local);
+      if(remote){protectDraft();return;}
+      if(AurumCloud.getStatus().online)stageBudget();else note('Using device copy · reconnect to sync');
+      return;
+    }
+    if(!env&&!local&&!AurumCloud.getStatus().online)throw Error('Reconnect to check for an existing budget.');
+    const next=remote||local||freshBudget();
+    if(!initial&&activeProfileId){
+      document.querySelectorAll('#app form').forEach(form=>form.reset());
+      pendingTransactionItem=null;clearTransactionProof();$('legacyChoices').replaceChildren();
+    }
+    showBudget(next);
+    localStorage.setItem(STORE_KEY,JSON.stringify(store));
+    if(env?.source==='cloud'){localStorage.removeItem(STORE_KEY+':draft');localStorage.removeItem(STORE_KEY+':conflict');conflict=false;}
+    $('app').querySelector('main').inert=conflict;
+    note(env?.source==='cloud'?'Loaded from cloud':env?'Using device copy · '+env.source:local?'Using device copy':'New budget · first edit will save');
+    if(env?.dirty&&!AurumCloud.sync.pending().some(x=>x.moduleName===BUDGET_MODULE))protectDraft();
+    if(!initial&&!conflict){location.reload();return;}
+  }catch(error){
+    const local=readDraft();checkOwner();
+    if(local){showBudget(local);$('app').querySelector('main').inert=true;note('Device copy · read only until Load from Cloud succeeds · '+error.message);}
+    else throw error;
+  }finally{busyLoading=false;$('app').inert=false;}
+  window.refreshInvestmentTracker(false);
+}
+async function startBudget(){
+  try{
+    if(location.protocol==='file:')throw Error('Open the investment-tracker folder in VS Code, serve its root index.html using Live Server, then sign in and choose Budgeting.');
+    if(!window.AurumCloud)throw Error('Budgeting could not load the shared tracker scripts. Serve the complete investment-tracker folder with its shared and modules folders together.');
+    await AurumCloud.initialize();
+    budgetUser=AurumCloud.auth.getUser();
+    if(!budgetUser?.id){location.replace(unifier+'?reason=session-required');return;}
+    STORE_KEY='aurum:budgeting:'+budgetUser.id;BACKUP_KEY=STORE_KEY+':backup';
+    conflict=localStorage.getItem(STORE_KEY+':conflict')==='1';
+    lastActivity=Date.now();
+    await reloadBudget(true);
+  }catch(error){lockPage();$('budgetGateMessage').textContent=error.message;}
+}
+function readLegacy(){
+  try{
+    checkOwner();
+    const raw=localStorage.getItem(LEGACY_KEY);
+    if(!raw)throw Error('No legacy budget on this origin. Export JSON from the original browser and use Import JSON here.');
+    chooseProfile(JSON.parse(raw));
+  }catch(error){alert(error.message);}
+}
+function chooseProfile(data){
+  checkOwner();
+  const choices=$('legacyChoices');choices.replaceChildren();
+  const profiles=Array.isArray(data?.profiles)?data.profiles:[data];
+  if(!profiles.length||profiles.some(p=>!p||!Array.isArray(p.transactions)))throw Error('Expected a budgeting JSON backup.');
+  const picker=document.createElement('select');picker.setAttribute('aria-label','Budget profile to import');
+  profiles.forEach((p,i)=>picker.add(new Option((p.username||'Profile')+' · '+p.transactions.length+' transactions',i)));
+  const button=document.createElement('button');button.textContent='Import selected profile';
+  button.onclick=()=>{
+    checkOwner();if(conflict||busyLoading||$('app').querySelector('main').inert)return;
+    const p=structuredClone(profiles[Number(picker.value)]);
+    if(!confirm('Replace the budget for '+trackerUsername()+' ('+(budgetUser.email||budgetUser.id)+')'+' with "'+(p.username||'Profile')+'"? Your current budget will be downloaded first.'))return;
+    downloadJson('budget-before-import.json',store);
+    delete p.password;delete p.recoveryAnswer;delete p.recoveryQuestion;delete p.linkedPortfolioReviewed;
+    p.id=p.id||makeId();
+    store=migrateStore({...defaultStore(),updatedAt:store.updatedAt,profiles:[p],activeProfileId:p.id});activeProfileId=p.id;
+    saveStore();location.reload();
+  };
+  choices.append(picker,button);
+  document.querySelector('[data-tab="settings"]').click();
+}
+async function importJson(event){
+  const file=event.target.files[0];event.target.value='';if(!file)return;
+  try{chooseProfile(JSON.parse(await file.text()));}catch(error){alert(error.message);}
+}
+function confirmReset(){
+  checkOwner();
+  if(conflict||localStorage.getItem(STORE_KEY+':draft')){alert('Export your pending device copy before resolving cloud sync.');return;}
+  if(confirm('Clear this account’s local budget copy and reload from cloud?')){
+    localStorage.removeItem(STORE_KEY);location.reload();
+  }
+}
+window.addEventListener('aurum-cloud:sync-end',syncStatus);
+window.addEventListener('aurum-cloud:conflict',e=>{if(budgetUser&&e.detail?.moduleName===BUDGET_MODULE)protectDraft();});
+window.addEventListener('storage',e=>{if(STORE_KEY&&e.key===STORE_KEY&&e.newValue!==e.oldValue){$('app').querySelector('main').inert=true;note('Budget updated in another tab · Load from Cloud to continue');}});
+function checkSession(){
+  if(budgetUser&&AurumCloud.auth.getUser()?.id!==budgetUser.id){leaving=true;lockPage();location.replace(unifier+'?reason=session-ended');}
+}
+window.addEventListener('aurum-cloud:auth-changed',()=>{checkSession();if(budgetUser&&!leaving)renderProfileText();});
+window.addEventListener('aurum-cloud:signed-out',checkSession);
+async function checkIdle(){
+  if(!budgetUser||leaving||Date.now()-lastActivity<60000)return;
+  leaving=true;lockPage();
+  try{await AurumCloud.auth.signOut();}finally{location.replace(unifier+'?reason=inactivity-logout');}
+}
+for(const name of ['pointerdown','keydown','touchstart','mousemove','wheel','scroll']){
+  window.addEventListener(name,()=>{if(Date.now()-lastActivity>=60000&&budgetUser)checkIdle();else lastActivity=Date.now();},{passive:true});
+}
+window.setInterval(checkIdle,1000);
+window.addEventListener('pageshow',()=>{checkSession();checkIdle();});
+
+
+function totals(){const p=currentProfile();if(!p)return{};const tx=p.transactions||[];const sum=arr=>arr.reduce((a,b)=>a+parseNum(b.mainAmount),0);const month=thisMonth();const monthTx=tx.filter(x=>x.month===month);const isEarnedIncome=x=>x.type==="income"&&!x.receivableId;const income=sum(monthTx.filter(x=>isEarnedIncome(x)&&x.status!=="planned"));const expenses=sum(monthTx.filter(x=>x.type==="expense"&&x.expenseCategory!=="AP Payment"&&x.status!=="planned"))+transferFees(month);const savings=sum(monthTx.filter(x=>x.type==="savings"&&x.status!=="planned"));const debtPayments=sum(monthTx.filter(x=>(x.type==="debt"||(x.type==="expense"&&x.expenseCategory==="AP Payment"))&&x.status!=="planned"));const investments=sum(monthTx.filter(x=>x.type==="investment"&&x.status!=="planned"));const allIncome=sum(tx.filter(x=>x.type==="income"&&x.status!=="planned"&&!['receivable','pending'].includes(x.status)));const allOut=sum(tx.filter(x=>["expense","savings","debt","investment"].includes(x.type)&&x.status!=="planned"&&!['payable','pending'].includes(x.status)));const accountsTotal=accountBalances().filter(x=>x.status!=="inactive").reduce((a,b)=>a+parseNum(b.balance),0);const cash=accountBalances().length?accountsTotal:allIncome-allOut-transferFees();const debtOutstanding=(p.debts||[]).filter(d=>d.status!=="paid").reduce((a,b)=>a+parseNum(b.outstandingMain),0);const goalsSaved=(p.goals||[]).reduce((a,b)=>a+parseNum(b.savedMain),0);const monthlyNet=income-expenses-savings-debtPayments-investments;const savingRate=income?((savings+investments)/income*100):0;const avgDaily=expenses/30;const runway=avgDaily?cash/avgDaily:0;return{month,income,expenses,savings,debtPayments,investments,monthlyNet,savingRate,cash,debtOutstanding,goalsSaved,runway,accountsTotal}}
+function financeSummary(){const p=currentProfile();const t=totals();const nw=p?.netWorthItems||[];const registeredAssets=(p?.assets||[]).filter(x=>x.status==="active").reduce((a,b)=>a+parseNum(b.currentMain),0);const netWorthManualAssets=nw.filter(x=>x.type==="asset").reduce((a,b)=>a+parseNum(b.mainValue),0);const accountTotal=accountBalances().filter(x=>x.status!=="inactive").reduce((a,b)=>a+parseNum(b.balance),0);const netAssets=registeredAssets+netWorthManualAssets+accountTotal;const netLiabilities=nw.filter(x=>x.type==="liability").reduce((a,b)=>a+parseNum(b.mainValue),0);const debts=(p?.debts||[]).filter(d=>d.status!=="paid").reduce((a,b)=>a+parseNum(b.outstandingMain),0);const ar=arapRows().filter(x=>x.arapType.startsWith("AR")).reduce((a,b)=>a+parseNum(b.mainAmount),0);const ap=arapRows().filter(x=>x.arapType.startsWith("AP")).reduce((a,b)=>a+parseNum(b.mainAmount),0);const activeProjects=(p?.projects||[]).filter(x=>!["completed","cancelled"].includes(x.status));const projectBudget=activeProjects.reduce((a,b)=>a+parseNum(b.budgetMain),0);const projectFunding=activeProjects.reduce((a,b)=>a+parseNum(b.fundingMain)+projectTransactionTotals(b.id).funding,0);const projectSpent=activeProjects.reduce((a,b)=>a+parseNum(b.spentMain)+projectTransactionTotals(b.id).spent,0);const totalAssets=netAssets+ar+(t.goalsSaved||0);const totalLiabilities=netLiabilities+ap;const netWorth=totalAssets-totalLiabilities;return{...t,accountTotal,registeredAssets,netWorthManualAssets,netAssets,netLiabilities,debts,ar,ap,projectBudget,projectFunding,projectSpent,totalAssets,totalLiabilities,netWorth}}
+function allMonths(){const p=currentProfile();if(!p)return[];const months=new Set();[...(p.transactions||[]),...(p.tradeReceivables||[]),...(p.budgets||[]),...(p.projects||[]),...(p.transfers||[])].forEach(x=>{if(x.month)months.add(x.month)});return Array.from(months).sort()}
+function monthlyCashFlowRows(){const p=currentProfile();if(!p)return[];const months=[...new Set([...(p.transactions||[]).map(x=>x.month),...(p.tradeReceivables||[]).map(x=>x.month),...(p.transfers||[]).map(x=>x.month)].filter(Boolean))].sort();return months.map(m=>{const tx=(p.transactions||[]).filter(x=>x.month===m);const rec=(p.tradeReceivables||[]).filter(x=>x.month===m);const sum=arr=>arr.reduce((a,b)=>a+parseNum(b.mainAmount),0);const cashIn=sum(tx.filter(x=>x.type==="income"&&x.status==="paid"))+rec.reduce((a,b)=>a+parseNum(b.receivedMain),0);const expenses=sum(tx.filter(x=>x.type==="expense"&&x.expenseCategory!=="AP Payment"&&x.status==="paid"))+transferFees(m);const savings=sum(tx.filter(x=>x.type==="savings"&&x.status!=="planned"));const investments=sum(tx.filter(x=>x.type==="investment"&&x.status!=="planned"));const debt=sum(tx.filter(x=>(x.type==="debt"||(x.type==="expense"&&x.expenseCategory==="AP Payment"))&&x.status!=="planned"));const expected=arapRows().filter(x=>x.month===m).reduce((a,b)=>a+parseNum(b.mainAmount),0)+sum(tx.filter(x=>x.status==="planned"));return{month:m,transfers:(p.transfers||[]).filter(t=>t.month===m).reduce((a,t)=>a+parseNum(t.mainAmount),0),cashIn,expenses,savings,investments,debt,net:cashIn-expenses-savings-investments-debt,expected}})}
+function renderCashFlowFixture(){const rows=monthlyCashFlowRows();const f=financeSummary();if($("cashFlowSummary"))$("cashFlowSummary").innerHTML=[["Cash In This Month",money(f.income)],["Cash Out This Month",money((f.expenses||0)+(f.savings||0)+(f.investments||0)+(f.debtPayments||0))],["Net Cash Movement",money(f.monthlyNet)],["Account Balance",money(f.accountTotal)],["Cash Runway",`${(f.runway||0).toFixed(1)} days`]].map(c=>`<div class="metric-card"><p>${c[0]}</p><h3>${c[1]}</h3></div>`).join("");if($("cashFlowTable"))$("cashFlowTable").innerHTML=rows.map(r=>`<tr><td>${escapeHtml(r.month)}</td><td>${money(r.cashIn)}</td><td>${money(r.expenses)}</td><td>${money(r.savings)}</td><td>${money(r.investments)}</td><td>${money(r.debt)}</td><td>${money(r.net)}</td><td>${money(r.expected)}<br><span class="small">Transfers: ${money(r.transfers)}</span></td></tr>`).join("")||'<tr><td colspan="8">No cash flow data yet.</td></tr>'}
+function renderStatementsFixture(){const f=financeSummary();if($("statementsBox"))$("statementsBox").innerHTML=[["Personal Net Worth",money(f.netWorth)],["Total Personal Assets",money(f.totalAssets)],["Total Personal Liabilities",money(f.totalLiabilities)],["Money Expected (AR)",money(f.ar)],["Bills Due (AP)",money(f.ap)],["Account Balances",money(f.accountTotal)]].map(c=>`<div class="metric-card"><p>${c[0]}</p><h3>${c[1]}</h3></div>`).join("");if($("incomeStatementTable"))$("incomeStatementTable").innerHTML=`<tr><td>Income this month</td><td>${money(f.income)}</td><td>Money received or earned this month.</td></tr><tr><td>Expenses this month</td><td>${money(f.expenses)}</td><td>Personal spending recorded this month.</td></tr><tr><td>Savings and investments</td><td>${money((f.savings||0)+(f.investments||0))}</td><td>Money moved toward future value.</td></tr><tr><td>Debt and AP payments</td><td>${money(f.debtPayments)}</td><td>Debt repayments and AP bill payments recorded as cash outflows.</td></tr><tr><td>Monthly surplus / deficit</td><td>${money(f.monthlyNet)}</td><td>Income minus expenses, savings, investments, and debt payments.</td></tr>`;if($("positionStatementTable"))$("positionStatementTable").innerHTML=`<tr><td>Cash / bank account balances</td><td>${money(f.accountTotal)}</td><td>Balances from registered accounts plus transactions and transfers.</td></tr><tr><td>Assets registered</td><td>${money(f.registeredAssets)}</td><td>Assets entered in the Assets page.</td></tr><tr><td>Other net-worth assets</td><td>${money(f.netWorthManualAssets)}</td><td>Extra assets manually entered in this combined section.</td></tr><tr><td>Debts outstanding</td><td>${money(f.debts)}</td><td>Outstanding debts from the Debts page.</td></tr><tr><td>Other liabilities</td><td>${money(f.netLiabilities)}</td><td>Liabilities manually entered in this combined section.</td></tr><tr><td><strong>Net worth</strong></td><td><strong>${money(f.netWorth)}</strong></td><td>Total assets minus total liabilities.</td></tr>`}
+window.addEventListener("load",startBudget);
+</script>
+<script>
+(function(){
+  'use strict';
+  var busy = false;
+  var snapshot = null;
+  var manualCats = ['investment profit','investment loss','investment profit/loss','investment profit / loss'];
+
+  function moneyTwd(v){
+    try{return new Intl.NumberFormat('en-US',{style:'currency',currency:'TWD',maximumFractionDigits:2}).format(Number(v)||0);}
+    catch(e){return 'NT$ '+(Number(v)||0).toFixed(2);}
+  }
+  function unwrap(envelope){
+    var state=envelope&&envelope.state&&typeof envelope.state==='object'?envelope.state:envelope||{};
+    var raw=state.raw&&typeof state.raw==='object'?state.raw:(state.data&&typeof state.data==='object'?state.data:state);
+    var summary=state.publishedSummary||raw.summary||state.summary||{};
+    return {raw:raw,summary:summary};
+  }
+  function setStatus(kind,message){
+    var el=document.getElementById('investmentTrackerStatus');
+    if(!el)return;
+    el.className='alert '+(kind==='good'?'good':kind==='danger'?'danger':'warning');
+    el.textContent=message;
+  }
+  function renderMetrics(){
+    var box=document.getElementById('investmentTrackerMetrics');
+    if(!box)return;
+    var cards=snapshot?[
+      ['ETF Portfolio Value',moneyTwd(snapshot.etfValue)],
+      ['CFD Account Value',moneyTwd(snapshot.cfdValue)],
+      ['Investment Profit / Loss',moneyTwd(snapshot.totalProfitLoss)]
+    ]:[
+      ['ETF Portfolio Value','Not connected'],
+      ['CFD Account Value','Not connected'],
+      ['Investment Profit / Loss','Not connected']
+    ];
+    box.innerHTML=cards.map(function(c){
+      return '<div class="metric-card"><p>'+c[0]+'</p><h3>'+c[1]+'</h3></div>';
+    }).join('');
+    var p=typeof currentProfile==='function'?currentProfile():null;
+    var checkbox=document.getElementById('includeInvestmentPortfolioInNetWorth');
+    if(p)renderOverlap(p);
+    if(checkbox)checkbox.checked=p?p.linkedPortfolioReviewed===true&&p.includeInvestmentPortfolioInNetWorth===true:true;
+    var fx=document.getElementById('investmentTwdRate');
+    if(fx)fx.value=window.BudgetFX?.quote('TWD',p?.mainCurrency||'TWD')??'';
+  }
+  function manualAssets(profile){
+    return [
+      ...profile.assets.filter(x=>x.status==='active').map(x=>({key:'asset:'+x.id,name:x.name,value:x.currentMain})),
+      ...profile.netWorthItems.filter(x=>x.type==='asset').map(x=>({key:'register:'+x.id,name:x.name,value:x.mainValue}))
+    ];
+  }
+  function renderOverlap(profile){
+    const box=document.getElementById('overlapChoices');box.replaceChildren();
+    const assets=manualAssets(profile);if(!assets.length)return;
+    const help=document.createElement('p');help.textContent='Select manual assets that already represent the linked ETF or CFD portfolio. Their manual values are replaced only while linked values are included.';box.append(help);
+    for(const asset of assets){
+      const label=document.createElement('label'),input=document.createElement('input');
+      input.type='checkbox';input.style.width='auto';
+      input.checked=(profile.portfolioOverlap||[]).includes(asset.key);
+      input.onchange=()=>{
+        const ids=new Set(profile.portfolioOverlap||[]);
+        if(input.checked)ids.add(asset.key);else ids.delete(asset.key);
+        profile.portfolioOverlap=Array.from(ids);markLocalSave();
+      };
+      label.append(input,document.createTextNode(' '+asset.name+' · '+money(asset.value)));box.append(label);
+    }
+  }
+  function isLinkedCategory(item){
+    return manualCats.indexOf(String(item&&item.category||'').trim().toLowerCase())>=0;
+  }
+
+  var oldTotals=window.totals;
+  if(typeof oldTotals==='function'){
+    window.totals=function(){
+      var t=oldTotals.apply(this,arguments);
+      var p=typeof currentProfile==='function'?currentProfile():null;
+      if(!p||!Array.isArray(p.transactions))return t;
+      var month=typeof thisMonth==='function'?thisMonth():'';
+      var sum=function(rows){return rows.reduce(function(a,b){return a+(Number(b.mainAmount)||0);},0);};
+      var monthIncome=sum(p.transactions.filter(function(x){return x.month===month&&x.type==='income'&&x.status!=='planned'&&isLinkedCategory(x);}));
+      var monthExpense=sum(p.transactions.filter(function(x){return x.month===month&&x.type==='expense'&&x.status!=='planned'&&isLinkedCategory(x);}));
+      var oldIncome=sum(p.transactions.filter(function(x){return x.type==='income'&&x.status!=='planned'&&isLinkedCategory(x);}));
+      var oldExpense=sum(p.transactions.filter(function(x){return x.type==='expense'&&x.status!=='planned'&&isLinkedCategory(x);}));
+      t.income-=monthIncome;
+      t.expenses-=monthExpense;
+      t.monthlyNet-=monthIncome;
+      t.monthlyNet+=monthExpense;
+      t.cash-=oldIncome;
+      t.cash+=oldExpense;
+      t.savingRate=t.income?((t.savings+t.investments)/t.income*100):0;
+      return t;
+    };
+  }
+
+  var oldMonthlyRows=window.monthlyCashFlowRows;
+  if(typeof oldMonthlyRows==='function'){
+    window.monthlyCashFlowRows=function(){
+      var rows=oldMonthlyRows.apply(this,arguments);
+      var p=typeof currentProfile==='function'?currentProfile():null;
+      if(!p||!Array.isArray(p.transactions))return rows;
+      rows.forEach(function(row){
+        var inc=p.transactions.filter(function(x){return x.month===row.month&&x.type==='income'&&x.status==='paid'&&isLinkedCategory(x);}).reduce(function(a,b){return a+(Number(b.mainAmount)||0);},0);
+        var exp=p.transactions.filter(function(x){return x.month===row.month&&x.type==='expense'&&x.status==='paid'&&isLinkedCategory(x);}).reduce(function(a,b){return a+(Number(b.mainAmount)||0);},0);
+        row.cashIn-=inc;
+        row.expenses-=exp;
+        row.net-=inc;
+        row.net+=exp;
+      });
+      return rows;
+    };
+  }
+
+  var oldFinanceSummary=window.financeSummary;
+  if(typeof oldFinanceSummary==='function'){
+    window.financeSummary=function(){
+      var f=oldFinanceSummary.apply(this,arguments);
+      var p=typeof currentProfile==='function'?currentProfile():null;
+      var value=snapshot?snapshot.totalValue:0;
+      var include=p?p.linkedPortfolioReviewed===true&&p.includeInvestmentPortfolioInNetWorth===true:true;
+      var rate=window.BudgetFX?.quote('TWD',p?.mainCurrency||'TWD')||0;
+      var convertedValue=value*rate;
+      var convertedProfit=(snapshot?snapshot.totalProfitLoss:0)*rate;
+      f.investmentValueTwd=value;
+      f.investmentProfitLossTwd=snapshot?snapshot.totalProfitLoss:0;
+      f.investmentPortfolioValue=convertedValue;
+      f.investmentProfitLoss=convertedProfit;
+      f.investmentFxRate=rate;
+      f.includeInvestment=Boolean(snapshot)&&include&&rate>0;
+      f.investmentRateMissing=include&&rate<=0;
+      if(f.includeInvestment){
+        const overlap=manualAssets(p).filter(a=>(p.portfolioOverlap||[]).includes(a.key)).reduce((n,a)=>n+Number(a.value||0),0);
+        f.netAssets=(Number(f.netAssets)||0)+convertedValue-overlap;
+        f.totalAssets=(Number(f.totalAssets)||0)+convertedValue-overlap;
+        f.netWorth=f.totalAssets-f.totalLiabilities;
+      }
+      return f;
+    };
+  }
+
+  var oldStatements=window.renderStatementsFixture;
+  if(typeof oldStatements==='function'){
+    window.renderStatementsFixture=function(){
+      oldStatements.apply(this,arguments);
+      var f=typeof financeSummary==='function'?financeSummary():{};
+      if(!f.includeInvestment && currentProfile()?.includeInvestmentPortfolioInNetWorth && currentProfile()?.linkedPortfolioReviewed){
+        const title=document.querySelector('#statementsBox .metric-card p');
+        if(title)title.textContent='Personal Net Worth (linked portfolio unavailable)';
+      }
+      var incomeTable=document.getElementById('incomeStatementTable');
+      var positionTable=document.getElementById('positionStatementTable');
+      var cards=document.getElementById('statementsBox');
+      if(incomeTable&&!document.getElementById('investmentPnlStatementRow')){
+        var tr=document.createElement('tr');
+        tr.id='investmentPnlStatementRow';
+        tr.innerHTML='<td>Investment profit / loss (Investor App, all time)</td><td>'+(snapshot&&f.investmentFxRate>0?money(f.investmentProfitLoss||0):'Not connected')+'</td><td>Live ETF + CFD tracker performance in TWD. Kept separate from monthly cash income; ETF performance may include unrealized market changes.</td>';
+        incomeTable.appendChild(tr);
+      }else if(incomeTable){
+        var cells=document.getElementById('investmentPnlStatementRow').children;
+        if(cells[1])cells[1].textContent=(snapshot&&f.investmentFxRate>0?money(f.investmentProfitLoss||0):'Not connected');
+      }
+      if(positionTable&&!document.getElementById('investmentPortfolioPositionRow')){
+        var tr2=document.createElement('tr');
+        tr2.id='investmentPortfolioPositionRow';
+        tr2.innerHTML='<td>Investment portfolio (ETF + CFD)</td><td>'+(snapshot&&f.investmentFxRate>0?money(f.investmentPortfolioValue||0):'Not connected')+'</td><td>Read-only value from the Investor App; '+(f.includeInvestment?'included in total assets':f.investmentRateMissing?'waiting for an automatic TWD conversion rate':'excluded from total assets by choice')+'.</td>';
+        var anchor=positionTable.querySelector('tr:last-child');
+        positionTable.insertBefore(tr2,anchor||null);
+      }else if(positionTable){
+        var c=document.getElementById('investmentPortfolioPositionRow').children;
+        if(c[1])c[1].textContent=(snapshot&&f.investmentFxRate>0?money(f.investmentPortfolioValue||0):'Not connected');
+        if(c[2])c[2].textContent='Read-only value from the Investor App; '+(f.includeInvestment?'included in total assets':f.investmentRateMissing?'waiting for an automatic TWD conversion rate':'excluded from total assets by choice')+'.';
+      }
+      if(cards&&!document.getElementById('investmentTrackerStatementCards')){
+        var wrap=document.createElement('div');
+        wrap.id='investmentTrackerStatementCards';
+        wrap.innerHTML='<div class="metric-card"><p>Investment Portfolio Value (TWD)</p><h3>'+(snapshot?moneyTwd(f.investmentValueTwd):'Not connected')+'</h3></div><div class="metric-card"><p>Investment Profit / Loss (TWD)</p><h3>'+(snapshot?moneyTwd(f.investmentProfitLossTwd):'Not connected')+'</h3></div>';
+        cards.appendChild(wrap);
+      }else if(cards){
+        var metrics=document.getElementById('investmentTrackerStatementCards').children;
+        if(metrics[0])metrics[0].querySelector('h3').textContent=(snapshot?moneyTwd(f.investmentValueTwd):'Not connected');
+        if(metrics[1])metrics[1].querySelector('h3').textContent=(snapshot?moneyTwd(f.investmentProfitLossTwd):'Not connected');
+      }
+      renderMetrics();
+    };
+  }
+
+  var oldPreview=window.previewTransactionBeforeSave;
+  if(typeof oldPreview==='function'){
+    window.previewTransactionBeforeSave=function(e){
+      var cat=String(document.getElementById('transactionCategory')&&document.getElementById('transactionCategory').value||'').trim().toLowerCase();
+      if(manualCats.indexOf(cat)>=0){
+        if(e&&e.preventDefault)e.preventDefault();
+        alert('Investment Profit/Loss is read from the Investor App and cannot be entered manually here. Refresh the Investor App link instead.');
+        return;
+      }
+      return oldPreview.apply(this,arguments);
+    };
+  }
+
+  async function refresh(showAlert){
+    if(busy)return;
+    busy=true;
+    var button=document.getElementById('refreshInvestmentTracker');
+    if(button){button.disabled=true;button.textContent='Refreshing…';}
+    try{
+      var cloud=window.AurumCloud;
+      if(!cloud||!cloud.module||typeof cloud.module.load!=='function'||typeof cloud.initialize!=='function'){
+        throw new Error('Shared Investor App cloud files are unavailable. This page must be served with the Investor App shared folder.');
+      }
+      await cloud.initialize();
+      var user=cloud.auth&&typeof cloud.auth.getUser==='function'?cloud.auth.getUser():null;
+      if(!user||!user.id)throw new Error('Sign in through the Investor App first. This page reuses that session and does not create another login.');
+      await window.BudgetFX.refresh();
+      var results=await Promise.all([cloud.module.load('etf'),cloud.module.load('cfd')]);
+      checkOwner();
+      const [etf,cfd]=results.map((result,index)=>{
+        const name=['ETF','CFD'][index];
+        if(result?.source!=='cloud')throw Error(name+' cloud summary unavailable. Refresh after reconnecting.');
+        const summary=unwrap(result).summary;
+        const currency=summary.currency==='NTD'?'TWD':summary.currency;
+        const rate=currency && window.BudgetFX.quote(currency,'TWD');
+        if(!rate)throw Error(name+' currency or exchange rate unavailable.');
+        for(const key of ['current_value','profit_loss']){
+          if(typeof summary[key]!=='number'||!Number.isFinite(summary[key]))throw Error(name+' summary is incomplete.');
+        }
+        return {value:summary.current_value*rate,profit:summary.profit_loss*rate};
+      });
+      var etfValue=etf.value,cfdValue=cfd.value,etfPnl=etf.profit,cfdPnl=cfd.profit;
+      snapshot={
+        userId:user.id,
+        etfValue:etfValue,
+        cfdValue:cfdValue,
+        totalValue:etfValue+cfdValue,
+        totalProfitLoss:etfPnl+cfdPnl,
+        updatedAt:new Date().toISOString()
+      };
+      setStatus('good','Investor App connected · ETF and CFD cloud data loaded · refreshed '+new Date(snapshot.updatedAt).toLocaleString()+'. Values are read-only and shown in TWD.');
+      renderMetrics();
+      if(typeof renderFinanceFixtures==='function')renderFinanceFixtures();
+      if(typeof renderMonthlyReviews==='function')renderMonthlyReviews();
+      if(showAlert)alert('Investor App data refreshed. Statements and Net Worth now show the latest ETF and CFD values.');
+    }catch(error){
+      snapshot=null;
+      setStatus('warning',error&&error.message?error.message:'Could not load Investor App data. Sign in to the tracker and retry.');
+      renderMetrics();
+      if(typeof renderFinanceFixtures==='function')renderFinanceFixtures();
+      if(showAlert)alert(error&&error.message?error.message:'Could not load Investor App data.');
+    }finally{
+      busy=false;
+      if(button){button.disabled=false;button.textContent='Refresh from Investor App';}
+    }
+  }
+  window.refreshInvestmentTracker=function(showAlert){return refresh(Boolean(showAlert));};
+  window.addEventListener('load',function(){
+    var btn=document.getElementById('refreshInvestmentTracker');
+    if(btn)btn.addEventListener('click',function(){refresh(true);});
+    var fx=document.getElementById('investmentTwdRate');
+
+    var option=document.getElementById('includeInvestmentPortfolioInNetWorth');
+    if(option)option.addEventListener('change',function(){
+      var p=typeof currentProfile==='function'?currentProfile():null;
+      if(!p)return;
+      if(option.checked&&!confirm('Include the linked ETF and CFD values? Confirm that you selected any manual assets that represent these portfolios.')){option.checked=false;return;}
+      p.linkedPortfolioReviewed=true;
+      p.includeInvestmentPortfolioInNetWorth=option.checked;
+      if(typeof saveStore==='function')saveStore();
+      if(typeof renderFinanceFixtures==='function')renderFinanceFixtures();
+    });
+    if(typeof activeProfileId!=='undefined'&&activeProfileId)refresh(false);
+  });
+  document.addEventListener('visibilitychange',function(){
+    if(document.visibilityState==='visible'&&typeof activeProfileId!=='undefined'&&activeProfileId)refresh(false);
+  });
+  window.setInterval(function(){
+    if(document.visibilityState==='visible'&&typeof activeProfileId!=='undefined'&&activeProfileId)refresh(false);
+  },60000);
+})();
+</script>
+<script>
+/* Automatic reference exchange rates. Existing records retain their booked rate. */
+window.BudgetFX = (() => {
+  'use strict';
+  const CACHE_KEY = 'pilotprofit_fx_usd_v1';
+  const DAY = 86400000, MAX_AGE = 7 * DAY;
+  const fields = {
+    transaction:['transactions','previewTransactionBeforeSave','clearTransactionForm','editTransaction'],
+    account:['accounts','saveAccount','clearAccountForm','editAccount'],
+    transfer:['transfers','saveTransfer','clearTransferForm','editTransfer'],
+    receivable:['tradeReceivables','saveTradeReceivable','clearTradeReceivableForm','editTradeReceivable'],
+    budget:['budgets','saveBudget','clearBudgetForm','editBudget'],
+    debt:['debts','saveDebt','clearDebtForm','editDebt'],
+    asset:['assets','saveAsset','clearAssetForm','editAsset'],
+    project:['projects','saveProject','clearProjectForm','editProject'],
+    netWorth:['netWorthItems','saveNetWorthItem','clearNetWorthForm','editNetWorthItem']
+  };
+  let cache=null, inFlight=null, lastAttempt=0, failed=false;
+  const el=id=>document.getElementById(id);
+  const positive=x=>typeof x==='number'&&Number.isFinite(x)&&x>0;
+  function valid(data){
+    return data&&data.result==='success'&&data.base_code==='USD'&&data.rates&&
+      positive(data.time_last_update_unix)&&data.time_last_update_unix*1000<=Date.now()+300000&&
+      ['USD','TWD','SZL'].every(c=>positive(data.rates[c]))&&data.rates.USD===1;
+  }
+  try { const saved=JSON.parse(localStorage.getItem(CACHE_KEY)); if(valid(saved))cache=saved; }catch(e){}
+  function usable(){return valid(cache)&&Date.now()-cache.time_last_update_unix*1000<=MAX_AGE;}
+  function due(){return !usable()||Date.now()>Math.min((cache.time_next_update_unix||0)*1000,cache.time_last_update_unix*1000+DAY);}
+  function quote(from,to){
+    if(from===to)return 1;
+    if(!usable()||!positive(cache.rates[from])||!positive(cache.rates[to]))return null;
+    const rate=cache.rates[to]/cache.rates[from];
+    return positive(rate)?rate:null;
+  }
+  function stamp(){return cache?new Date(cache.time_last_update_unix*1000).toLocaleString():'';}
+  function context(prefix){
+    const p=currentProfile(), from=el(prefix+'Currency')?.value, to=p?.mainCurrency||'TWD';
+    const id=el(prefix+'Id')?.value;
+    const record=(p?.[fields[prefix][0]]||[]).find(x=>x.id===id);
+    if(record&&record.currency===from&&(!record.baseCurrency||record.baseCurrency===to)&&positive(Number(record.rateToMain))){
+      return {rate:Number(record.rateToMain),from,to,source:'recorded',asOf:record.fxAsOf||null};
+    }
+    return {rate:quote(from,to),from,to,source:from===to?'same currency':'ExchangeRate-API',asOf:from===to?null:(usable()?new Date(cache.time_last_update_unix*1000).toISOString():null)};
+  }
+  function paint(prefix){
+    const input=el(prefix+'Rate'); if(!input)return null;
+    const c=context(prefix), note=el(prefix+'FxNote');
+    input.value=c.rate===null?'':String(c.rate);
+    input.readOnly=true; input.step='any';
+    input.setAttribute('aria-label','Automatic exchange rate to '+c.to);
+    if(note){
+      note.textContent=c.source==='recorded'?`Recorded rate: 1 ${c.from} = ${c.rate} ${c.to}. Kept for this saved entry.`:
+        c.from===c.to?`1 ${c.from} = 1 ${c.to}`:
+        c.rate!==null?`1 ${c.from} = ${Number(c.rate.toPrecision(8))} ${c.to} · ${failed||due()?'Cached rate':'Reference rate'} as of ${stamp()}`:
+        inFlight?'Fetching exchange rate…':'Rate unavailable. Connect to the internet before saving this currency.';
+    }
+    return c;
+  }
+  function paintAll(){
+    Object.keys(fields).forEach(paint);
+    const input=el('investmentTwdRate');
+    const to=currentProfile()?.mainCurrency||'TWD', rate=quote('TWD',to);
+    if(input){input.readOnly=true;input.value=rate===null?'':String(rate);}
+    const note=el('investmentFxNote');
+    if(note)note.textContent=rate===null?'Waiting for an exchange rate.':`Automatic: 1 TWD = ${Number(rate.toPrecision(8))} ${to}${to==='TWD'?'':' · as of '+stamp()}`;
+    const status=el('fxStatus');
+    if(status)status.textContent=inFlight?'Updating exchange rates…':usable()?`${failed||due()?'Using cached rates':'Rates ready'} · as of ${stamp()}`:'Exchange rates unavailable. Same-currency entries still work.';
+  }
+  function refresh(){
+    if(inFlight)return inFlight;
+    if(!due()||Date.now()-lastAttempt<60000){paintAll();return Promise.resolve(usable());}
+    lastAttempt=Date.now();
+    inFlight=(async()=>{
+      const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),12000);
+      try{
+        const response=await fetch('https://open.er-api.com/v6/latest/USD',{signal:controller.signal,credentials:'omit'});
+        if(!response.ok)throw new Error('Rate service unavailable');
+        const data=await response.json();
+        if(!valid(data)||Date.now()-data.time_last_update_unix*1000>MAX_AGE)throw new Error('Invalid or expired rates');
+        cache=data;failed=false;
+        try{localStorage.setItem(CACHE_KEY,JSON.stringify(data));}catch(e){}
+      }catch(e){failed=true;}
+      finally{clearTimeout(timer);inFlight=null;paintAll();if(currentProfile())renderFinanceFixtures();}
+      return usable();
+    })();
+    paintAll();return inFlight;
+  }
+  function prepare(prefix){
+    const c=paint(prefix);
+    if(c&&positive(c.rate))return true;
+    refresh();alert('An exchange rate is not available yet. Connect to the internet and try again. No entry has been saved.');return false;
+  }
+  function meta(prefix){const c=context(prefix);return {baseCurrency:c.to,fxSource:c.source,fxAsOf:c.asOf};}
+  function initialize(){
+    Object.entries(fields).forEach(([prefix,config])=>{
+      const input=el(prefix+'Rate'),currency=el(prefix+'Currency');if(!input||!currency)return;
+      const label=input.parentElement.querySelector('label');if(label)label.textContent='Exchange Rate · Automatic';
+      const note=document.createElement('p');note.id=prefix+'FxNote';note.className='small';note.setAttribute('aria-live','polite');input.after(note);
+      currency.addEventListener('change',()=>{paint(prefix);refresh();});
+      for(const name of config.slice(2)){
+        const original=window[name];if(typeof original==='function')window[name]=function(){const result=original.apply(this,arguments);paint(prefix);return result;};
+      }
+      const original=window[config[1]];
+      if(typeof original==='function')window[config[1]]=function(event){
+        if(!prepare(prefix)){event?.preventDefault();return false;}
+        return original.apply(this,arguments);
+      };
+      const form=input.closest('form');
+      if(form)form.addEventListener('submit',async event=>{
+        if(positive(paint(prefix)?.rate))return;
+        event.preventDefault();event.stopImmediatePropagation();
+        if(form.dataset.fxWaiting==='1')return;
+        form.dataset.fxWaiting='1';
+        try{await refresh();if(positive(paint(prefix)?.rate)){form.requestSubmit();}else{prepare(prefix);}}
+        finally{delete form.dataset.fxWaiting;}
+      },true);
+    });
+    const build=window.buildTransactionItemFromForm;
+    window.buildTransactionItemFromForm=function(){const item=build.apply(this,arguments);return {...item,...meta('transaction')};};
+    const save=window.recordSave;
+    window.recordSave=function(collection,item,idField){
+      const prefix=Object.keys(fields).find(key=>fields[key][0]===collection);
+      if(prefix)Object.assign(item,meta(prefix));return save.apply(this,arguments);
+    };
+    // Historical amounts are denominated in the profile currency. Do not silently relabel them.
+    const settings=window.saveSettings;
+    window.saveSettings=function(event){
+      const p=currentProfile(),next=el('settingCurrency').value;
+      if(next!==p.mainCurrency&&Object.values(fields).some(([key])=>(p[key]||[]).length)){
+        event.preventDefault();el('settingCurrency').value=p.mainCurrency;
+        alert('This budget already has records in '+p.mainCurrency+'. Its main currency is kept to preserve those balances. You can still enter TWD, USD or SZL transactions with automatic conversion.');return;
+      }
+      const result=settings.apply(this,arguments);paintAll();refresh();return result;
+    };
+    paintAll();refresh();
+  }
+  window.addEventListener('load',initialize);
+  window.addEventListener('online',()=>{lastAttempt=0;refresh();});
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refresh();});
+  window.setInterval(()=>{if(document.visibilityState==='visible')refresh();},3600000);
+  return {quote,refresh,prepare,paintAll};
+})();
+
+</script>
+</body>
+</html>
