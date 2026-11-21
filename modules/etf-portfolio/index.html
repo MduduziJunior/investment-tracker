@@ -47,7 +47,7 @@
 <div class="app">
 <section class="work">
   <div class="modulebar">
-    <nav aria-label="Investment tracker modules"><a href="../../index.html">← Unified Dashboard</a><a class="active" href="./index.html" aria-current="page">ETF</a><a href="../cfd-journal/index.html">CFD</a><a href="../cash-savings/index.html">Cash Savings</a></nav>
+    <nav aria-label="Investment tracker modules"><a href="../../index.html">← Unified Dashboard</a><a class="active" href="./index.html" aria-current="page">ETF</a><a href="../cfd-journal/index.html">CFD</a><a href="../cash-savings/index.html">Cash Savings</a><a href="../budgeting/index.html">Budgeting</a></nav>
     <span class="modulebar-status"><i></i>Supabase ETF module · Taiwan · Cathay Securities</span>
   </div>
   <div class="modulebrand"><div class="logo">ETF</div><b>Taiwan ETF Portfolio<small>Authenticated Cathay Securities investment tracker · FIFO cost basis</small></b></div>
@@ -131,7 +131,8 @@
     home: ROOT_URL,
     etf: './index.html',
     cfd: '../cfd-journal/index.html',
-    cash: '../cash-savings/index.html'
+    cash: '../cash-savings/index.html',
+    budgeting: '../budgeting/index.html'
   });
 
   const ACTIVE_USER_KEY = 'aurum_imperium_active_user_v1';
@@ -182,6 +183,7 @@
 
   const runtime = {
     initialized: false,
+    verifiedCloudRead: false,
     user: null,
     profile: null,
     username: '',
@@ -646,6 +648,7 @@
   }
 
   function persistLocalState() {
+    if(!sameSession()) return;
     if (!runtime.user?.id) return false;
     const summary = buildSummary();
     const results = [
@@ -906,7 +909,22 @@
     if (duration > 0) showMessage.timer = setTimeout(()=>{ box.style.display='none'; }, duration);
   }
 
+  function canPublishQuoteRefresh() {
+    if (!sameSession() || !runtime.verifiedCloudRead || runtime.conflictLocked) return false;
+    const cached=AurumCloud.module.getCached?.(MODULE.cloudId)?.state;
+    if (cached && JSON.stringify(cached)!==JSON.stringify(runtime.cloudBaseState)) {
+      setCloudStatus('pending','ETF changed in another tab · Load Cloud to refresh');
+      return false;
+    }
+    return true;
+  }
+
+  function sameSession() {
+    return Boolean(runtime.user?.id && runtime.user.id===window.AurumCloud?.auth?.getUser()?.id);
+  }
+
   function ensureEditable() {
+    if (!sameSession()) { redirectForMissingSession('session-changed'); return false; }
     if (runtime.conflictLocked) { showMessage('Editing is locked until the protected cloud conflict is resolved with Load Cloud.', true, 7000); return false; }
     if (runtime.cloudSaveInProgress || runtime.priceUpdateInProgress) { showMessage('ETF data is busy synchronizing. Wait for the current operation to finish.', true); return false; }
     if (!runtime.initialized || !runtime.user?.id) { showMessage('The authenticated ETF session is not ready yet.', true); return false; }
@@ -1599,14 +1617,16 @@
     try {
       const list=await requestMarketQuotes([ticker]);
       if(!list.length) throw new Error('No price returned.');
+      if(!sameSession() || runtime.conflictLocked || (runtime.verifiedCloudRead && !canPublishQuoteRefresh())) return false;
+      const priorValue=computePortfolio().net;
       storeQuotes(list);
       const latest = runtime.quotes[ticker] || list[0];
       if(display&&isActive()){display.textContent=`${money(latest.price)} · ${latest.source} · ${pct(latest.change)}`;display.className='';}
       if(isActive() && ($('kind')?.value==='buy'||$('kind')?.value==='sell') && !runtime.executionPriceTouched) $('price').value=latest.price;
       if(isActive()) updateTradePreview();
-      // Preview quotes are reproducible market data, not ledger edits. Keeping
-      // them local avoids a background ETF save racing the open Unified tab.
-      persistLocalState();
+      if(runtime.initialized && runtime.verifiedCloudRead && Math.abs(computePortfolio().net-priorValue)>EPS)
+        markLocalMutation('ETF holding valuation updated · cloud sync in 10 seconds',{renderNow:false,silentMessage:true});
+      else persistLocalState();
       if(!silent) showMessage(`${ticker} market price updated.`);
       return true;
     } catch(error) {
@@ -1642,6 +1662,18 @@
     document.querySelectorAll('[data-check]').forEach(box=>runtime.journey.checks[box.dataset.check]=box.checked);
     markLocalMutation('Investment journey saved · cloud sync in 10 seconds');
     showMessage('Investment journey saved.');
+  }
+
+  function repairPublishedSummary(state) {
+    if (!sameSession() || !runtime.verifiedCloudRead || runtime.conflictLocked) return false;
+    const summary=buildSummary();
+    const keys=['module','currency','current_value','total_contributed','profit_loss'];
+    if (keys.every(key=>state.publishedSummary?.[key]===summary[key])) return false;
+    const next={...clone(state),publishedSummary:summary};
+    AurumCloud.module.autoSave(MODULE.cloudId,next,{schemaVersion:Math.max(MODULE.schemaVersion,Number(state.schemaVersion)||0),delayMs:AUTO_SAVE_MS});
+    runtime.cloudBaseState=clone(next);
+    setCloudStatus('pending','ETF summary queued for Budgeting and Unified Dashboard');
+    return true;
   }
 
   function buildCloudState() {
@@ -1683,9 +1715,12 @@
     const state=isObject(cloudState)?cloudState:{};
     const raw=isObject(state.raw)?state.raw:(isObject(state.data)?state.data:state);
     const transactions=Array.isArray(raw.transactions)?raw.transactions:(Array.isArray(raw.tx)?raw.tx:[]);
+    if (!Array.isArray(raw.transactions) && !Array.isArray(raw.tx)) throw new Error('ETF cloud ledger is incomplete. Current records were retained.');
+    const normalized=transactions.map(normalizeTransaction);
+    if(normalized.some(record=>!record)) throw new Error('ETF cloud ledger contains unreadable transactions.');
     const splitQuotes=splitLegacyQuotes(raw.quotes,raw.manualQuotes||raw.manual_quotes);
     return {
-      transactions:transactions.map(normalizeTransaction).filter(Boolean).sort(compareRecords),
+      transactions:normalized.sort(compareRecords),
       quotes:splitQuotes.online,
       manualQuotes:splitQuotes.manual,
       journey:normalizeJourney(raw.journey),
@@ -1728,27 +1763,12 @@
     const cfg=window.AURUM_SUPABASE_CONFIG||{};
     const prefix=String(cfg.LOCAL_PREFIX||'aurum_imperium_cloud_v1');
     const userId=String(runtime.user?.id||'');
-    const belongsToEtf=value=>isObject(value)&&['moduleName','module_name','module','id'].some(key=>String(value[key]||'').toLowerCase()===MODULE.cloudId);
-    const clean=value=>{
-      if(Array.isArray(value))return value.filter(item=>!belongsToEtf(item)).map(clean);
-      if(!isObject(value))return value;
-      const output={};for(const [key,item] of Object.entries(value))output[key]=clean(item);return output;
-    };
-    for(let index=localStorage.length-1;index>=0;index--){
-      const key=localStorage.key(index);if(!key||!key.startsWith(prefix)||!key.includes(userId))continue;
-      const lower=key.toLowerCase();
-      if(lower.includes(MODULE.cloudId)&&(lower.includes('module')||lower.includes('cache')||lower.includes('pending'))){
-        try{localStorage.removeItem(key);}catch{}continue;
-      }
-      try{
-        const raw=localStorage.getItem(key);const parsed=JSON.parse(raw);const cleaned=clean(parsed);
-        if(JSON.stringify(cleaned)!==JSON.stringify(parsed))localStorage.setItem(key,JSON.stringify(cleaned));
-      }catch{}
-    }
-    for(const method of ['discard','cancel','clearPending','removePending']){
-      try{AurumCloud?.sync?.[method]?.(MODULE.cloudId);}catch{}
-      try{AurumCloud?.module?.[method]?.(MODULE.cloudId);}catch{}
-    }
+    if (!sameSession()) throw new Error('Tracker session changed.');
+    const key=(cfg.LOCAL_KEYS?.SYNC_QUEUE || prefix+'_sync_queue')+':'+userId;
+    const queue=JSON.parse(localStorage.getItem(key)||'[]');
+    if(!Array.isArray(queue)) throw new Error('Unable to read the authenticated sync queue.');
+    const remaining=queue.filter(item=>!(item?.kind==='module-state' && item.moduleName===MODULE.cloudId));
+    if(remaining.length!==queue.length) localStorage.setItem(key,JSON.stringify(remaining));
   }
 
   async function resolveConflictByAcceptingCloud() {
@@ -1762,6 +1782,7 @@
   }
 
   function markLocalMutation(message='Saved locally · cloud sync in 10 seconds',options={}) {
+    if(!sameSession()) return;
     persistLocalState();
     if(options.renderNow!==false) render();
     if(!runtime.initialized||!runtime.user?.id||runtime.conflictLocked) return;
@@ -1778,13 +1799,14 @@
   }
 
   async function saveCloudNow({silent=false}={}) {
-    if(!runtime.user?.id) return false;
+    if(!sameSession()) return false;
     if(runtime.conflictLocked){if(!silent)showMessage('Save blocked: use Load Cloud to resolve the protected conflict first.',true);return false;}
     if(runtime.cloudSaveInProgress) return false;
     runtime.cloudSaveInProgress=true; $('saveCloud').disabled=true; setCloudStatus('pending','Saving ETF to cloud…');
     try{
       const snapshot=buildCloudState();
       const result=await AurumCloud.module.save(MODULE.cloudId,snapshot,{schemaVersion:MODULE.schemaVersion});
+      if(!sameSession() || runtime.conflictLocked) return false;
       if(result?.queued){runtime.pendingMutation=true;setCloudStatus('pending',navigator.onLine?'ETF save queued · synchronization pending':'Offline · ETF save queued safely');if(!silent)showMessage('ETF cloud save is queued safely.');return false;}
       runtime.cloudBaseState=clone(result?.state||snapshot); runtime.pendingMutation=false; persistLocalState();
       setCloudStatus('online','Cloud connected · ETF synced'); if(!silent)showMessage('ETF Portfolio saved to Supabase Cloud.'); return true;
@@ -1793,18 +1815,24 @@
   }
 
   async function loadCloudNow({forceAfterConflict=false,initial=false}={}) {
-    if(!runtime.user?.id) return false;
+    if(!sameSession()) return false;
     if(runtime.conflictLocked&&!forceAfterConflict) return resolveConflictByAcceptingCloud();
     $('loadCloud').disabled=true; setCloudStatus('pending','Loading ETF from cloud…');
     try{
+      runtime.verifiedCloudRead=false;
       const result=await AurumCloud.module.load(MODULE.cloudId);
+      if(!sameSession()) return false;
+      runtime.verifiedCloudRead=result?.source==='cloud' || (!result && AurumCloud.getStatus().online);
+      if(!runtime.verifiedCloudRead && result?.source!=='local-unsynced'){
+        setCloudStatus('pending','Cloud load unverified · device ledger retained');return false;
+      }
       if(!result){setCloudStatus('online','Cloud connected · no ETF state yet');if(!initial)showMessage('No ETF cloud state exists yet. Your local ETF data was not erased.');return false;}
       if(result.source==='local-unsynced'){
         const local=extractEnvelopeState(result); if(local)applyCloudState(local,{source:'local-unsynced'});
         runtime.pendingMutation=true; setCloudStatus('pending','Unsynced local ETF changes protected'); if(!initial)showMessage('Unsynced ETF changes are protected and were not overwritten.'); return false;
       }
       const cloud=extractEnvelopeState(result); if(!cloud)throw new Error('Cloud load returned no ETF state.');
-      applyCloudState(cloud,{source:'cloud'}); runtime.pendingMutation=false; if(!initial)showMessage('ETF Portfolio loaded from Supabase Cloud.'); return true;
+      applyCloudState(cloud,{source:'cloud'}); runtime.pendingMutation=false;repairPublishedSummary(cloud); if(!initial)showMessage('ETF Portfolio loaded from Supabase Cloud.'); return true;
     }catch(error){setCloudStatus('error','ETF cloud load failed · local data preserved');if(!initial)showMessage(error?.message||'Cloud load failed. Local ETF data is preserved.',true,0);return false;}
     finally{$('loadCloud').disabled=false;}
   }
@@ -1903,7 +1931,7 @@
     window.addEventListener('aurum-cloud:conflict',event=>{if(event.detail?.moduleName&&event.detail.moduleName!==MODULE.cloudId)return;setConflictLock(true);setCloudStatus('pending','ETF conflict protected · Load Cloud to resolve');});
     window.addEventListener('aurum-cloud:sync-start',()=>{if(!runtime.conflictLocked)setCloudStatus('pending','Synchronizing ETF…');});
     window.addEventListener('aurum-cloud:sync-end',()=>{
-      if(runtime.conflictLocked)return;
+      if(runtime.conflictLocked||!sameSession()||!runtime.verifiedCloudRead)return;
       try{const pending=Array.isArray(AurumCloud.sync.pending?.())?AurumCloud.sync.pending().some(op=>op.moduleName===MODULE.cloudId):false;runtime.pendingMutation=pending;setCloudStatus(pending?'pending':(navigator.onLine?'online':'pending'),pending?(navigator.onLine?'ETF sync pending':'Offline · ETF queued safely'):(navigator.onLine?'Cloud connected · ETF synced':'Offline · local ETF available'));}catch{}
     });
     window.addEventListener('aurum-cloud:offline',()=>setCloudStatus('pending','Offline · local ETF available'));
@@ -1921,8 +1949,9 @@
     if(runtime.logoutInProgress)return;
     runtime.logoutInProgress=true;
     try{
-      if(runtime.pendingMutation){try{AurumCloud.module.autoSave(MODULE.cloudId,buildCloudState(),{schemaVersion:MODULE.schemaVersion,delayMs:0});if(navigator.onLine)await Promise.race([AurumCloud.sync.flush(),new Promise(r=>setTimeout(r,2500))]);}catch{}}
-      await AurumCloud.auth.signOut();
+      if(!sameSession()) return;
+      if(runtime.pendingMutation&&!runtime.conflictLocked){try{AurumCloud.module.autoSave(MODULE.cloudId,buildCloudState(),{schemaVersion:MODULE.schemaVersion,delayMs:0});if(navigator.onLine)await Promise.race([AurumCloud.sync.flush(),new Promise(r=>setTimeout(r,2500))]);}catch{}}
+      if(sameSession())await AurumCloud.auth.signOut();
     }catch(error){console.warn('ETF inactivity logout warning:',error);}
     finally{location.replace(`${ROOT_URL}?reason=inactivity-logout`);}
   }
@@ -1939,8 +1968,8 @@
     let last=0;
     for(const name of ['pointerdown','keydown','touchstart','mousemove','wheel','scroll']) window.addEventListener(name,()=>{const now=Date.now();if(now-last<250)return;last=now;resetActivity();},{passive:true});
     window.addEventListener('pageshow',()=>{if(runtime.initialized&&runtime.user?.id)resetActivity();});
-    document.addEventListener('visibilitychange',()=>{if(document.visibilityState!=='visible'||!runtime.initialized)return;const u=AurumCloud.auth.getUser();if(!u?.id)redirectForMissingSession('session-ended');else resetActivity();});
-    window.addEventListener('beforeunload',()=>{persistLocalState();if(runtime.pendingMutation&&runtime.user?.id&&!runtime.conflictLocked){try{AurumCloud.module.autoSave(MODULE.cloudId,buildCloudState(),{schemaVersion:MODULE.schemaVersion,delayMs:0});}catch{}}});
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState!=='visible'||!runtime.initialized)return;const u=AurumCloud.auth.getUser();if(u?.id!==runtime.user?.id)redirectForMissingSession('session-changed');else resetActivity();});
+    window.addEventListener('beforeunload',()=>{if(!sameSession())return;if(runtime.pendingMutation&&runtime.user?.id&&!runtime.conflictLocked){try{AurumCloud.module.autoSave(MODULE.cloudId,buildCloudState(),{schemaVersion:MODULE.schemaVersion,delayMs:0});}catch{}}});
   }
 
   async function redirectForMissingSession(reason='session-required') {
@@ -2052,7 +2081,7 @@
   }
 
   async function maybeRefreshStalePrices() {
-    if(!navigator.onLine||runtime.conflictLocked||runtime.priceUpdateInProgress||runtime.cloudSaveInProgress)return;
+    if(!navigator.onLine||!canPublishQuoteRefresh()||runtime.priceUpdateInProgress||runtime.cloudSaveInProgress)return;
     const holdings=computePortfolio().holdings;if(!holdings.length)return;
     const stale=holdings.filter(h=>{
       const updated=Date.parse(String(runtime.quotes[h.ticker]?.updated||''));
@@ -2060,7 +2089,7 @@
     });
     if(!stale.length)return;
     runtime.priceUpdateInProgress=true;setConflictLock(runtime.conflictLocked);
-    try{const list=await requestMarketQuotes(stale.map(h=>h.ticker));if(list.length){storeQuotes(list);persistLocalState();render();}}
+    try{const list=await requestMarketQuotes(stale.map(h=>h.ticker));if(list.length && canPublishQuoteRefresh()){storeQuotes(list);markLocalMutation('ETF market prices updated · cloud sync in 10 seconds',{silentMessage:true});}}
     catch{}
     finally{runtime.priceUpdateInProgress=false;setConflictLock(runtime.conflictLocked);}
   }
@@ -2073,7 +2102,8 @@
       if(!user?.id){await redirectForMissingSession('session-required');return;}
       runtime.user=clone(user);
       try{runtime.profile=await AurumCloud.profile.load();}catch{runtime.profile=AurumCloud.profile.get?.()||null;}
-      runtime.username=cleanUsername(runtime.profile?.username||user.user_metadata?.username||user.user_metadata?.display_name||String(user.email||'Investor').split('@')[0])||`user_${String(user.id).slice(0,8)}`;
+      if(!sameSession()){await redirectForMissingSession('session-changed');return;}
+      runtime.username=cleanUsername(runtime.profile?.username||runtime.profile?.display_name||`user_${String(user.id).slice(0,8)}`)||`user_${String(user.id).slice(0,8)}`;
       activateCompatibilityScope(runtime.profile||{username:runtime.username},user.id);
       configureScopedKeys();
       const selfCheck=runCriticalSelfCheck();if(selfCheck.length)throw new Error(`ETF safety self-check failed: ${selfCheck.join(' ')}`);
@@ -2086,17 +2116,19 @@
       const localBefore={transactions:clone(runtime.transactions),quotes:clone(runtime.quotes),manualQuotes:clone(runtime.manualQuotes),journey:clone(runtime.journey),priceHistory:clone(runtime.priceHistory)};
       let result=null, initialLoadError=null;
       try{result=await AurumCloud.module.load(MODULE.cloudId);}catch(error){initialLoadError=error;console.warn('Initial ETF cloud load:',error);}
-      let migrationNeeded=claimed && !initialLoadError;
+      if(!sameSession()){await redirectForMissingSession('session-changed');return;}
+      runtime.verifiedCloudRead=!initialLoadError && (result?.source==='cloud' || (!result && AurumCloud.getStatus().online));
+      let migrationNeeded=claimed && runtime.verifiedCloudRead;
       if(result){
         if(result.source==='local-unsynced'){
           const local=extractEnvelopeState(result);if(local)applyCloudState(local,{source:'local-unsynced'});runtime.pendingMutation=true;
         }else{
           const cloud=extractEnvelopeState(result);
-          if(cloud){const parts=extractCloudParts(cloud);runtime.transactions=localBefore.transactions;runtime.quotes=localBefore.quotes;runtime.manualQuotes=localBefore.manualQuotes;runtime.journey=localBefore.journey;runtime.priceHistory=localBefore.priceHistory;applyCloudState(cloud,{source:'cloud',mergeCompatibility:!parts.native});if(!parts.native)migrationNeeded=true;}
+          if(cloud){const parts=extractCloudParts(cloud);runtime.transactions=localBefore.transactions;runtime.quotes=localBefore.quotes;runtime.manualQuotes=localBefore.manualQuotes;runtime.journey=localBefore.journey;runtime.priceHistory=localBefore.priceHistory;applyCloudState(cloud,{source:result.source,mergeCompatibility:!parts.native || result.source!=='cloud'});if(!parts.native)migrationNeeded=true;}
         }
       }else{
         persistLocalState();render();
-        if(!initialLoadError && (runtime.transactions.length||Object.keys(runtime.quotes).length||Object.keys(runtime.journey).some(k=>runtime.journey[k]))) migrationNeeded=true;
+        if(!initialLoadError && (runtime.transactions.length||Object.keys(runtime.quotes).length||JSON.stringify(runtime.journey)!==JSON.stringify(normalizeJourney({})))) migrationNeeded=true;
       }
 
       runtime.initialized=true;runtime.lastActivityAt=Date.now();$('sessionGate').hidden=true;setInterval(updateInactivityTimer,250);
@@ -2107,11 +2139,12 @@
       if(initialLoadError){
         setCloudStatus(navigator.onLine?'error':'pending',navigator.onLine?'Cloud load unavailable · local ETF preserved':'Offline · local ETF available');
         showMessage('Supabase could not be loaded during startup. Local ETF data was preserved and no automatic overwrite was attempted.',true,7000);
-      }else if(migrationNeeded){markLocalMutation('ETF migration protected · cloud sync in 10 seconds',{silentMessage:true});showMessage('Existing authenticated ETF data was preserved and will synchronize to Supabase.');}
+      }else if(migrationNeeded && runtime.verifiedCloudRead){markLocalMutation('ETF migration protected · cloud sync in 10 seconds',{silentMessage:true});showMessage('Existing authenticated ETF data was preserved and will synchronize to Supabase.');}
       else if(result?.source==='local-unsynced')setCloudStatus('pending','Unsynced local ETF changes protected');
-      else if(navigator.onLine)setCloudStatus('online',result?'Cloud connected · ETF synced':'Cloud connected · ETF ready');
-      else setCloudStatus('pending','Offline · local ETF available');
-      if(!initialLoadError) maybeRefreshStalePrices();
+      else if(result?.source==='cloud' && repairPublishedSummary(extractEnvelopeState(result))) showMessage('ETF reporting summary queued for synchronization.');
+      else if(runtime.verifiedCloudRead)setCloudStatus('online',result?'Cloud connected · ETF synced':'Cloud connected · ETF ready');
+      else setCloudStatus('pending','Using device ETF ledger · cloud load unverified');
+      if(runtime.verifiedCloudRead) maybeRefreshStalePrices();
     }catch(error){
       console.error('ETF initialization failed:',error);
       $('sessionGate').hidden=false;
@@ -2137,4 +2170,4 @@
 </script>
 </body>
 
-</html>
+</html>```

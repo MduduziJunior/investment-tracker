@@ -266,6 +266,7 @@ button{cursor:pointer}
     <a href="../etf-portfolio/index.html">ETF Portfolio</a>
     <a class="active" href="./index.html" aria-current="page">CFD Journal</a>
     <a href="../cash-savings/index.html">Cash Savings</a>
+    <a href="../budgeting/index.html">Budgeting</a>
   </nav>
 
   <div id="conflictBanner" class="conflict-banner hidden">
@@ -831,6 +832,7 @@ const cloudRuntime = {
   logoutInProgress:false,
   lastMutationAt:null,
   pendingMutation:false,
+  cloudReadVerified:false,
   cloudSaveInProgress:false
 };
 
@@ -1441,7 +1443,7 @@ function setConflictLock(locked,message='Sync conflict protected · Load Cloud t
   if(locked){ setCloudStatus('error',message); toast('Cloud conflict protected','A newer cloud revision was preserved. Load Cloud before editing or saving again.'); }
 }
 function sessionOwnershipValid(){
-  if(!cloudRuntime.initialized||!cloudRuntime.user?.id) return true;
+  if(!cloudRuntime.user?.id) return false;
   const live=window.AurumCloud?.auth?.getUser?.();
   return !!live?.id&&live.id===cloudRuntime.user.id;
 }
@@ -1482,6 +1484,20 @@ function publishedCfdSummary(){
     module:'cfd',currency:'USD',current_value:account,total_contributed:ft.net,profit_loss:realised,
     detail:`${open} open · ${closed} closed · account ${money(account)} · realised trading P/L ${money(realised)}`
   };
+}
+function repairPublishedSummary(cloudState){
+  if (!sessionOwnershipValid() || cloudRuntime.conflictLocked) return false;
+  const summary=publishedCfdSummary();
+  const fields=['module','currency','current_value','total_contributed','profit_loss'];
+  if (fields.every(key=>cloudState.publishedSummary?.[key]===summary[key])) return false;
+  // A summary repair must preserve even fields this version of the journal does not edit.
+  const snapshot={...deepClone(cloudState),publishedSummary:summary};
+  AurumCloud.module.autoSave(CLOUD_MODULE_ID,snapshot,{
+    schemaVersion:Math.max(SCHEMA_VERSION,Number(snapshot.schemaVersion)||0),delayMs:AUTO_SAVE_MS
+  });
+  cloudRuntime.cloudBaseState=deepClone(snapshot);
+  setCloudStatus('pending','CFD summary queued for Budgeting and Unified Dashboard');
+  return true;
 }
 function buildCloudState(){
   const base=isObject(cloudRuntime.cloudBaseState)?deepClone(cloudRuntime.cloudBaseState):{};
@@ -1536,7 +1552,16 @@ function cloudStateParts(cloudState){
   const cloudTrades=Array.isArray(raw.trades)?raw.trades:(Array.isArray(cloudState?.trades)?cloudState.trades:[]);
   const cloudFunding=Array.isArray(raw.funding)?raw.funding:(Array.isArray(cloudState?.funding)?cloudState.funding:[]);
   const evidence=isObject(raw.evidenceIndex)?raw.evidenceIndex:(isObject(cloudState?.evidenceIndex)?cloudState.evidenceIndex:{});
-  return {trades:sanitizeTradeCollection(cloudTrades),funding:sanitizeFundingCollection(cloudFunding),evidenceIndex:deepClone(evidence),native:Boolean(raw.nativeCfdModule||cloudState?.source==='cfd-module')};
+  if(!(Array.isArray(raw.trades)||Array.isArray(cloudState?.trades)) ||
+     !(Array.isArray(raw.funding)||Array.isArray(cloudState?.funding))){
+    throw new Error('CFD ledger is incomplete. Current records have been retained.');
+  }
+  const checkedTrades=sanitizeTradeCollection(cloudTrades);
+  const checkedFunding=sanitizeFundingCollection(cloudFunding);
+  if(checkedTrades.length!==cloudTrades.length || checkedFunding.length!==cloudFunding.length){
+    throw new Error('CFD ledger contains unreadable records. Current records have been retained.');
+  }
+  return {trades:checkedTrades,funding:checkedFunding,evidenceIndex:deepClone(evidence),native:Boolean(raw.nativeCfdModule||cloudState?.source==='cfd-module')};
 }
 function applyCloudState(cloudState,{source='cloud',mergeCompatibility=false}={}){
   if(!isObject(cloudState)) return false;
@@ -1567,10 +1592,10 @@ async function resolveConflictByAcceptingCloud(){
   if(!window.confirm('A newer CFD cloud revision is protected. Load the latest Supabase copy now? Unsynchronized local cloud-cache changes for this module will be discarded. Export JSON first if you need them.')) return false;
   const key=cloudCacheKey();
   if(key) try{ localStorage.removeItem(key); }catch{}
-  setConflictLock(false);
   return loadCloudNow({forceAfterConflict:true});
 }
 function markLocalMutation(message='Saved locally · cloud sync in 10 seconds'){
+  if(!sessionOwnershipValid()) return;
   persistLocalStores();
   if(!cloudRuntime.initialized||!cloudRuntime.user?.id||cloudRuntime.conflictLocked||!sessionOwnershipValid()) return;
   cloudRuntime.lastMutationAt=Date.now();
@@ -1595,6 +1620,8 @@ async function saveCloudNow({silent=false}={}){
   try{
     const snapshot=buildCloudState();
     const result=await AurumCloud.module.save(CLOUD_MODULE_ID,snapshot,{schemaVersion:SCHEMA_VERSION});
+    if(!sessionOwnershipValid()){ redirectForMissingSession('session-changed'); return false; }
+    if(cloudRuntime.conflictLocked) return false;
     if(result?.queued){
       cloudRuntime.pendingMutation=true;
       setCloudStatus('pending',navigator.onLine?'Save queued · synchronization pending':'Offline · save queued safely');
@@ -1623,10 +1650,23 @@ async function loadCloudNow({forceAfterConflict=false,initial=false}={}){
   $('loadCloud').disabled=true;
   setCloudStatus('pending','Loading CFD from cloud…');
   try{
+    cloudRuntime.cloudReadVerified=false;
     const result=await AurumCloud.module.load(CLOUD_MODULE_ID);
+    if(!sessionOwnershipValid()){ redirectForMissingSession('session-changed'); return false; }
+    if(!result && !AurumCloud.getStatus().online){
+      setCloudStatus('pending','Offline · no confirmed cloud state');
+      return false;
+    }
     if(!result){
+      if(forceAfterConflict) setConflictLock(false);
+      cloudRuntime.cloudReadVerified=true;
       setCloudStatus('online','Cloud connected · no CFD state yet');
       if(!initial) toast('No cloud CFD state','Your current local CFD data was not erased.');
+      return false;
+    }
+    if(result.source!=='cloud' && (forceAfterConflict || result.source!=='local-unsynced')){
+      setCloudStatus('pending','Cloud load unverified · current CFD records retained');
+      if(!initial) toast('Cloud copy unavailable','Current device records are available. Retry Load Cloud when connected.');
       return false;
     }
     if(result.source==='local-unsynced'){
@@ -1641,8 +1681,10 @@ async function loadCloudNow({forceAfterConflict=false,initial=false}={}){
     if(!cloud) throw new Error('Cloud load returned no CFD state.');
     const parts=cloudStateParts(cloud);
     applyCloudState(cloud,{source:'cloud',mergeCompatibility:initial&&!parts.native});
+    cloudRuntime.cloudReadVerified=true;
     setConflictLock(false);
     cloudRuntime.pendingMutation=false;
+    repairPublishedSummary(cloud);
     if(!initial) toast('CFD loaded from cloud','Latest Supabase state applied to this authenticated profile.');
     return true;
   }catch(error){
@@ -1666,10 +1708,11 @@ async function logoutForInactivity(){
   if(cloudRuntime.logoutInProgress) return;
   cloudRuntime.logoutInProgress=true;
   try{
-    if(cloudRuntime.pendingMutation){
+    if(!sessionOwnershipValid()) return;
+    if(cloudRuntime.pendingMutation && !cloudRuntime.conflictLocked){
       try{ const snapshot=buildCloudState(); AurumCloud.module.autoSave(CLOUD_MODULE_ID,snapshot,{schemaVersion:SCHEMA_VERSION,delayMs:0}); if(navigator.onLine) await AurumCloud.sync.flush(); }catch{}
     }
-    await AurumCloud.auth.signOut();
+    if(sessionOwnershipValid()) await AurumCloud.auth.signOut();
   }catch(error){ console.warn('CFD inactivity logout warning:',error); }
   finally{ location.replace(`${ROOT_URL}?reason=inactivity-logout`); }
 }
@@ -1692,7 +1735,7 @@ function bindCloudEvents(){
   });
   window.addEventListener('aurum-cloud:sync-start',()=>{ if(!cloudRuntime.conflictLocked) setCloudStatus('pending','Synchronizing CFD…'); });
   window.addEventListener('aurum-cloud:sync-end',()=>{
-    if(cloudRuntime.conflictLocked) return;
+    if(cloudRuntime.conflictLocked || !sessionOwnershipValid() || !cloudRuntime.cloudReadVerified) return;
     try{
       const pending=Array.isArray(AurumCloud.sync.pending?.())?AurumCloud.sync.pending().some(op=>op.moduleName===CLOUD_MODULE_ID):false;
       cloudRuntime.pendingMutation=pending;
@@ -1733,7 +1776,6 @@ function bindConflictMutationGuard(){
 }
 function stageBeforeUnload(){
   if(!sessionOwnershipValid()) return;
-  persistLocalStores();
   if(!cloudRuntime.initialized||!cloudRuntime.user?.id||!cloudRuntime.pendingMutation||cloudRuntime.conflictLocked) return;
   try{
     const snapshot=buildCloudState();
@@ -2956,7 +2998,8 @@ async function initializeModule(){
     cloudRuntime.user=deepClone(user);
     try{ cloudRuntime.profile=await AurumCloud.profile.load(); }
     catch{ cloudRuntime.profile=AurumCloud.profile.get?.()||null; }
-    cloudRuntime.username=cleanUsername(cloudRuntime.profile?.username||user.user_metadata?.username||user.user_metadata?.display_name||String(user.email||'Investor').split('@')[0])||`user_${String(user.id).slice(0,8)}`;
+    if(!sessionOwnershipValid()){ await redirectForMissingSession('session-changed'); return; }
+    cloudRuntime.username=cleanUsername(cloudRuntime.profile?.username||cloudRuntime.profile?.display_name||`user_${String(user.id).slice(0,8)}`)||`user_${String(user.id).slice(0,8)}`;
     activateCompatibilityScope(cloudRuntime.profile||{username:cloudRuntime.username},user.id);
     configureScopedStores();
     const selfCheckErrors=runCriticalSelfCheck();
@@ -2974,9 +3017,13 @@ async function initializeModule(){
     setCloudStatus('pending',navigator.onLine?'Loading authenticated CFD state…':'Offline · loading local CFD cache…');
 
     let result=null;
-    try{ result=await AurumCloud.module.load(CLOUD_MODULE_ID); }
+    try{
+      result=await AurumCloud.module.load(CLOUD_MODULE_ID);
+      cloudRuntime.cloudReadVerified=result?.source==='cloud'||(!result&&AurumCloud.getStatus().online);
+    }
     catch(error){ console.warn('Initial CFD cloud load:',error); }
 
+    if(!sessionOwnershipValid()){ await redirectForMissingSession('session-changed'); return; }
     let migrationNeeded=claimed;
     if(result){
       if(result.source==='local-unsynced'){
@@ -2985,9 +3032,10 @@ async function initializeModule(){
         cloudRuntime.pendingMutation=true;
       }else{
         const cloud=extractEnvelopeState(result);
+        if(!cloud) throw new Error('The CFD cloud row has no readable ledger.');
         if(cloud){
           const parts=cloudStateParts(cloud);
-          applyCloudState(cloud,{source:'cloud',mergeCompatibility:!parts.native});
+          applyCloudState(cloud,{source:result.source,mergeCompatibility:!parts.native || result.source!=='cloud'});
           if(!parts.native) migrationNeeded=true;
         }
       }
@@ -3006,15 +3054,17 @@ async function initializeModule(){
     refreshMonthlyEvidence().catch(()=>null);
     retryEvidenceCloudQueue().catch(()=>null);
 
-    if(migrationNeeded){
+    if(migrationNeeded && cloudRuntime.cloudReadVerified){
       markLocalMutation('CFD migration protected · cloud sync in 10 seconds');
       toast('CFD cloud migration ready','Existing authenticated CFD data was preserved and will synchronize to Supabase.');
+    }else if(result?.source==='cloud' && repairPublishedSummary(result.state)){
+      toast('CFD reporting updated','The USD investment summary is queued for synchronization.');
     }else if(result?.source==='local-unsynced'){
       setCloudStatus('pending','Unsynced local CFD changes protected');
-    }else if(navigator.onLine){
+    }else if(cloudRuntime.cloudReadVerified && navigator.onLine){
       setCloudStatus('online',result?'Cloud connected · CFD synced':'Cloud connected · CFD ready');
     }else{
-      setCloudStatus('pending','Offline · local CFD available');
+      setCloudStatus('pending',navigator.onLine?'Cloud load unverified · local CFD available':'Offline · local CFD available');
     }
   }catch(error){
     console.error('CFD initialization failed:',error);
