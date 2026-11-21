@@ -106,10 +106,17 @@
       <div id="holdingsGrid" class="holdings-grid"></div>
     </section>
 
+<section class="box"><h2>Budgeting funding and statements</h2>
+       <p>Start a deposit or withdrawal in <a href="../budgeting/index.html">Budgeting → Transfers</a>. After it syncs, load its reference here. For a movement already recorded in this jar, use Edit on the existing row before selecting the reference.</p>
+       <button id="budgetReload" class="secondary" type="button">Load Budgeting references</button>
+       <p id="budgetStatus" role="status">Budgeting references have not been loaded.</p>
+       <div class="form"><label>Statement period beginning<input id="periodFrom" type="date"></label><label>Period ending<input id="periodTo" type="date"></label>
+       <button id="publishPeriod" type="button" class="secondary">Prepare statement period</button></div>
+       <p id="periodNote" role="status"></p></section>
     <section class="box">
       <h2 id="formTitle">Record Monthly Transaction</h2>
       <form id="transactionForm" class="form" novalidate>
-        <div><label for="month">Accounting Month</label><input id="month" type="month" required><div class="field-note">Defaults to the current month on this device. Change only when recording a legitimate historical month.</div></div>
+        <div class="wide"><label for="budgetRef">Budgeting account and funding reference</label><select id="budgetRef"><option value="">Select a Budgeting movement</option></select></div><div><label for="month">Accounting Month</label><input id="month" type="month" required><div class="field-note">Defaults to the current month on this device. Change only when recording a legitimate historical month.</div></div>
         <div><label>Recorded on this Device</label><div id="deviceClock" class="device-time-box" aria-live="off">Reading device date and time…</div></div>
         <div><label for="type">Transaction Type</label><select id="type" required><option value="deposit">Deposit</option><option value="withdrawal">Withdrawal</option></select></div>
         <div><label id="currencyLabel" for="currency">Transaction Currency</label><select id="currency" required><option value="TWD">NTD (TWD)</option><option value="USD">USD</option><option value="SZL">SZL (E)</option></select></div>
@@ -138,7 +145,7 @@
     </section>
 
     <section class="box">
-      <div class="table-head"><h2>Monthly Transaction History</h2><div class="actions"><button class="secondary" id="exportData" type="button">Export JSON</button><button class="secondary" id="importData" type="button">Import JSON</button><input class="file-input" id="importFile" type="file" accept="application/json,.json"><button class="secondary" id="cancelEdit" type="button" hidden>Cancel Edit</button><button class="secondary" id="clearAll" type="button">Clear All</button></div></div>
+      <label for="findPosting">Find a statement reference or jar record</label><input id="findPosting" type="search" placeholder="Paste the reference from Budgeting"><div class="table-head"><h2>Monthly Transaction History</h2><div class="actions"><button class="secondary" id="exportData" type="button">Export JSON</button><button class="secondary" id="importData" type="button">Import JSON</button><input class="file-input" id="importFile" type="file" accept="application/json,.json"><button class="secondary" id="cancelEdit" type="button" hidden>Cancel Edit</button><button class="secondary" id="clearAll" type="button">Clear All</button></div></div>
       <div class="table-wrap"><table><thead><tr><th>Accounting Month</th><th>Recorded on Device</th><th>Type</th><th>Original Transaction</th><th>Treatment</th><th>Actually Held / Removed</th><th class="right">NTD at Transaction</th><th>FX Rate Used</th><th>Note</th><th class="right">Actions</th></tr></thead><tbody id="history"></tbody></table></div>
     </section>
   </main>
@@ -188,7 +195,7 @@
     function money(value,currency='TWD'){const n=Number(value)||0;const f=new Intl.NumberFormat('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n);if(currency==='TWD')return `NT$${f}`;if(currency==='USD')return `$${f}`;if(currency==='SZL')return `E${f}`;return `${currency} ${f}`}
     function formatTwd(v){return v==null?'Unavailable':money(v,'TWD')}
     function monthName(v){if(!validMonth(v))return String(v||'');const [y,m]=v.split('-').map(Number);return new Date(y,m-1,1).toLocaleDateString('en-US',{month:'long',year:'numeric'})}
-    function compareRecords(a,b){const m=String(a.month).localeCompare(String(b.month));if(m)return m;const ac=Number(a.createdAt||0),bc=Number(b.createdAt||0);if(ac!==bc)return ac-bc;if(a.type!==b.type)return a.type==='deposit'?-1:1;return String(a.id).localeCompare(String(b.id))}
+    function compareRecords(a,b){const m=String(a.month).localeCompare(String(b.month));if(m)return m;const day=String(a.date||a.month+'-01').localeCompare(String(b.date||b.month+'-01'));if(day)return day;const ac=Number(a.createdAt||0),bc=Number(b.createdAt||0);if(ac!==bc)return ac-bc;if(a.type!==b.type)return a.type==='deposit'?-1:1;return String(a.id).localeCompare(String(b.id))}
 
     function readJson(key,fallback=null){try{const raw=localStorage.getItem(key);return raw==null?fallback:JSON.parse(raw)}catch{return fallback}}
     function writeJson(key,value){try{localStorage.setItem(key,JSON.stringify(value));return true}catch{return false}}
@@ -204,13 +211,13 @@
       const cached=cachedRates();$('refreshFx').disabled=true;if(!silent)$('fxStatus').textContent='FX: updating live rates…';let liveLoaded=false;
       try{
         const response=await fetchWithTimeout('https://open.er-api.com/v6/latest/TWD',{cache:'no-store'});if(!response.ok)throw Error('Primary FX unavailable');const payload=await response.json();if(payload.result!=='success'||!validRatePayload(payload.rates))throw Error('Invalid primary FX response');
-        state.rates=normalizeRateRecord(payload.rates,payload.time_last_update_utc||new Date().toISOString(),'live');writeJson(RATE_CACHE_KEY,state.rates);liveLoaded=true;
+        state.rates=normalizeRateRecord(payload.rates,payload.time_last_update_utc||new Date().toISOString(),'live');state.rates.effectiveDay=typeof payload.time_last_update_unix==='number'?new Date(payload.time_last_update_unix*1000).toISOString().slice(0,10):null;writeJson(RATE_CACHE_KEY,state.rates);liveLoaded=true;
       }catch(primaryError){
         try{
           const response=await fetchWithTimeout('https://api.exchangerate-api.com/v4/latest/TWD',{cache:'no-store'});if(!response.ok)throw Error('Backup FX unavailable');const payload=await response.json();if(!validRatePayload(payload.rates))throw Error('Invalid backup FX response');
-          state.rates=normalizeRateRecord(payload.rates,payload.date_last_updated||new Date().toISOString(),'live-backup');writeJson(RATE_CACHE_KEY,state.rates);liveLoaded=true;
+          state.rates=normalizeRateRecord(payload.rates,payload.date_last_updated||new Date().toISOString(),'live-backup');state.rates.effectiveDay=isDay(payload.date)?payload.date:null;writeJson(RATE_CACHE_KEY,state.rates);liveLoaded=true;
         }catch(backupError){
-          if(cached?.rates&&validRatePayload(cached.rates))state.rates={...normalizeRateRecord(cached.rates,cached.updatedAt,'cached')};else state.rates={rates:{TWD:1},updatedAt:null,source:'unavailable'};
+          if(cached?.rates&&validRatePayload(cached.rates))state.rates={...normalizeRateRecord(cached.rates,cached.updatedAt,'cached'),effectiveDay:cached.effectiveDay||null};else state.rates={rates:{TWD:1},updatedAt:null,source:'unavailable'};
         }
       }finally{$('refreshFx').disabled=false}
       const age=rateAgeHours(),stale=state.rates?.source==='cached'&&Number.isFinite(age)&&age>36;const ts=state.rates?.updatedAt?` · ${new Date(state.rates.updatedAt).toLocaleString()}`:'';$('fxStatus').textContent=`FX: ${rateSourceLabel()}${stale?' (stale cache)':''}${ts}`;
@@ -240,7 +247,18 @@
     }
     function hydrateMissingFxBasis(records){let changed=false;for(const r of records){const source=normalizeCurrency(r.sourceCurrency||r.currency);if(source==='TWD'){if(r.fxRateTwdAtTransaction!==1){r.fxRateTwdAtTransaction=1;changed=true}if(!(Number(r.twdAtTransaction)>0)){r.twdAtTransaction=roundMoney(r.sourceAmount||r.amount);changed=true}continue}if(!(Number(r.fxRateTwdAtTransaction)>0)){const rate=Number(r.twdAtTransaction)/Number(r.sourceAmount);if(Number.isFinite(rate)&&rate>0){r.fxRateTwdAtTransaction=roundRate(rate);r.fxRateSource='recorded-transaction-basis';changed=true}}if(!(Number(r.twdAtTransaction)>0)&&Number(r.fxRateTwdAtTransaction)>0){r.twdAtTransaction=r.heldCurrency==='TWD'?roundMoney(r.heldAmount):roundMoney(r.sourceAmount*r.fxRateTwdAtTransaction);changed=true}}
       return changed}
-    function validateHistoricalHoldings(records){const units={TWD:0,USD:0,SZL:0};for(const r of [...records].sort(compareRecords)){const c=normalizeCurrency(r.currency||r.heldCurrency);const a=roundMoney(r.amount??r.heldAmount);if(!(a>0))return{valid:false,reason:'A transaction contains an invalid held amount.'};units[c]=roundMoney(units[c]+(r.type==='deposit'?a:-a));if(units[c]<-0.005)return{valid:false,reason:`The ${money(a,c)} withdrawal in ${monthName(r.month)} exceeds the ${c} actually held at that point in history.`}}
+    function validateHistoricalHoldings(records){
+      const seen=new Set(),ids=new Set();
+      for(const r of records){
+        if(ids.has(r.id))return {valid:false,reason:'Duplicate Cash Savings record ID.'};ids.add(r.id);
+        if(!r.budgetLink)continue;
+        if(r.budgetLink.kind!==r.type||r.budgetLink.currency!==r.sourceCurrency||r.budgetLink.amount!==r.sourceAmount||
+          r.budgetLink.date!==r.date||r.month!==r.date.slice(0,7))return {valid:false,reason:'The saved jar posting differs from its linked Budgeting reference.'};
+        if(!bookingValid(r.budgetLink)||r.budgetOwner!==state.user?.id||seen.has(r.budgetLink.id))
+          return {valid:false,reason:'Invalid, duplicate, or other-user Budgeting reference.'};
+        seen.add(r.budgetLink.id);
+      }
+      const units={TWD:0,USD:0,SZL:0};for(const r of [...records].sort(compareRecords)){const c=normalizeCurrency(r.currency||r.heldCurrency);const a=roundMoney(r.amount??r.heldAmount);if(!(a>0))return{valid:false,reason:'A transaction contains an invalid held amount.'};units[c]=roundMoney(units[c]+(r.type==='deposit'?a:-a));if(units[c]<-0.005)return{valid:false,reason:`The ${money(a,c)} withdrawal in ${monthName(r.month)} exceeds the ${c} actually held at that point in history.`}}
       return{valid:true}}
     function mergeById(existing,incoming){const map=new Map(existing.map(r=>[String(r.id),clone(r)]));for(const candidate of incoming){const id=String(candidate.id),current=map.get(id);if(!current){map.set(id,clone(candidate));continue}const a=Number(current.updatedAt||current.createdAt||0),b=Number(candidate.updatedAt||candidate.createdAt||0);if(b>a)map.set(id,{...current,...clone(candidate)});else if(b===a&&JSON.stringify(current)===JSON.stringify(candidate))continue}return[...map.values()].sort(compareRecords)}
     function recordsFingerprint(records=state.records){return JSON.stringify([...records].map(r=>normalizeRecord(r,'TWD')).filter(Boolean).sort((a,b)=>String(a.id).localeCompare(String(b.id))))}
@@ -284,7 +302,183 @@
     }
     function mirrorCompatibilityLedger(){if(!sameSession()||!state.scope)return;const store=scopedKey(BASE_STORE),currencyStore=scopedKey(BASE_CURRENCY_STORE);try{if(store)localStorage.setItem(store,JSON.stringify(state.records));if(currencyStore)localStorage.setItem(currencyStore,'TWD');localStorage.setItem(ACTIVE_USER_KEY,state.scope)}catch(e){console.warn('Cash Savings compatibility mirror failed:',e)}}
 
-    function buildCloudState(){const base=isObject(state.cloudBaseState)?clone(state.cloudBaseState):{},raw=isObject(base.raw)?clone(base.raw):{},s=summary(),clock=deviceClockSnapshot();return{...base,module:MODULE.cloudId,source:'cash-savings-module',updatedAt:clock.utcIso,updatedAtDevice:clock.deviceDateTime,deviceTimeZone:clock.timeZone,timezoneOffsetMinutes:clock.timezoneOffsetMinutes,legacyScope:state.scope||base.legacyScope||null,bridgeVersion:MODULE.bridgeVersion,schemaVersion:MODULE.schemaVersion,raw:{...raw,ownerUserId:state.user.id,records:clone(state.records),currency:'TWD',reportingCurrency:'TWD',multiCurrency:true,deviceTimestampVersion:1,legacyMigrationCompleted:true,holdings:clone(s.holdings),deviceContext:{capturedAt:clock.deviceDateTime,utcIso:clock.utcIso,timeZone:clock.timeZone,timezoneOffsetMinutes:clock.timezoneOffsetMinutes},fx:{rates:clone(state.rates),summaryVersion:5}},publishedSummary:s}}
+    // Budgeting is the writer for bank postings. Cash Savings owns the jar posting.
+    // A funding reference is attached only when the user selects and saves it.
+    let budgetDirectory=null, reportRange=null, loadingBudget=0;
+    const dayNow=()=>deviceClockSnapshot().deviceDate;
+    const isDay=d=>typeof d==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(d)&&Number.isFinite(Date.parse(d))&&new Date(d).toISOString().slice(0,10)===d;
+    const previousDay=d=>new Date(Date.parse(d)-86400000).toISOString().slice(0,10);
+    function bookingValid(b){
+      return b?.module===MODULE.cloudId&&typeof b.id==='string'&&Boolean(b.id)&&typeof b.accountId==='string'&&Boolean(b.accountId)
+        &&['deposit','withdrawal'].includes(b.kind)&&isDay(b.date)&&CURRENCIES.includes(b.currency)&&CURRENCIES.includes(b.base)
+        &&Number.isFinite(b.rate)&&b.rate>0&&Number.isFinite(b.amount)&&b.amount>0&&Number.isFinite(b.fee)&&b.fee>=0;
+    }
+    function reportConfig(){
+      const saved=state.cloudBaseState.raw?.cashReport;
+      return saved?.ownerId===state.user?.id?saved:{};
+    }
+    function budgetDates(b){return b.date+' · '+b.kind+' '+money(b.amount,b.currency);}
+    function rebuildChoices(){
+      const sel=$('budgetRef'),chosen=sel.value;
+      sel.replaceChildren(new Option('Select a Budgeting movement',''));
+      if(!budgetDirectory)return;
+      for(const b of budgetDirectory.funding){
+        if(state.records.some(r=>r.id!==state.editingId&&r.budgetLink?.id===b.id))continue;
+        const account=budgetDirectory.accounts.find(a=>a.id===b.accountId);
+        sel.add(new Option(budgetDates(b)+' · '+account.name+' · '+b.id,b.id));
+      }
+      if(Array.from(sel.options).some(o=>o.value===chosen))sel.value=chosen;
+    }
+    async function refreshBudget(){
+      const ticket=++loadingBudget,owner=state.user?.id;
+      try{
+        if(!sameSession())throw Error('Sign in through the Unified Dashboard.');
+        const env=await AurumCloud.module.load('budgeting');
+        if(ticket!==loadingBudget||!sameSession()||state.user.id!==owner)return false;
+        const directory=env?.state?.budgetFunding;
+        if(env?.source!=='cloud'||env.dirty||env.state?.ownerId!==owner||directory?.ownerId!==owner||
+          directory.version!==1||!CURRENCIES.includes(directory.currency)||!Array.isArray(directory.accounts)||!Array.isArray(directory.funding))
+          throw Error('Load and save a Budgeting movement using the updated Budgeting module, then reload references here.');
+        const funding=directory.funding.filter(b=>b?.module===MODULE.cloudId);
+        if(funding.some(b=>!bookingValid(b)||b.base!==directory.currency||!directory.accounts.some(a=>a.id===b.accountId))||
+          new Set(funding.map(b=>b.id)).size!==funding.length)throw Error('Invalid or duplicate Budgeting reference.');
+        if(funding.some(w=>w.kind==='withdrawal'&&!funding.some(d=>d.kind==='deposit'&&d.accountId===w.accountId&&d.date<=w.date)))throw Error('A withdrawal references an account without a prior Cash Savings deposit. Review it in Budgeting.');
+        budgetDirectory={...directory,funding};rebuildChoices();
+        const missing=state.records.filter(r=>r.budgetLink&&!funding.some(b=>sameBooking(b,observed(r))));
+        $('budgetStatus').textContent='Loaded '+funding.length+' Budgeting movements.'+(missing.length?' Review changed or removed references: '+missing.map(r=>r.budgetLink.id).join(', '):'');
+        const pending=funding.filter(b=>!state.records.some(r=>r.budgetLink?.id===b.id));
+        if(pending.length)$('budgetStatus').textContent+=' Awaiting a jar posting: '+pending.map(b=>b.id).join(', ')+'.';
+        const legacy=state.records.filter(r=>!r.budgetLink).length;
+        if(legacy)$('budgetStatus').textContent+=' Unlinked legacy records: '+legacy+'.';
+        return true;
+      }catch(e){if(ticket===loadingBudget){budgetDirectory=null;rebuildChoices();$('budgetStatus').textContent=e.message;}return false;}
+    }
+    function sameBooking(a,b){return ['id','module','accountId','date','kind','base','currency','rate','amount','fee'].every(k=>a?.[k]===b?.[k]);}
+    function selectBooking(){
+      const b=budgetDirectory?.funding.find(b=>b.id===$('budgetRef').value);
+      if(!b)return;
+      const existing=state.records.find(r=>r.id===state.editingId);
+      const keep=existing?.sourceCurrency===b.currency&&existing.sourceAmount===b.amount;
+      monthInput.value=b.date.slice(0,7);typeInput.value=b.kind;currencyInput.value=b.currency;amountInput.value=String(b.amount);
+      if(!keep){state.fxRateTouched=false;state.convertedTouched=false;}
+      syncFormFields(!keep);
+      if(b.base==='TWD'&&!keep){fxRateInput.value=String(b.rate);state.fxRateTouched=true;state.formRateSource='budget-booked';updateConvertedPreview();}
+    }
+    function observed(r){
+      const b=r.budgetLink;
+      if(!bookingValid(b)||r.budgetOwner!==state.user.id)return {id:'legacy-cash:'+r.id,date:r.date};
+      return {...b,kind:r.type,date:r.date,currency:r.sourceCurrency,amount:r.sourceAmount};
+    }
+    function reportSettings(){
+      const saved=reportConfig();
+      const currency=budgetDirectory?.currency||saved.currency;
+      const quotes={...saved.quotes};
+      const raw=state.rates,day=raw?.effectiveDay;
+      if(!quotes[day]&&isDay(day)&&day<=dayNow()&&validRatePayload(raw?.rates)&&raw?.source!=='unavailable')
+        quotes[day]={TWD:1,USD:Number(raw.rates.USD),SZL:Number(raw.rates.SZL)};
+      const today=dayNow(),ranges=new Map();
+      for(const r of [...(Array.isArray(saved.requested)?saved.requested:[]),{from:today.slice(0,7)+'-01',to:today},{from:today.slice(0,4)+'-01-01',to:today},reportRange]){
+        if(r&&isDay(r.from)&&isDay(r.to)&&r.from<=r.to&&r.to<=today)ranges.set(r.from+'/'+r.to,{from:r.from,to:r.to});
+      }
+      const requested=new Map((saved.requested||[]).map(r=>[r.from+'/'+r.to,r]));
+      if(reportRange)requested.set(reportRange.from+'/'+reportRange.to,reportRange);
+      return {ownerId:state.user.id,currency,quotes,requested:[...requested.values()],ranges:[...ranges.values()]};
+    }
+    function makePeriod(from,to,config){
+      const rows=state.records.filter(r=>r.month<=to.slice(0,7));
+      const earlier=[],closing=[],sources=[],flows=[];
+      let deposits=0,withdrawals=0;
+      for(const r of rows){
+        // Older month-only entries cannot establish a partial month's balance.
+        const dated=bookingValid(r.budgetLink)&&r.budgetOwner===state.user.id;
+        const nextMonth=new Date(Date.parse(r.month+'-01')).setUTCMonth(Number(r.month.slice(5)));
+        const end=previousDay(new Date(nextMonth).toISOString().slice(0,10));
+        if(!dated&&((from>r.month+'-01'&&from<=end)||(to>=r.month+'-01'&&to<end)))return null;
+        const day=dated?r.date:end;
+        if(day>to)continue;
+        closing.push(r);
+        if(day<from){
+          earlier.push(r);
+          sources.push({date:dated?day:r.month,reference:dated?r.budgetLink.id:r.id,description:'Opening holding · '+r.type+' '+money(r.heldAmount,r.heldCurrency)+' · jar record '+r.id});
+          continue;
+        }
+        let value;
+        if(dated&&r.budgetLink.base===config.currency)value=roundMoney(r.sourceAmount*r.budgetLink.rate);
+        else if(r.sourceCurrency===config.currency)value=r.sourceAmount;
+        else if(config.currency==='TWD')value=r.twdAtTransaction;
+        if(!Number.isFinite(value)||value<=0)return null;
+        if(r.type==='deposit')deposits+=value;else withdrawals+=value;
+        flows.push({r,day,value});
+        sources.push({date:dated?day:r.month,reference:dated?r.budgetLink.id:r.id,description:r.type+' · '+money(value,config.currency)+' · Cash Savings '+r.id});
+      }
+      function valuation(records,day){
+        const units=holdings(records),rates=config.quotes[day];
+        let total=0;
+        for(const [c,n] of Object.entries(units)){
+          if(!n)continue;
+          if(c===config.currency){total+=n;continue;}
+          if(!(rates?.[c]>0&&rates?.[config.currency]>0))return null;
+          total+=n*rates[config.currency]/rates[c];
+        }
+        return roundMoney(total);
+      }
+      const opening=valuation(earlier,previousDay(from)),close=valuation(closing,to);
+      if(opening==null||close==null)return null;
+      deposits=roundMoney(deposits);withdrawals=roundMoney(withdrawals);
+      // Calculate FX from the units held, their carrying costs and actual disposal
+      // proceeds independently of the opening-to-closing reconciliation.
+      const openingUnits=holdings(earlier),positions={};
+      const unitRate=(code,day)=>code===config.currency?1:config.quotes[day]?.[config.currency]/config.quotes[day]?.[code];
+      let fx=0;
+      for(const c of CURRENCIES){
+        const units=openingUnits[c];
+        positions[c]={units,cost:units?units*unitRate(c,previousDay(from)):0};
+      }
+      for(const {r,value} of flows.sort((a,b)=>a.day.localeCompare(b.day)||compareRecords(a.r,b.r))){
+        const c=r.heldCurrency,units=r.heldAmount,pos=positions[c];
+        if(r.type==='deposit'){
+          const cost=c===config.currency?units:value;
+          fx+=cost-value;pos.cost+=cost;pos.units=roundMoney(pos.units+units);
+        }else{
+          if(pos.units<units||!(pos.units>0))return null;
+          const released=pos.cost*units/pos.units;
+          fx+=value-released;pos.cost-=released;pos.units=roundMoney(pos.units-units);
+        }
+      }
+      for(const c of CURRENCIES){
+        const pos=positions[c];
+        if(pos.units)fx+=pos.units*unitRate(c,to)-pos.cost;
+      }
+      // Opening and closing valuations can each round by half a cent. Keep that
+      // rounding visible rather than absorbing a genuine ledger difference.
+      const rawOpening=CURRENCIES.reduce((n,c)=>n+(openingUnits[c]?openingUnits[c]*unitRate(c,previousDay(from)):0),0);
+      const rawClose=CURRENCIES.reduce((n,c)=>n+(positions[c].units?positions[c].units*unitRate(c,to):0),0);
+      const rounding=(close-rawClose)-(opening-rawOpening);
+      fx=roundMoney(fx+rounding);
+      if(!Number.isFinite(fx))return null;
+      sources.push({date:to,reference:'Closing cash holdings',description:JSON.stringify(holdings(closing))+' · reporting currency '+config.currency+
+        ' · closing rates '+JSON.stringify(config.quotes[to]||{})+' · FX '+money(fx,config.currency)});
+      return {from,to,opening,closing:close,deposits,withdrawals,realized:0,unrealized:0,fees:0,fx,sources};
+    }
+    function reporting(config){
+      if(!CURRENCIES.includes(config.currency))return null;
+      return {version:1,ownerId:state.user.id,currency:config.currency,funding:state.records.map(observed),
+        periods:config.ranges.map(r=>makePeriod(r.from,r.to,config)).filter(Boolean)};
+    }
+    $('budgetReload').onclick=async()=>{if(await refreshBudget())publishValuation();};
+    $('budgetRef').onchange=selectBooking;
+    $('findPosting').addEventListener('input',render);
+    $('publishPeriod').onclick=async()=>{
+      const from=$('periodFrom').value,to=$('periodTo').value;
+      if(!isDay(from)||!isDay(to)||from>to||to>dayNow())return flash('Choose a valid reporting period ending today or earlier.',true);
+      if(!state.verified||state.conflictLocked||!(await refreshBudget())||!sameSession()||state.conflictLocked)return;
+      reportRange={from,to};
+      const available=makePeriod(from,to,reportSettings());
+      markLocalMutation();
+      $('periodNote').textContent=available?'Period prepared for cloud save. Load module figures in Budgeting after sync.':'Incomplete period. A dated valuation, booked conversion, or exact transaction date is missing.';
+    };
+
+    function buildCloudState(){const base=isObject(state.cloudBaseState)?clone(state.cloudBaseState):{},raw=isObject(base.raw)?clone(base.raw):{},s=summary(),clock=deviceClockSnapshot(),config=reportSettings();return{...base,budgetReporting:reporting(config),module:MODULE.cloudId,source:'cash-savings-module',updatedAt:clock.utcIso,updatedAtDevice:clock.deviceDateTime,deviceTimeZone:clock.timeZone,timezoneOffsetMinutes:clock.timezoneOffsetMinutes,legacyScope:state.scope||base.legacyScope||null,bridgeVersion:MODULE.bridgeVersion,schemaVersion:MODULE.schemaVersion,raw:{...raw,cashReport:config,ownerUserId:state.user.id,records:clone(state.records),currency:'TWD',reportingCurrency:'TWD',multiCurrency:true,deviceTimestampVersion:1,legacyMigrationCompleted:true,holdings:clone(s.holdings),deviceContext:{capturedAt:clock.deviceDateTime,utcIso:clock.utcIso,timeZone:clock.timeZone,timezoneOffsetMinutes:clock.timezoneOffsetMinutes},fx:{rates:clone(state.rates),summaryVersion:5}},publishedSummary:s}}
     function extractCloudRecords(cloudState){if(!isObject(cloudState))return[];const candidates=[cloudState?.raw?.records,cloudState?.records,cloudState?.collections?.cash];const owner=cloudState.raw?.ownerUserId||cloudState.ownerUserId;
       if(owner && owner!==state.user?.id) throw Error('Cash Savings ledger belongs to another tracker account.');
       const rows=candidates.find(Array.isArray);
@@ -295,7 +489,7 @@
 
     let flashTimer=null;function flash(message,error=false,timeout=3500){clearTimeout(flashTimer);$('notice').textContent=String(message||'');$('notice').style.color=error?'#ff8484':'#79e59a';if(timeout>0)flashTimer=setTimeout(()=>$('notice').textContent='',timeout)}
     function setCloudStatus(kind,message){const dot=$('cloudDot');dot.className='status-dot';if(kind==='online')dot.classList.add('online');if(kind==='pending')dot.classList.add('pending');if(kind==='error')dot.classList.add('error');$('cloudStatus').textContent=message}
-    function resetForm(){state.editingId=null;state.fxRateTouched=false;state.convertedTouched=false;state.formRateSource='';form.reset();monthInput.value=localMonthNow();typeInput.value='deposit';currencyInput.value='TWD';treatmentInput.value='keep-original';$('formTitle').textContent='Record Monthly Transaction';$('saveBtn').textContent='Add Transaction';$('cancelEdit').hidden=true;syncFormFields(true)}
+    function resetForm(){state.editingId=null;state.fxRateTouched=false;state.convertedTouched=false;state.formRateSource='';form.reset();rebuildChoices();monthInput.value=localMonthNow();typeInput.value='deposit';currencyInput.value='TWD';treatmentInput.value='keep-original';$('formTitle').textContent='Record Monthly Transaction';$('saveBtn').textContent='Add Transaction';$('cancelEdit').hidden=true;syncFormFields(true)}
     function setEditingLocked(locked){[monthInput,typeInput,currencyInput,amountInput,treatmentInput,fxRateInput,convertedInput,noteInput,$('saveBtn'),$('importData'),$('clearAll'),$('refreshFx')].forEach(c=>{if(c)c.disabled=Boolean(locked)});$('conflictBanner').hidden=!locked}
     function setConflictLock(locked,message){state.conflictLocked=Boolean(locked);setEditingLocked(state.conflictLocked);if(locked){setCloudStatus('error',message||'Sync conflict protected · Load Cloud to resolve');flash('Cloud conflict protected. Export JSON if needed, then use Load Cloud to accept the latest cloud copy.',true,0)}}
 
@@ -303,9 +497,9 @@
     function updateConvertedPreview(){if($('convertedWrap').hidden||state.convertedTouched)return;const amount=roundMoney(amountInput.value),rate=roundRate(fxRateInput.value);if(amount>0&&rate>0)convertedInput.value=roundMoney(amount*rate).toFixed(2);else convertedInput.value=''}
     function syncFormFields(forceRate=false){const type=normalizeType(typeInput.value)||'deposit',currency=normalizeCurrency(currencyInput.value);$('currencyLabel').textContent=type==='deposit'?'Deposit Currency':'Currency Removed From Jar';const foreign=currency!=='TWD';$('treatmentWrap').hidden=!(type==='deposit'&&foreign);if(!foreign){treatmentInput.value='keep-original';$('fxRateWrap').hidden=true;$('convertedWrap').hidden=true;fxRateInput.value='1';convertedInput.value='';return}$('fxRateWrap').hidden=false;$('fxRateLabel').textContent=type==='deposit'?(treatmentInput.value==='convert-to-twd'?`Conversion rate · 1 ${currency} = ? TWD`:`Deposit basis rate · 1 ${currency} = ? TWD`):`Withdrawal rate · 1 ${currency} = ? TWD`;$('fxRateHint').textContent=`${rateSourceLabel()} rate is used automatically when available. You can enter the exact rate you actually received/used.`;$('convertedWrap').hidden=!(type==='deposit'&&treatmentInput.value==='convert-to-twd');populateFormRate(forceRate);updateConvertedPreview()}
 
-    function render(){const s=summary();$('balance').textContent=formatTwd(s.current_value);$('deposited').textContent=formatTwd(s.totalDepositedTwd);$('withdrawn').textContent=formatTwd(s.totalWithdrawnTwd);$('netContributed').textContent=formatTwd(s.netContributedTwd);$('fxGainLoss').textContent=s.fxGainLossTwd==null?'Unavailable':`${s.fxGainLossTwd>=0?'':'-'}${formatTwd(Math.abs(s.fxGainLossTwd))}`;$('fxGainLoss').className=`value ${s.fxGainLossTwd>0?'green':s.fxGainLossTwd<0?'red':'gold'}`;$('transactionCount').textContent=String(s.transactionCount);
+    function render(){rebuildChoices();const s=summary();$('balance').textContent=formatTwd(s.current_value);$('deposited').textContent=formatTwd(s.totalDepositedTwd);$('withdrawn').textContent=formatTwd(s.totalWithdrawnTwd);$('netContributed').textContent=formatTwd(s.netContributedTwd);$('fxGainLoss').textContent=s.fxGainLossTwd==null?'Unavailable':`${s.fxGainLossTwd>=0?'':'-'}${formatTwd(Math.abs(s.fxGainLossTwd))}`;$('fxGainLoss').className=`value ${s.fxGainLossTwd>0?'green':s.fxGainLossTwd<0?'red':'gold'}`;$('transactionCount').textContent=String(s.transactionCount);
       const grid=$('holdingsGrid');grid.replaceChildren();for(const c of CURRENCIES){const d=s.perCurrency[c];const card=document.createElement('article');card.className='holding-card';const gain=d.fxGainLossTwd;card.innerHTML=`<div class="holding-head"><span class="holding-code">${c==='TWD'?'NTD (TWD)':c}</span><span class="${gain>0?'positive':gain<0?'negative':''}">${gain===0?'FX neutral':`${gain>0?'+':''}${formatTwd(gain)}`}</span></div><div class="holding-balance">${money(d.units,c)}</div><div class="holding-meta"><span>Current rate: <strong>${c==='TWD'?'1.000000 TWD':d.rateAvailable?`1 ${c} = ${d.rate.toFixed(6)} TWD`:'Unavailable'}</strong></span><span>Current NTD value: <strong>${formatTwd(d.valueTwd)}</strong></span><span>Net NTD contribution basis: <strong>${formatTwd(d.basisTwd)}</strong></span></div>`;grid.appendChild(card)}
-      const tbody=$('history');tbody.replaceChildren();const rows=[...state.records].sort(compareRecords).reverse();if(!rows.length){const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=10;td.className='empty';td.textContent='No emergency-fund transactions recorded yet.';tr.appendChild(td);tbody.appendChild(tr)}else for(const r of rows){const tr=document.createElement('tr');const source=money(r.sourceAmount,r.sourceCurrency);const held=money(r.heldAmount,r.heldCurrency);const treatment=r.type==='withdrawal'?`Withdrawal from ${r.heldCurrency}`:(r.treatment==='convert-to-twd'?`Converted ${r.sourceCurrency} → NTD`:(r.sourceCurrency==='TWD'?'Held as NTD':`Kept as ${r.sourceCurrency}`));const rate=r.sourceCurrency==='TWD'?'1.000000 TWD':Number(r.fxRateTwdAtTransaction)>0?`1 ${r.sourceCurrency} = ${Number(r.fxRateTwdAtTransaction).toFixed(6)} TWD`:'Not recorded';const cells=[monthName(r.month),formatDeviceStamp(r),r.type==='deposit'?'Deposit':'Withdrawal',`${source} ${r.sourceCurrency}`,treatment,`${held} ${r.heldCurrency}`];for(const text of cells){const td=document.createElement('td');td.textContent=text;tr.appendChild(td)}const twd=document.createElement('td');twd.className=`right ${r.type==='deposit'?'green':'red'}`;twd.textContent=`${r.type==='withdrawal'?'-':''}${formatTwd(r.twdAtTransaction)}`;tr.appendChild(twd);const rateTd=document.createElement('td');rateTd.textContent=rate;tr.appendChild(rateTd);const note=document.createElement('td');note.textContent=r.note||'—';tr.appendChild(note);const actions=document.createElement('td');actions.className='right';const box=document.createElement('div');box.className='row-actions';for(const [action,label,cls] of [['edit','Edit','edit'],['delete','Delete','danger']]){const b=document.createElement('button');b.type='button';b.dataset.action=action;b.dataset.id=r.id;b.className=cls;b.textContent=label;b.disabled=state.conflictLocked;box.appendChild(b)}actions.appendChild(box);tr.appendChild(actions);tbody.appendChild(tr)}
+      const tbody=$('history');tbody.replaceChildren();const query=$('findPosting').value.trim().toLowerCase();const rows=[...state.records].filter(r=>!query||[r.id,r.budgetLink?.id,r.budgetLink?.accountId,r.note].some(v=>String(v||'').toLowerCase().includes(query))).sort(compareRecords).reverse();if(!rows.length){const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=10;td.className='empty';td.textContent=query?'No matching Cash Savings records.':'No emergency-fund transactions recorded yet.';tr.appendChild(td);tbody.appendChild(tr)}else for(const r of rows){const tr=document.createElement('tr');const source=money(r.sourceAmount,r.sourceCurrency);const held=money(r.heldAmount,r.heldCurrency);const treatment=r.type==='withdrawal'?`Withdrawal from ${r.heldCurrency}`:(r.treatment==='convert-to-twd'?`Converted ${r.sourceCurrency} → NTD`:(r.sourceCurrency==='TWD'?'Held as NTD':`Kept as ${r.sourceCurrency}`));const rate=r.sourceCurrency==='TWD'?'1.000000 TWD':Number(r.fxRateTwdAtTransaction)>0?`1 ${r.sourceCurrency} = ${Number(r.fxRateTwdAtTransaction).toFixed(6)} TWD`:'Not recorded';const cells=[monthName(r.month),formatDeviceStamp(r),r.type==='deposit'?'Deposit':'Withdrawal',`${source} ${r.sourceCurrency}`,treatment,`${held} ${r.heldCurrency}`];for(const text of cells){const td=document.createElement('td');td.textContent=text;tr.appendChild(td)}const twd=document.createElement('td');twd.className=`right ${r.type==='deposit'?'green':'red'}`;twd.textContent=`${r.type==='withdrawal'?'-':''}${formatTwd(r.twdAtTransaction)}`;tr.appendChild(twd);const rateTd=document.createElement('td');rateTd.textContent=rate;tr.appendChild(rateTd);const note=document.createElement('td');note.textContent=['Jar record '+r.id,r.note,r.budgetLink?'Budget reference '+r.budgetLink.id:'Legacy · unlinked'].filter(Boolean).join(' · ');tr.appendChild(note);const actions=document.createElement('td');actions.className='right';const box=document.createElement('div');box.className='row-actions';for(const [action,label,cls] of [['edit','Edit','edit'],['delete','Delete','danger']]){const b=document.createElement('button');b.type='button';b.dataset.action=action;b.dataset.id=r.id;b.className=cls;b.textContent=label;b.disabled=state.conflictLocked;box.appendChild(b)}actions.appendChild(box);tr.appendChild(actions);tbody.appendChild(tr)}
     }
     function announceModuleUpdate(){const s=summary(),clock=deviceClockSnapshot(),detail={module:MODULE.visibleId,source:MODULE.source,currency:'TWD',balance:s.current_value,current_value:s.current_value,deposited:s.totalDepositedTwd,withdrawn:s.totalWithdrawnTwd,total_contributed:s.total_contributed,profit_loss:s.profit_loss,holdings:clone(s.holdings),transactionCount:s.transactionCount,updatedAt:clock.utcIso,updatedAtDevice:clock.deviceDateTime,deviceTimeZone:clock.timeZone,timezoneOffsetMinutes:clock.timezoneOffsetMinutes};try{window.dispatchEvent(new CustomEvent('profitpilot:cash-updated',{detail}))}catch{}if(window.parent!==window){try{window.parent.postMessage({type:'profitpilot:module-updated',module:MODULE.visibleId,summary:detail},location.origin)}catch{}}}
 
@@ -321,22 +515,37 @@
       if(!state.verified && (forceAfterConflict || result?.source!=='local-unsynced')){
         setCloudStatus('pending','Cloud read unverified · device ledger retained');return false;
       }
-      if(!result){setConflictLock(false);setCloudStatus('online','Cloud connected · no Cash Savings state yet');if(!initial)flash('No Cash Savings cloud state exists yet. Your local data was not erased.');return false}if(result.source==='local-unsynced'){const local=extractEnvelopeState(result);if(local)applyCloudState(local,{source:'local-unsynced'});setCloudStatus('pending','Unsynced local Cash Savings changes protected');if(!initial)flash('Unsynced local changes are protected and were not overwritten by cloud data.',true,0);return false}const cloud=extractEnvelopeState(result);if(!cloud)throw Error('Cloud load returned no Cash Savings state.');applyCloudState(cloud,{source:'cloud'});state.conflictLocked=false;setEditingLocked(false);setCloudStatus('online','Cloud connected · synced');publishValuation();if(!initial)flash('Cash Savings loaded from cloud.');return true}catch(error){setCloudStatus('error','Cloud load failed · current data preserved');if(!initial)flash(error?.message||'Cloud load failed. Current data is preserved.',true,0);return false}finally{$('loadCloud').disabled=false}}
+      if(!result){setConflictLock(false);setEditingLocked(false);setCloudStatus('online','Cloud connected · no Cash Savings state yet');if(!initial)flash('No Cash Savings cloud state exists yet. Your local data was not erased.');return false}if(result.source==='local-unsynced'){const local=extractEnvelopeState(result);if(local)applyCloudState(local,{source:'local-unsynced'});setCloudStatus('pending','Unsynced local Cash Savings changes protected');if(!initial)flash('Unsynced local changes are protected and were not overwritten by cloud data.',true,0);return false}const cloud=extractEnvelopeState(result);if(!cloud)throw Error('Cloud load returned no Cash Savings state.');applyCloudState(cloud,{source:'cloud'});state.conflictLocked=false;setEditingLocked(false);setCloudStatus('online','Cloud connected · synced');publishValuation();if(!initial)flash('Cash Savings loaded from cloud.');return true}catch(error){setCloudStatus('error','Cloud load failed · current data preserved');if(!initial)flash(error?.message||'Cloud load failed. Current data is preserved.',true,0);return false}finally{$('loadCloud').disabled=false}}
 
     function publishValuation(){
       const base=state.cloudBaseState;
       if(!sameSession()||!state.verified||state.conflictLocked||!base?.module)return;
       const next=summary();
       const fields=['currency','current_value','total_contributed','profit_loss','transactionCount'];
-      if(fields.every(key=>base.publishedSummary?.[key]===next[key]))return;
+      const config=reportSettings(),feed=reporting(config);
+      if(fields.every(key=>base.publishedSummary?.[key]===next[key])&&JSON.stringify(feed)===JSON.stringify(base.budgetReporting)&&JSON.stringify(config)===JSON.stringify(base.raw?.cashReport))return;
       const cached=AurumCloud.module.getCached?.(MODULE.cloudId)?.state;
       if(cached && JSON.stringify(cached)!==JSON.stringify(base))return;
-      const snapshot={...clone(base),publishedSummary:next,updatedAt:new Date().toISOString()};
+      const snapshot={...clone(base),raw:{...clone(base.raw),cashReport:config},budgetReporting:feed,publishedSummary:next,updatedAt:new Date().toISOString()};
       AurumCloud.module.autoSave(MODULE.cloudId,snapshot,{schemaVersion:Math.max(MODULE.schemaVersion,Number(base.schemaVersion)||0),delayMs:AUTO_SAVE_MS});
       state.cloudBaseState=clone(snapshot);
       setCloudStatus('pending','Cash valuation queued for synchronization');
     }
 
+    function mergeReportBackup(payload){
+      const saved=reportConfig(),incoming=payload?.cashReport;
+      if(!incoming||incoming.ownerId!==state.user.id||!CURRENCIES.includes(incoming.currency))return null;
+      const quotes={...saved.quotes};
+      for(const [day,row] of Object.entries(incoming.quotes||{})){
+        if(!isDay(day)||day>dayNow()||row?.TWD!==1||!['USD','SZL'].every(c=>Number.isFinite(row[c])&&row[c]>0))continue;
+        if(quotes[day]&&['USD','SZL'].some(c=>quotes[day][c]!==row[c]))continue;
+        quotes[day]={TWD:1,USD:row.USD,SZL:row.SZL};
+      }
+      const ranges=new Map();
+      for(const r of [...(saved.requested||[]),...(Array.isArray(incoming.requested)?incoming.requested:[])])
+        if(isDay(r?.from)&&isDay(r?.to)&&r.from<=r.to&&r.to<=dayNow())ranges.set(r.from+'/'+r.to,{from:r.from,to:r.to});
+      return {...saved,ownerId:state.user.id,currency:budgetDirectory?.currency||saved.currency||incoming.currency,quotes,requested:[...ranges.values()]};
+    }
     function extractImportPayload(payload){if(Array.isArray(payload))return{records:payload,currency:'TWD'};if(!isObject(payload))throw Error('Invalid JSON structure.');const candidates=[payload?.collections?.cash,payload?.modules?.cash_savings?.raw?.records,payload?.modules?.cash_savings?.records,payload?.raw?.records,payload?.records];const records=candidates.find(Array.isArray);if(!records)throw Error('No Cash Savings transaction collection was found in this JSON file.');const currency=payload?.currency||payload?.modules?.cash_savings?.raw?.currency||payload?.modules?.cash_savings?.publishedSummary?.currency||payload?.raw?.currency||'TWD';return{records,currency:normalizeCurrency(currency,'TWD')}}
 
     async function logoutForInactivity(){if(state.logoutInProgress)return;state.logoutInProgress=true;try{if(state.user?.id&&navigator.onLine)await Promise.race([AurumCloud.sync.flush().catch(()=>null),new Promise(r=>setTimeout(r,3000))])}finally{try{if(sameSession())await AurumCloud.auth.signOut()}catch{}location.replace(`${ROOT_URL}?reason=inactive`)}}
@@ -345,26 +554,43 @@
     async function redirectForMissingSession(reason='session-required'){$('sessionGate').hidden=false;setTimeout(()=>location.replace(`${ROOT_URL}?reason=${encodeURIComponent(reason)}`),350)}
     function bindCloudEvents(){window.addEventListener('aurum-cloud:conflict',event=>{if(event.detail?.moduleName&&event.detail.moduleName!==MODULE.cloudId)return;setConflictLock(true,'Sync conflict protected · Load Cloud to resolve')});window.addEventListener('aurum-cloud:sync-start',()=>{if(!state.conflictLocked)setCloudStatus('pending','Synchronizing…')});window.addEventListener('aurum-cloud:sync-end',()=>{if(state.conflictLocked||!sameSession()||!state.verified)return;try{const pending=AurumCloud.sync.pending().some(op=>op.moduleName===MODULE.cloudId);setCloudStatus(pending?'pending':(navigator.onLine?'online':'pending'),pending?(navigator.onLine?'Cash Savings sync pending':'Offline · change queued safely'):(navigator.onLine?'Cloud connected · synced':'Offline · local data available'))}catch{}});window.addEventListener('aurum-cloud:offline',()=>setCloudStatus('pending','Offline · local data available'));window.addEventListener('aurum-cloud:online',()=>{if(!state.conflictLocked)setCloudStatus('pending','Back online · synchronizing')});window.addEventListener('aurum-cloud:auth',event=>{if(event.detail?.event==='SIGNED_OUT'&&!state.logoutInProgress)redirectForMissingSession('session-ended')})}
 
-    form.addEventListener('submit',event=>{event.preventDefault();if(!sameSession()||(!state.verified&&!state.cloudBaseState?.module))return flash('Load Cash Savings before editing.',true);if(state.conflictLocked)return flash('Resolve the protected cloud conflict before editing.',true);const month=monthInput.value,type=normalizeType(typeInput.value),sourceCurrency=normalizeCurrency(currencyInput.value),sourceAmount=roundMoney(amountInput.value);if(!validMonth(month))return flash('Select a valid transaction month.',true);if(!type)return flash('Select Deposit or Withdrawal.',true);if(!(sourceAmount>0))return flash('Enter a valid amount greater than zero.',true);
+    let checkingBooking=false;
+    form.addEventListener('submit',async event=>{event.preventDefault();
+      const previous=state.records.find(r=>r.id===state.editingId),ref=$('budgetRef').value,before=budgetDirectory?.funding.find(b=>b.id===ref);
+      if(!ref&&(!previous||previous.budgetLink))return flash('Select a saved Budgeting reference for this movement.',true);
+      if(checkingBooking)return;
+      if(ref){
+        checkingBooking=true;
+        try{if(!before||!await refreshBudget()||state.editingId!==(previous?.id||null)||previous&&state.records.find(r=>r.id===previous.id)!==previous||
+          !sameBooking(before,budgetDirectory?.funding.find(b=>b.id===ref))||$('budgetRef').value!==ref)
+          return flash('The reference or ledger changed. Review it before saving.',true);}
+        finally{checkingBooking=false;}
+      }
+      if(before&&(typeInput.value!==before.kind||monthInput.value!==before.date.slice(0,7)||currencyInput.value!==before.currency||roundMoney(amountInput.value)!==before.amount))
+        return flash('Select the reference again to use its month, direction, currency and amount.',true);
+      if(ref&&state.records.some(r=>r.id!==state.editingId&&r.budgetLink?.id===ref))return flash('This reference already has a jar posting.',true);
+      if(!sameSession()||(!state.verified&&!state.cloudBaseState?.module))return flash('Load Cash Savings before editing.',true);if(state.conflictLocked)return flash('Resolve the protected cloud conflict before editing.',true);const month=monthInput.value,type=normalizeType(typeInput.value),sourceCurrency=normalizeCurrency(currencyInput.value),sourceAmount=roundMoney(amountInput.value);if(!validMonth(month))return flash('Select a valid transaction month.',true);if(!type)return flash('Select Deposit or Withdrawal.',true);if(!(sourceAmount>0))return flash('Enter a valid amount greater than zero.',true);
       const existing=state.editingId?state.records.find(r=>r.id===state.editingId):null,now=Date.now(),clock=deviceClockSnapshot(now);let heldCurrency=sourceCurrency,heldAmount=sourceAmount,treatment=type==='withdrawal'?'withdrawal':(sourceCurrency==='TWD'?'twd':'keep-original'),rate=sourceCurrency==='TWD'?1:normalizedFxRate(fxRateInput.value,sourceCurrency),twdAt=0,rateSource=sourceCurrency==='TWD'?'fixed-twd':(state.formRateSource||'manual');
       if(sourceCurrency!=='TWD'&&!(rate>0))return flash(`Enter the TWD rate for ${sourceCurrency}, or use Refresh FX.`,true,6000);
       if(type==='deposit'&&sourceCurrency!=='TWD'&&treatmentInput.value==='convert-to-twd'){treatment='convert-to-twd';heldCurrency='TWD';const quotedRate=rate,converted=roundMoney(convertedInput.value);heldAmount=converted>0?converted:roundMoney(sourceAmount*quotedRate);if(!(heldAmount>0))return flash('Enter the actual NTD received from the conversion.',true);const effectiveRate=roundRate(heldAmount/sourceAmount);rate=effectiveRate>0?effectiveRate:quotedRate;rateSource=state.convertedTouched?'actual-conversion':'calculated-conversion';twdAt=heldAmount}else if(type==='deposit'){twdAt=sourceCurrency==='TWD'?sourceAmount:roundMoney(sourceAmount*rate)}else{twdAt=sourceCurrency==='TWD'?sourceAmount:roundMoney(sourceAmount*rate)}
-      const candidate=normalizeRecord({...(existing||{}),id:existing?.id||makeId(),month,date:`${month}-01`,type,sourceAmount,sourceCurrency,heldAmount,heldCurrency,amount:heldAmount,currency:heldCurrency,treatment,fxRateTwdAtTransaction:rate,fxRateSource:rateSource,twdAtTransaction:twdAt,note:noteInput.value.trim(),createdAt:existing?.createdAt||now,updatedAt:now,recordedAtEpochMs:existing?.recordedAtEpochMs||now,recordedAtDevice:existing?.recordedAtDevice||clock.deviceDateTime,recordedAtUtc:existing?.recordedAtUtc||clock.utcIso,recordedDate:existing?.recordedDate||clock.deviceDate,recordedTime:existing?.recordedTime||clock.deviceTime,deviceTimeZone:existing?.deviceTimeZone||clock.timeZone,timezoneOffsetMinutes:existing?.timezoneOffsetMinutes??clock.timezoneOffsetMinutes,timestampSource:existing?.timestampSource||'device-action',lastEditedAtEpochMs:now,lastEditedAtDevice:clock.deviceDateTime,lastEditedAtUtc:clock.utcIso},heldCurrency);if(!candidate)return flash('The transaction could not be validated.',true);const proposed=state.editingId?state.records.map(r=>r.id===state.editingId?candidate:r):[...state.records,candidate];const validation=validateHistoricalHoldings(proposed);if(!validation.valid)return flash(validation.reason,true,6500);state.records=proposed.sort(compareRecords);const edited=Boolean(state.editingId);resetForm();render();markLocalMutation();flash(edited?'Transaction updated. Cloud sync is scheduled.':'Transaction added. Cloud sync is scheduled.')
+      const candidate=normalizeRecord({...(existing||{}),id:existing?.id||makeId(),budgetLink:before?clone(before):null,budgetOwner:before?state.user.id:null,month,date:before?.date||`${month}-01`,type,sourceAmount,sourceCurrency,heldAmount,heldCurrency,amount:heldAmount,currency:heldCurrency,treatment,fxRateTwdAtTransaction:rate,fxRateSource:rateSource,twdAtTransaction:twdAt,note:noteInput.value.trim(),createdAt:existing?.createdAt||now,updatedAt:now,recordedAtEpochMs:existing?.recordedAtEpochMs||now,recordedAtDevice:existing?.recordedAtDevice||clock.deviceDateTime,recordedAtUtc:existing?.recordedAtUtc||clock.utcIso,recordedDate:existing?.recordedDate||clock.deviceDate,recordedTime:existing?.recordedTime||clock.deviceTime,deviceTimeZone:existing?.deviceTimeZone||clock.timeZone,timezoneOffsetMinutes:existing?.timezoneOffsetMinutes??clock.timezoneOffsetMinutes,timestampSource:existing?.timestampSource||'device-action',lastEditedAtEpochMs:now,lastEditedAtDevice:clock.deviceDateTime,lastEditedAtUtc:clock.utcIso},heldCurrency);if(!candidate)return flash('The transaction could not be validated.',true);const proposed=state.editingId?state.records.map(r=>r.id===state.editingId?candidate:r):[...state.records,candidate];const validation=validateHistoricalHoldings(proposed);if(!validation.valid)return flash(validation.reason,true,6500);state.records=proposed.sort(compareRecords);const edited=Boolean(state.editingId);resetForm();render();markLocalMutation();flash(edited?'Transaction updated. Cloud sync is scheduled.':'Transaction added. Cloud sync is scheduled.')
     });
 
-    $('history').addEventListener('click',event=>{const button=event.target.closest('button[data-action][data-id]');if(!button||!sameSession()||state.conflictLocked||(!state.verified&&!state.cloudBaseState?.module))return;const r=state.records.find(x=>x.id===button.dataset.id);if(!r)return;if(button.dataset.action==='edit'){state.editingId=r.id;monthInput.value=r.month;typeInput.value=r.type;currencyInput.value=r.sourceCurrency||r.currency;amountInput.value=String(r.sourceAmount||r.amount);treatmentInput.value=r.treatment==='convert-to-twd'?'convert-to-twd':'keep-original';state.fxRateTouched=true;state.convertedTouched=true;state.formRateSource=r.fxRateSource||'stored';fxRateInput.value=r.sourceCurrency==='TWD'?'1':(Number(r.fxRateTwdAtTransaction)>0?String(r.fxRateTwdAtTransaction):'');convertedInput.value=r.treatment==='convert-to-twd'?String(r.heldAmount):'';noteInput.value=r.note||'';$('formTitle').textContent='Edit Monthly Transaction';$('saveBtn').textContent='Save Changes';$('cancelEdit').hidden=false;syncFormFields(false);window.scrollTo({top:0,behavior:'smooth'});return}if(button.dataset.action==='delete'){if(!confirm('Delete this transaction?'))return;const proposed=state.records.filter(x=>x.id!==r.id),validation=validateHistoricalHoldings(proposed);if(!validation.valid)return flash('This transaction cannot be deleted because a later withdrawal depends on that currency balance. Edit or remove the dependent withdrawal first.',true,6500);state.records=proposed;if(state.editingId===r.id)resetForm();render();markLocalMutation();flash('Transaction deleted. Cloud sync is scheduled.')}});
+    $('history').addEventListener('click',event=>{const button=event.target.closest('button[data-action][data-id]');if(!button||!sameSession()||state.conflictLocked||(!state.verified&&!state.cloudBaseState?.module))return;const r=state.records.find(x=>x.id===button.dataset.id);if(!r)return;if(button.dataset.action==='edit'){state.editingId=r.id;rebuildChoices();$('budgetRef').value=r.budgetLink?.id||'';monthInput.value=r.month;typeInput.value=r.type;currencyInput.value=r.sourceCurrency||r.currency;amountInput.value=String(r.sourceAmount||r.amount);treatmentInput.value=r.treatment==='convert-to-twd'?'convert-to-twd':'keep-original';state.fxRateTouched=true;state.convertedTouched=true;state.formRateSource=r.fxRateSource||'stored';fxRateInput.value=r.sourceCurrency==='TWD'?'1':(Number(r.fxRateTwdAtTransaction)>0?String(r.fxRateTwdAtTransaction):'');convertedInput.value=r.treatment==='convert-to-twd'?String(r.heldAmount):'';noteInput.value=r.note||'';$('formTitle').textContent='Edit Monthly Transaction';$('saveBtn').textContent='Save Changes';$('cancelEdit').hidden=false;syncFormFields(false);window.scrollTo({top:0,behavior:'smooth'});return}if(button.dataset.action==='delete'){if(!confirm('Delete this transaction?'))return;const proposed=state.records.filter(x=>x.id!==r.id),validation=validateHistoricalHoldings(proposed);if(!validation.valid)return flash('This transaction cannot be deleted because a later withdrawal depends on that currency balance. Edit or remove the dependent withdrawal first.',true,6500);state.records=proposed;if(state.editingId===r.id)resetForm();render();markLocalMutation();flash('Transaction deleted. Cloud sync is scheduled.')}});
 
     $('cancelEdit').addEventListener('click',resetForm);$('clearAll').addEventListener('click',()=>{if(!sameSession()||state.conflictLocked||(!state.verified&&!state.cloudBaseState?.module)||!state.records.length)return;if(!confirm('Delete every emergency-fund transaction for this signed-in profile? This change will synchronize to cloud.'))return;state.records=[];resetForm();render();markLocalMutation();flash('All Cash Savings transactions cleared. Cloud sync is scheduled.')});
     typeInput.addEventListener('change',()=>{state.fxRateTouched=false;state.convertedTouched=false;syncFormFields(true)});currencyInput.addEventListener('change',()=>{state.fxRateTouched=false;state.convertedTouched=false;state.formRateSource='';syncFormFields(true)});treatmentInput.addEventListener('change',()=>{state.convertedTouched=false;syncFormFields(false)});amountInput.addEventListener('input',updateConvertedPreview);fxRateInput.addEventListener('input',()=>{state.fxRateTouched=true;state.formRateSource='manual';updateConvertedPreview()});convertedInput.addEventListener('input',()=>{state.convertedTouched=true});
 
     $('refreshFx').addEventListener('click',()=>updateExchangeRates({forceForm:true,silent:false}));$('loadCloud').addEventListener('click',()=>loadCloudNow());$('saveCloud').addEventListener('click',()=>saveCloudNow());$('returnDashboard').addEventListener('click',()=>location.href=ROOT_URL);$('staySignedIn').addEventListener('click',resetActivity);
 
-    $('exportData').addEventListener('click',()=>{const s=summary(),payload={application:'Aurum Imperium Investment Tracker',backupVersion:5,module:MODULE.cloudId,schema:MODULE.backupSchema,exportedAt:new Date().toISOString(),deviceContext:deviceClockSnapshot(),reportingCurrency:'TWD',profile:{username:state.username||null},collections:{cash:clone(state.records)},publishedSummary:s,fx:{latestRates:clone(state.rates),note:'Transaction-time FX basis is stored per record. Current foreign holdings are revalued using the latest available rate.'},security:{credentialsIncluded:false,authenticationTokensIncluded:false}};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`aurum-cash-savings-multicurrency-${new Date().toISOString().slice(0,10)}.json`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);flash('Multi-currency Cash Savings JSON backup exported.')});
-    $('importData').addEventListener('click',()=>{if(state.conflictLocked)return flash('Resolve the protected cloud conflict before importing.',true);$('importFile').click()});$('importFile').addEventListener('change',async event=>{const file=event.target.files?.[0];event.target.value='';if(!file)return;if(file.size>MAX_IMPORT_BYTES)return flash('Import failed. JSON file is larger than 10 MB.',true);try{const payload=JSON.parse(await file.text());if(!sameSession()||state.conflictLocked||(!state.verified&&!state.cloudBaseState?.module))return;const backupUsername=String(payload?.profile?.username||'').trim();if(backupUsername&&state.username&&backupUsername.toLowerCase()!==state.username.toLowerCase()&&!confirm(`This backup identifies profile “${backupUsername}”, while you are signed in as “${state.username}”. Importing it would intentionally copy Cash Savings data between profiles. Continue?`))return;const extracted=extractImportPayload(payload),clean=extracted.records.map(r=>normalizeRecord(r,extracted.currency)).filter(Boolean);if(clean.length!==extracted.records.length)throw Error('One or more Cash Savings records are invalid.');hydrateMissingFxBasis(clean);const merged=mergeById(state.records,clean),validation=validateHistoricalHoldings(merged);if(!validation.valid)throw Error(validation.reason);if(recordsFingerprint(state.records)===recordsFingerprint(merged))return flash('Import verified · no changes detected.');if(!confirm(`Merge ${clean.length} Cash Savings transaction(s) into the current signed-in profile? Existing newer records with the same ID will be preserved.`))return;state.records=merged;resetForm();render();markLocalMutation();flash('Cash Savings JSON merged. Cloud sync is scheduled.')}catch(error){flash(error?.message||'Import failed. Select a valid Cash Savings or whole-app Aurum Imperium JSON backup.',true,7500)}});
+    $('exportData').addEventListener('click',()=>{const s=summary(),payload={application:'Aurum Imperium Investment Tracker',backupVersion:5,module:MODULE.cloudId,schema:MODULE.backupSchema,exportedAt:new Date().toISOString(),deviceContext:deviceClockSnapshot(),reportingCurrency:'TWD',profile:{username:state.username||null},collections:{cash:clone(state.records)},cashReport:reportSettings(),publishedSummary:s,fx:{latestRates:clone(state.rates),note:'Transaction-time FX basis is stored per record. Current foreign holdings are revalued using the latest available rate.'},security:{credentialsIncluded:false,authenticationTokensIncluded:false}};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`aurum-cash-savings-multicurrency-${new Date().toISOString().slice(0,10)}.json`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);flash('Multi-currency Cash Savings JSON backup exported.')});
+    $('importData').addEventListener('click',()=>{if(state.conflictLocked)return flash('Resolve the protected cloud conflict before importing.',true);$('importFile').click()});$('importFile').addEventListener('change',async event=>{const file=event.target.files?.[0];event.target.value='';if(!file)return;if(file.size>MAX_IMPORT_BYTES)return flash('Import failed. JSON file is larger than 10 MB.',true);try{const payload=JSON.parse(await file.text());if(!sameSession()||state.conflictLocked||(!state.verified&&!state.cloudBaseState?.module))return;const backupUsername=String(payload?.profile?.username||'').trim();if(backupUsername&&state.username&&backupUsername.toLowerCase()!==state.username.toLowerCase()&&!confirm(`This backup identifies profile “${backupUsername}”, while you are signed in as “${state.username}”. Importing it would intentionally copy Cash Savings data between profiles. Continue?`))return;const extracted=extractImportPayload(payload),clean=extracted.records.map(r=>normalizeRecord(r,extracted.currency)).filter(Boolean);if(clean.some(r=>r.budgetLink&&r.budgetOwner!==state.user?.id))throw Error('A funding reference belongs to another profile. Import an unlinked backup or use the original profile.');
+      if(new Set(clean.map(r=>r.id)).size!==clean.length)throw Error('Duplicate record IDs in backup.');
+      if(clean.length!==extracted.records.length)throw Error('One or more Cash Savings records are invalid.');hydrateMissingFxBasis(clean);const merged=mergeById(state.records,clean),validation=validateHistoricalHoldings(merged);if(!validation.valid)throw Error(validation.reason);const recovered=mergeReportBackup(payload);if((!recovered||JSON.stringify(recovered)===JSON.stringify(reportConfig()))&&recordsFingerprint(state.records)===recordsFingerprint(merged))return flash('Import verified · no changes detected.');if(!confirm(`Merge ${clean.length} Cash Savings transaction(s) into the current signed-in profile? Existing newer records with the same ID will be preserved.`))return;if(recovered)state.cloudBaseState={...state.cloudBaseState,raw:{...state.cloudBaseState.raw,cashReport:recovered}};state.records=merged;resetForm();render();markLocalMutation();flash('Cash Savings JSON merged. Cloud sync is scheduled.')}catch(error){flash(error?.message||'Import failed. Select a valid Cash Savings or whole-app Aurum Imperium JSON backup.',true,7500)}});
 
     const activityEvents=['pointerdown','keydown','touchstart','mousemove','wheel','scroll'];let lastSignal=0;for(const name of activityEvents)window.addEventListener(name,()=>{const now=Date.now();if(now-lastSignal<250)return;lastSignal=now;resetActivity()},{passive:true});window.addEventListener('pageshow',()=>{if(state.initialized&&state.user?.id)resetActivity()});document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&state.initialized){refreshDeviceClock();const u=AurumCloud.auth.getUser();if(u?.id!==state.user?.id)redirectForMissingSession('session-ended');else resetActivity()}});
 
-    window.ProfitPilotCashSavings=Object.freeze({module:MODULE,getRecords:()=>clone(state.records),getSummary:()=>clone(summary()),exportData:()=>({schema:MODULE.backupSchema,module:MODULE.cloudId,reportingCurrency:'TWD',collections:{cash:clone(state.records)},publishedSummary:clone(summary())}),loadCloud:()=>loadCloudNow(),saveCloud:()=>saveCloudNow()});
+    window.ProfitPilotCashSavings=Object.freeze({module:MODULE,getRecords:()=>clone(state.records),getSummary:()=>clone(summary()),exportData:()=>({schema:MODULE.backupSchema,module:MODULE.cloudId,reportingCurrency:'TWD',collections:{cash:clone(state.records)},cashReport:reportSettings(),publishedSummary:clone(summary())}),loadCloud:()=>loadCloudNow(),saveCloud:()=>saveCloudNow()});
 
     async function initialize(){try{if(!window.AurumCloud)throw Error('Aurum Cloud engine did not load.');await AurumCloud.initialize();const user=AurumCloud.auth.getUser();if(!user?.id){await redirectForMissingSession('session-required');return}state.user=clone(user);try{state.profile=await AurumCloud.profile.load()}catch{state.profile=AurumCloud.profile.get()}if(!sameSession()){await redirectForMissingSession('session-changed');return}
       state.username=String(state.profile?.username||state.profile?.display_name||('user_'+user.id.slice(0,8))).trim();
@@ -393,6 +619,8 @@
       else if(state.verified)setCloudStatus('online','Cloud checked · no Cash Savings ledger yet');
       else if(!initial){setEditingLocked(true);$('conflictBanner').hidden=true;setCloudStatus('pending','Device ledger · Load Cloud before editing')}
       else setCloudStatus('pending',result?.source==='local-unsynced'?'Cash Savings changes pending':'Using device ledger · cloud read unverified');
+      $('periodFrom').value=dayNow().slice(0,7)+'-01';$('periodTo').value=dayNow();
+      refreshBudget().then(ok=>{if(ok&&sameSession()&&state.verified)publishValuation();});
       setInterval(updateInactivityTimer,250);setInterval(refreshDeviceClock,1000)}catch(error){console.error('Cash Savings initialization failed:',error);$('sessionGate').hidden=false;$('sessionGate').querySelector('h2').textContent='Cash Savings could not initialize';$('sessionGate').querySelector('p').textContent=`${error?.message||'Unknown initialization error.'} Returning to the Unified Dashboard.`;setTimeout(()=>location.replace(`${ROOT_URL}?reason=module-initialization-error`),1800)}}
     initialize();
   })();

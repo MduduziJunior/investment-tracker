@@ -52,7 +52,7 @@
     .tracker-links a[aria-current="page"]{background:#edd8a2;color:#183a31;font-weight:700}
     @media print{.tracker-links{display:none}}
   </style>
-</head>
+<style>.reportSheet td:not(:first-child),.reportSheet th:not(:first-child){text-align:right;font-variant-numeric:tabular-nums}.reportSheet tfoot{border-top:3px double currentColor;font-weight:bold}.reportSheet summary{cursor:pointer}.reportSheet td{vertical-align:top}.reportSheet details p{font-size:.85em}.reportSheet{overflow:auto} #assetMatches label{display:block;margin:.5em 0}@media print{#fundForm,#assetMatches,#refreshInvestmentTracker{display:none}}</style></head>
 <body>
 <div id="budgetGate" class="card" role="status"><span id="budgetGateMessage">Opening your budgeting workspace…</span> <a href="../../index.html">Return to Unifier</a></div>
 <div id="app" class="hidden">
@@ -112,7 +112,7 @@
     <form class="form-grid" onsubmit="saveAccount(event)"><input type="hidden" id="accountId" />
       <div><label>Account Name</label><input id="accountName" required placeholder="Cash, Cathay Bank, Mobile Money" /></div>
       <div><label>Account Type</label><select id="accountType"><option>Cash</option><option>Bank</option><option>Mobile Money</option><option>Savings Account</option><option>Investment Wallet</option><option>Other</option></select></div>
-      <div><label>Opening Balance</label><input id="accountOpening" type="number" step="0.01" value="0" /></div>
+      <div><label>Opening balance date</label><input id="accountOpeningDate" type="date"/></div><div><label>Opening Balance</label><input id="accountOpening" type="number" step="0.01" value="0" /></div>
       <div><label>Currency</label><select id="accountCurrency"><option value="TWD">NTD / TWD</option><option value="USD">USD</option><option value="SZL">E / SZL</option></select></div>
       <div><label>Rate to Main Currency</label><input id="accountRate" type="number" min="0" step="0.000001" value="1" /></div>
       <div><label>Status</label><select id="accountStatus"><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
@@ -141,6 +141,18 @@
     </form>
     <div class="table-wrap"><table><thead><tr><th>Date</th><th>Month</th><th>From</th><th>To</th><th>Amount Received</th><th>Switching Fee</th><th>Total Deducted</th><th>Reference</th><th>Journal Logic</th><th>Note</th><th>Action</th></tr></thead><tbody id="transfersTable"></tbody></table></div>
   </div>
+  <div class="card"><h2>Module deposits and withdrawals</h2>
+  <p>Record the Budgeting side here. Use the same reference in the receiving module. Check matching status in Statements &amp; Net Worth before entering a second movement.</p>
+  <form id="fundForm" class="form-grid"><input type="hidden" id="fundKey">
+  <label>Module<select id="fundModule"><option value="etf">ETF Portfolio</option><option value="cfd">CFD Journal</option><option value="cash_savings">Cash Savings</option></select></label>
+  <label>Movement<select id="fundKind"><option value="deposit">Deposit to module</option><option value="withdrawal">Withdrawal to Budgeting</option></select></label>
+  <label>Registered account<select id="fundAccount" required></select></label>
+  <label>Date<input id="fundDate" type="date" required></label>
+  <label>Amount before fee<input id="fundAmount" type="number" step="0.01" min="0.01" required></label>
+  <label>Fee in transfer currency<input id="fundFee" type="number" step="0.01" min="0" value="0"></label>
+  <label>Currency<select id="fundCurrency"><option>TWD</option><option>USD</option><option>SZL</option></select></label>
+  <label>Rate to budget currency<input id="fundRate" readonly></label>
+  <button type="submit">Save movement</button><button type="button" id="fundClear">Clear</button></form><div id="fundList"></div></div>
 </section>
 
 <section id="receivables" class="section">
@@ -212,10 +224,13 @@
 </section>
 
 <section id="statements" class="section">
-  <div class="card"><h2>Statements & Net Worth</h2><p class="muted">Your statements and net worth are presented together so income, spending, assets and liabilities form one complete view of your financial position.</p><div id="statementsBox" class="grid"></div></div>
-  <div class="card" id="investmentTrackerCard"><div class="small-actions" style="justify-content:space-between;align-items:center"><div><h2>Investment Tracker Link</h2><p class="muted">Read-only figures from your signed-in ETF and CFD modules. They update Statements and Net Worth without creating budget transactions.</p></div><button type="button" class="secondary-btn" id="refreshInvestmentTracker">Refresh from Investor App</button></div><div id="investmentTrackerStatus" class="alert warning" style="margin-top:12px">Connecting to the shared Investor App…</div><div id="overlapChoices"></div><div id="investmentTrackerMetrics" class="grid"></div><div style="max-width:320px;margin-top:12px"><label for="investmentTwdRate">TWD to Budget Main Currency Rate</label><input id="investmentTwdRate" type="number" min="0" step="any" placeholder="1.00" style="width:100%"><p class="muted" id="investmentFxNote">Fetched automatically for your budget main currency.</p></div><label style="display:flex;gap:8px;align-items:center;margin-top:12px"><input type="checkbox" id="includeInvestmentPortfolioInNetWorth" style="width:auto"> Include the linked ETF and CFD account value in Net Worth</label><p class="muted">When linking is enabled, selected manual portfolio assets are counted at their linked value. Investment gains stay separate from cash flow because market gains are not automatically spendable cash.</p></div>
-  <div class="card"><h2>Personal Income & Spending Statement</h2><div class="table-wrap"><table><thead><tr><th>Line</th><th>Amount</th><th>Meaning</th></tr></thead><tbody id="incomeStatementTable"></tbody></table></div></div>
-  <div class="card"><h2>Personal Financial Position</h2><div class="table-wrap"><table><thead><tr><th>Line</th><th>Amount</th><th>Meaning</th></tr></thead><tbody id="positionStatementTable"></tbody></table></div></div>
+  <div class="card"><h2>Statements &amp; Net Worth</h2>
+    <div class="form-grid"><label>Period beginning<input type="date" id="reportFrom"></label>
+    <label>As at<input type="date" id="reportTo"></label></div>
+    <button id="refreshInvestmentTracker" type="button">Load module figures</button>
+    <p id="reportStatus" role="status"></p></div>
+  <div id="correlationReports"></div>
+  <div class="card"><h2>Portfolio asset matching</h2><p>Review which module balances to include. Match manual assets that already represent those balances. Their original records are retained.</p><div id="assetMatches"></div></div>
   <div class="card"><h2>Net Worth Register</h2><p class="muted">Add extra personal assets and liabilities here. Do not register the same bank balance, asset, or debt twice: Accounts, Assets and Debts are already included automatically.</p><form class="form-grid" onsubmit="saveNetWorthItem(event)"><input type="hidden" id="netWorthId" />
     <div><label>Date</label><input id="netWorthDate" type="date" required /></div>
     <div><label>Type</label><select id="netWorthType"><option value="asset">Asset</option><option value="liability">Liability</option></select></div>
@@ -261,7 +276,7 @@ function defaultStore(){return{version:"PilotProfit Personal Budget Fully Local 
 function emptyProfile(username,password,currency,q,a,incomeTarget,savingTarget){return{id:makeId(),username,password,mainCurrency:currency||"TWD",monthlyIncomeTarget:parseNum(incomeTarget),monthlySavingTarget:parseNum(savingTarget),emergencyFundTarget:0,recoveryQuestion:q||"",recoveryAnswer:(a||"").trim().toLowerCase(),accounts:[],transfers:[],transactions:[],tradeReceivables:[],budgets:[],goals:[],debts:[],assets:[],projects:[],recurringTemplates:[],closedMonths:[],netWorthItems:[],createdAt:nowIso(),updatedAt:nowIso(),lastLocalSaveAt:nowIso()}}
 function migrateStore(s){s.version="PilotProfit Personal Budget Fully Local Offline Edition";s.profiles=Array.isArray(s.profiles)?s.profiles:[];s.activeProfileId=s.activeProfileId||null;s.createdAt=s.createdAt||nowIso();s.updatedAt=s.updatedAt||nowIso();s.profiles.forEach(p=>{p.id=p.id||makeId();p.username=p.username||"Profile";p.password=p.password||"";p.mainCurrency=p.mainCurrency||p.defaultCurrency||"TWD";p.monthlyIncomeTarget=parseNum(p.monthlyIncomeTarget);p.monthlySavingTarget=parseNum(p.monthlySavingTarget);p.emergencyFundTarget=parseNum(p.emergencyFundTarget);p.recoveryQuestion=p.recoveryQuestion||"";p.recoveryAnswer=p.recoveryAnswer||"";["accounts","transfers","transactions","tradeReceivables","budgets","goals","debts","assets","projects","recurringTemplates","closedMonths","netWorthItems"].forEach(k=>{p[k]=Array.isArray(p[k])?p[k]:[]});p.transactions.forEach(x=>{if(x.entryKind==="apPayment"||x.type==="apPayment"){x.type="expense";x.expenseCategory="AP Payment";x.category="AP Payment";}});p.createdAt=p.createdAt||nowIso();p.updatedAt=p.updatedAt||nowIso();p.lastLocalSaveAt=p.lastLocalSaveAt||nowIso()});return s}
 function saveStore(){
-  checkOwner();
+  checkOwner();checkFunds(currentProfile());
   if(busyLoading || conflict || $('app').querySelector('main').inert)throw Error("Load the current budget before editing.");
   const previous=readDraft();
   if(previous&&previous.updatedAt!==store.updatedAt){
@@ -317,7 +332,7 @@ function updateTransactionFields(){const type=$("transactionType")?.value||"inco
 function syncBudgetCategoryInput(){const v=$("budgetCategorySelect").value;if(v)$("budgetCategory").value=v}
 function setSelectIfOption(selectId,value){const el=$(selectId);if(!el)return;const found=Array.from(el.options).some(o=>o.value===value||o.text===value);el.value=found?value:""}
 function convert(amount,rate){return parseNum(amount)*parseNum(rate)}
-function totals(){const p=currentProfile();if(!p)return{};const tx=p.transactions;const sum=arr=>arr.reduce((a,b)=>a+parseNum(b.mainAmount),0);const month=thisMonth();const monthTx=tx.filter(x=>x.month===month);const income=sum(monthTx.filter(x=>x.type==="income"&&x.status!=="planned"));const expenses=sum(monthTx.filter(x=>x.type==="expense"&&x.expenseCategory!=="AP Payment"&&x.status!=="planned"))+transferFees(month);const savings=sum(monthTx.filter(x=>x.type==="savings"&&x.status!=="planned"));const debtPayments=sum(monthTx.filter(x=>(x.type==="debt"||(x.type==="expense"&&x.expenseCategory==="AP Payment"))&&x.status!=="planned"));const investments=sum(monthTx.filter(x=>x.type==="investment"&&x.status!=="planned"));const allIncome=sum(tx.filter(x=>x.type==="income"&&x.status!=="planned"));const allOut=sum(tx.filter(x=>["expense","savings","debt","investment"].includes(x.type)&&x.status!=="planned"));const cash=allIncome-allOut-transferFees();const debtOutstanding=p.debts.filter(d=>d.status!=="paid").reduce((a,b)=>a+parseNum(b.outstandingMain),0);const goalsSaved=p.goals.reduce((a,b)=>a+parseNum(b.savedMain),0);const monthlyNet=income-expenses-savings-debtPayments-investments;const savingRate=income?((savings+investments)/income*100):0;const avgDaily=expenses/30;const runway=avgDaily?cash/avgDaily:0;return{month,income,expenses,savings,debtPayments,investments,monthlyNet,savingRate,cash,debtOutstanding,goalsSaved,runway}}
+function totals(){const p=currentProfile();if(!p)return{};const tx=p.transactions;const sum=arr=>arr.reduce((a,b)=>a+parseNum(b.mainAmount),0);const month=thisMonth();const monthTx=tx.filter(x=>x.month===month);const income=sum(monthTx.filter(x=>x.type==="income"&&x.status!=="planned"));const expenses=sum(monthTx.filter(x=>x.type==="expense"&&x.expenseCategory!=="AP Payment"&&x.status!=="planned"))+transferFees(month);const savings=sum(monthTx.filter(x=>x.type==="savings"&&x.status!=="planned"));const debtPayments=sum(monthTx.filter(x=>(x.type==="debt"||(x.type==="expense"&&x.expenseCategory==="AP Payment"))&&x.status!=="planned"));const investments=sum(monthTx.filter(x=>x.type==="investment"&&x.status!=="planned"))+funds(p).filter(r=>r.date.slice(0,7)===month).reduce((n,r)=>n+signedPrincipal(r),0);const allIncome=sum(tx.filter(x=>x.type==="income"&&x.status!=="planned"));const allOut=sum(tx.filter(x=>["expense","savings","debt","investment"].includes(x.type)&&x.status!=="planned"));const cash=allIncome-allOut-transferFees();const debtOutstanding=p.debts.filter(d=>d.status!=="paid").reduce((a,b)=>a+parseNum(b.outstandingMain),0);const goalsSaved=p.goals.reduce((a,b)=>a+parseNum(b.savedMain),0);const monthlyNet=income-expenses-savings-debtPayments-investments;const savingRate=income?((savings+investments)/income*100):0;const avgDaily=expenses/30;const runway=avgDaily?cash/avgDaily:0;return{month,income,expenses,savings,debtPayments,investments,monthlyNet,savingRate,cash,debtOutstanding,goalsSaved,runway}}
 function renderAll(){const p=currentProfile();if(!p)return;renderProfileText();renderStatus();renderAccountOptions();renderProjectOptions();renderGoalDebtOptions();updateTransactionFields();renderMetrics();renderBudgetHealth();renderSpendingBars();renderReviewCenter();renderAccounts();renderTransfers();renderTables();renderTradeReceivables();renderAssetProjectSections();renderFinanceFixtures();renderMonthlyReviews();loadSettingsIntoForm(false)}
 function trackerUsername(){
   const profile=AurumCloud.profile.get();
@@ -336,6 +351,7 @@ function recordSave(collection,item,idField){const p=currentProfile();const id=$
 function removeRecord(collection,id){
   const p=currentProfile();const old=(p[collection]||[]).find(x=>x.id===id);
   if(!old)return;
+  if(collection==="accounts"&&funds(p).some(r=>r.accountId===id))return alert("This account has linked module funding records.");
   if(collection==="debts"&&(p.transactions||[]).some(x=>x.type==="debt"&&x.debtId===id&&x.status==="paid"))return alert("This debt has linked payments. Keep it in the tracker so the payment history and balance remain correct.");
   if(collection==="tradeReceivables"&&(p.transactions||[]).some(x=>x.receivableId===id&&x.status==="paid"))return alert("This receivable has linked collections. Keep it in the tracker so the collection history and balance remain correct.");
   if(collection==="transactions"&&(p.transactions||[]).some(x=>x.payableId===id))return alert("This bill has linked payments. Delete its payment records first.");
@@ -425,9 +441,8 @@ function renderGoals(){const p=currentProfile();$("goalsList").innerHTML=p.goals
 
 function arapRows(){const p=currentProfile();if(!p)return[];const rows=[];(p.transactions||[]).forEach(x=>{if(x.status==="receivable"||(x.type==="income"&&x.status==="pending")){rows.push({...x,arapType:"AR - Money Expected",sourceType:"transaction"})}if(x.status==="payable"||(x.type==="expense"&&x.status==="pending")){const remaining=payableOutstanding(x.id);if(remaining>0)rows.push({...x,mainAmount:remaining,originalBillAmount:x.mainAmount,amountPaid:Math.max(0,parseNum(x.mainAmount)-remaining),arapType:"AP - Bill Due",sourceType:"transaction"})}});(p.tradeReceivables||[]).filter(x=>!["collected","written off"].includes(x.status)&&tradeReceivableOutstanding(x)>0).forEach(x=>rows.push({id:x.id,date:x.date,month:x.month,arapType:"AR - Trade Receivable",category:x.category,mainAmount:tradeReceivableOutstanding(x),reference:x.reference,description:`${x.debtor}: ${x.description}`,sourceType:"tradeReceivable"}));(p.debts||[]).filter(x=>x.status!=="paid"&&parseNum(x.outstandingMain)>0).forEach(x=>rows.push({id:x.id,date:x.dueDate||"",month:"",arapType:"AP - Personal Debt",category:"Debt / Loan",mainAmount:x.outstandingMain,reference:"",description:`${x.lender||"Lender"}: ${x.name}`,sourceType:"debt"}));return rows.sort((a,b)=>(a.date||"").localeCompare(b.date||""))}
 function financeSummary(){const p=currentProfile();const t=totals();const nw=p?.netWorthItems||[];const registeredAssets=(p?.assets||[]).filter(x=>x.status==="active").reduce((a,b)=>a+parseNum(b.currentMain),0);const netWorthManualAssets=nw.filter(x=>x.type==="asset").reduce((a,b)=>a+parseNum(b.mainValue),0);const netAssets=registeredAssets+netWorthManualAssets;const netLiabilities=nw.filter(x=>x.type==="liability").reduce((a,b)=>a+parseNum(b.mainValue),0);const debts=(p?.debts||[]).filter(d=>d.status!=="paid").reduce((a,b)=>a+parseNum(b.outstandingMain),0);const ar=arapRows().filter(x=>x.arapType.startsWith("AR")).reduce((a,b)=>a+parseNum(b.mainAmount),0);const ap=arapRows().filter(x=>x.arapType.startsWith("AP")).reduce((a,b)=>a+parseNum(b.mainAmount),0);const activeProjects=(p?.projects||[]).filter(x=>!["completed","cancelled"].includes(x.status));const projectBudget=activeProjects.reduce((a,b)=>a+parseNum(b.budgetMain),0);const projectFunding=activeProjects.reduce((a,b)=>a+parseNum(b.fundingMain)+projectTransactionTotals(b.id).funding,0);const projectSpent=activeProjects.reduce((a,b)=>a+parseNum(b.spentMain)+projectTransactionTotals(b.id).spent,0);const totalAssets=t.cash+netAssets+ar+(t.goalsSaved||0);const totalLiabilities=netLiabilities+debts+ap;const netWorth=totalAssets-totalLiabilities;return{...t,registeredAssets,netWorthManualAssets,netAssets,netLiabilities,debts,ar,ap,projectBudget,projectFunding,projectSpent,totalAssets,totalLiabilities,netWorth}}
-function monthlyCashFlowRows(){const p=currentProfile();if(!p)return[];const months=[...new Set([...(p.transactions||[]).map(x=>x.month),...(p.tradeReceivables||[]).map(x=>x.month),...(p.transfers||[]).map(x=>x.month)].filter(Boolean))].sort();return months.map(m=>{const tx=p.transactions.filter(x=>x.month===m);const rec=(p.tradeReceivables||[]).filter(x=>x.month===m);const sum=arr=>arr.reduce((a,b)=>a+parseNum(b.mainAmount),0);const cashIn=sum(tx.filter(x=>x.type==="income"&&x.status==="paid"))+rec.reduce((a,b)=>a+parseNum(b.receivedMain),0);const expenses=sum(tx.filter(x=>x.type==="expense"&&x.status==="paid"))+transferFees(m);const savings=sum(tx.filter(x=>x.type==="savings"&&x.status==="paid"));const investments=sum(tx.filter(x=>x.type==="investment"&&x.status==="paid"));const debt=sum(tx.filter(x=>x.type==="debt"&&x.status==="paid"));const expected=sum(tx.filter(x=>x.status!=="paid"))+rec.filter(x=>!["collected","written off"].includes(x.status)).reduce((a,b)=>a+parseNum(b.outstandingMain),0);return{month:m,transfers:(p.transfers||[]).filter(t=>t.month===m).reduce((a,t)=>a+parseNum(t.mainAmount),0),cashIn,expenses,savings,investments,dedebt:debt,debt,net:cashIn-expenses-savings-investments-debt,expected}})}
+function monthlyCashFlowRows(){const p=currentProfile();if(!p)return[];const months=[...new Set([...(p.transactions||[]).map(x=>x.month),...(p.tradeReceivables||[]).map(x=>x.month),...(p.transfers||[]).map(x=>x.month),...funds(p).map(x=>x.date.slice(0,7))].filter(Boolean))].sort();return months.map(m=>{const tx=p.transactions.filter(x=>x.month===m);const rec=(p.tradeReceivables||[]).filter(x=>x.month===m);const sum=arr=>arr.reduce((a,b)=>a+parseNum(b.mainAmount),0);const cashIn=sum(tx.filter(x=>x.type==="income"&&x.status==="paid"))+rec.reduce((a,b)=>a+parseNum(b.receivedMain),0);const expenses=sum(tx.filter(x=>x.type==="expense"&&x.status==="paid"))+transferFees(m);const savings=sum(tx.filter(x=>x.type==="savings"&&x.status==="paid"));const investments=sum(tx.filter(x=>x.type==="investment"&&x.status==="paid"));const debt=sum(tx.filter(x=>x.type==="debt"&&x.status==="paid"));const expected=sum(tx.filter(x=>x.status!=="paid"))+rec.filter(x=>!["collected","written off"].includes(x.status)).reduce((a,b)=>a+parseNum(b.outstandingMain),0);const linked=funds(p).filter(r=>r.date.slice(0,7)===m).reduce((n,r)=>n+signedPrincipal(r),0);return{month:m,transfers:(p.transfers||[]).filter(t=>t.month===m).reduce((a,t)=>a+parseNum(t.mainAmount),0),cashIn,expenses,savings,investments,dedebt:debt,debt,net:cashIn-expenses-savings-investments-debt,expected}})}
 function renderFinanceFixtures(){renderStatementsFixture();renderCashFlowFixture();renderNetWorthFixture()}
-function renderStatementsFixture(){const f=financeSummary();if($("statementsBox"))$("statementsBox").innerHTML=[["Personal Net Worth",money(f.netWorth)],["Total Personal Assets",money(f.totalAssets)],["Total Personal Liabilities",money(f.totalLiabilities)],["Money Expected (AR)",money(f.ar)],["Bills Due (AP)",money(f.ap)],["Current Cash Estimate",money(f.cash)]].map(c=>`<div class="metric-card"><p>${c[0]}</p><h3>${c[1]}</h3></div>`).join("");if($("incomeStatementTable"))$("incomeStatementTable").innerHTML=`<tr><td>Income this month</td><td>${money(f.income)}</td><td>Money received or earned this month.</td></tr><tr><td>Expenses this month</td><td>${money(f.expenses)}</td><td>Personal spending recorded this month.</td></tr><tr><td>Savings and investments</td><td>${money((f.savings||0)+(f.investments||0))}</td><td>Money moved toward future goals.</td></tr><tr><td>Debt and AP payments</td><td>${money(f.debtPayments)}</td><td>Debt repayments and AP bill payments recorded as cash outflows.</td></tr><tr><td>Monthly surplus / deficit</td><td>${money(f.monthlyNet)}</td><td>Income minus expenses, savings, investments, and debt payments.</td></tr>`;if($("positionStatementTable"))$("positionStatementTable").innerHTML=`<tr><td>Cash estimate</td><td>${money(f.cash)}</td><td>All-time cash inflows minus outflows.</td></tr><tr><td>Saved toward goals</td><td>${money(f.goalsSaved)}</td><td>Total amounts saved in your goals.</td></tr><tr><td>Assets registered</td><td>${money(f.registeredAssets)}</td><td>Assets entered in the Assets page.</td></tr><tr><td>Other net-worth assets</td><td>${money(f.netWorthManualAssets)}</td><td>Extra assets manually entered in Net Worth.</td></tr><tr><td>Active project funding</td><td>${money(f.projectFunding)}</td><td>Funding currently allocated to active personal projects.</td></tr><tr><td>Money expected / AR</td><td>${money(f.ar)}</td><td>Money expected but not yet received.</td></tr><tr><td>Money expected / AR</td><td>${money(f.ar)}</td><td>Money expected but not yet received.</td></tr><tr><td>Debts outstanding</td><td>${money(f.debts)}</td><td>Outstanding debts from the Debts page.</td></tr><tr><td>Bills due / AP</td><td>${money(f.ap)}</td><td>Remaining balance on unpaid bills after linked payments.</td></tr><tr><td>Other liabilities</td><td>${money(f.netLiabilities)}</td><td>Liabilities manually entered in Net Worth.</td></tr><tr><td>Bills due / AP</td><td>${money(f.ap)}</td><td>Personal bills or obligations not yet paid.</td></tr><tr><td><strong>Net worth</strong></td><td><strong>${money(f.netWorth)}</strong></td><td>Assets minus liabilities.</td></tr>`}
 function renderCashFlowFixture(){const rows=monthlyCashFlowRows();const f=financeSummary();if($("cashFlowSummary"))$("cashFlowSummary").innerHTML=[["Cash In This Month",money(f.income)],["Cash Out This Month",money((f.expenses||0)+(f.savings||0)+(f.investments||0)+(f.debtPayments||0))],["Net Cash Movement",money(f.monthlyNet)],["Cash Runway",`${(f.runway||0).toFixed(1)} days`]].map(c=>`<div class="metric-card"><p>${c[0]}</p><h3>${c[1]}</h3></div>`).join("");if($("cashFlowTable"))$("cashFlowTable").innerHTML=rows.map(r=>`<tr><td>${escapeHtml(r.month)}</td><td>${money(r.cashIn)}</td><td>${money(r.expenses)}</td><td>${money(r.savings)}</td><td>${money(r.investments)}</td><td>${money(r.debt)}</td><td>${money(r.net)}</td><td>${money(r.expected)}</td></tr>`).join("")||'<tr><td colspan="8">No cash flow data yet.</td></tr>'}
 function renderArapFixture(){const rows=arapRows();const ar=rows.filter(x=>x.arapType.startsWith("AR")).reduce((a,b)=>a+parseNum(b.mainAmount),0),ap=rows.filter(x=>x.arapType.startsWith("AP")).reduce((a,b)=>a+parseNum(b.mainAmount),0);if($("arapSummary"))$("arapSummary").innerHTML=[["Money Expected / AR",money(ar)],["Bills Due / AP",money(ap)],["Net Expected Position",money(ar-ap)]].map(c=>`<div class="metric-card"><p>${c[0]}</p><h3>${c[1]}</h3></div>`).join("");if($("arapTable"))$("arapTable").innerHTML=rows.map(x=>{const action=x.sourceType==="tradeReceivable"?`<button onclick="editTradeReceivable('${x.id}')">Open Receivable</button>`:x.sourceType==="debt"?`<button onclick="editDebt('${x.id}')">Open Debt</button>`:`<button onclick="editTransaction('${x.id}')">Open Transaction</button>`;return `<tr><td>${escapeHtml(x.date)}</td><td>${escapeHtml(x.month)}</td><td><span class="pill ${x.arapType.startsWith('AR')?'good':'warn'}">${escapeHtml(x.arapType)}</span></td><td>${escapeHtml(x.category)}</td><td>${money(x.mainAmount)}${x.arapType.startsWith("AP")&&x.amountPaid?`<br><span class="small">Paid: ${money(x.amountPaid)}</span>`:""}</td><td>${escapeHtml(x.reference)}</td><td>${escapeHtml(x.description)}</td><td>${action}</td></tr>`}).join("")||'<tr><td colspan="8">No receivables or payables yet. Add Trade Receivables or mark a transaction as Money Expected / Receivable or Bill Due / Payable.</td></tr>'}
 function saveAsset(e){e.preventDefault();const current=convert($("assetCurrentValue").value,$("assetRate").value);const cost=convert($("assetCost").value,$("assetRate").value);const item={id:$("assetId").value||makeId(),date:$("assetDate").value,name:$("assetName").value.trim(),category:$("assetCategory").value.trim(),cost:parseNum($("assetCost").value),currentValue:parseNum($("assetCurrentValue").value),currency:$("assetCurrency").value,rateToMain:parseNum($("assetRate").value),costMain:cost,currentMain:current,status:$("assetStatus").value,note:$("assetNote").value.trim(),updatedAt:nowIso()};recordSave("assets",item,"assetId");clearAssetForm()}
@@ -442,7 +457,7 @@ function clearNetWorthForm(){["netWorthId","netWorthName","netWorthCategory","ne
 function editNetWorthItem(id){const x=currentProfile().netWorthItems.find(r=>r.id===id);if(!x)return;Object.entries({netWorthId:x.id,netWorthDate:x.date,netWorthType:x.type,netWorthName:x.name,netWorthCategory:x.category,netWorthValue:x.value,netWorthCurrency:x.currency,netWorthRate:x.rateToMain,netWorthNote:x.note}).forEach(([k,v])=>$(k).value=v??"");showTab("statements")}
 function renderNetWorthFixture(){const p=currentProfile();if(!p)return;const f=financeSummary();if($("netWorthSummary"))$("netWorthSummary").innerHTML=[["Assets",money(f.totalAssets)],["Liabilities",money(f.totalLiabilities)],["Net Worth",money(f.netWorth)]].map(c=>`<div class="metric-card"><p>${c[0]}</p><h3>${c[1]}</h3></div>`).join("");if($("netWorthTable"))$("netWorthTable").innerHTML=(p.netWorthItems||[]).map(x=>`<tr><td>${escapeHtml(x.date)}</td><td><span class="pill ${x.type==='asset'?'good':'warn'}">${escapeHtml(x.type)}</span></td><td>${escapeHtml(x.name)}</td><td>${escapeHtml(x.category)}</td><td>${money(x.mainValue)}</td><td>${escapeHtml(x.note)}</td><td><button onclick="editNetWorthItem('${x.id}')">Edit</button> <button class="danger-btn" onclick="removeRecord('netWorthItems','${x.id}')">Delete</button></td></tr>`).join("")||'<tr><td colspan="7">No net-worth items recorded yet.</td></tr>'}
 function allMonths(){const p=currentProfile();if(!p)return[];const months=new Set();[...(p.transactions||[]),...(p.tradeReceivables||[]),...(p.budgets||[]),...(p.projects||[])].forEach(x=>{if(x.month)months.add(x.month)});return Array.from(months).sort()}
-function monthFinance(month){const p=currentProfile();const tx=(p.transactions||[]).filter(x=>x.month===month);const rec=(p.tradeReceivables||[]).filter(x=>x.month===month);const budgets=(p.budgets||[]).filter(x=>x.month===month);const sum=arr=>arr.reduce((a,b)=>a+parseNum(b.mainAmount),0);const paidIncome=sum(tx.filter(x=>x.type==="income"&&x.status==="paid"));const income=sum(tx.filter(x=>x.type==="income"&&x.status!=="planned"));const expenses=sum(tx.filter(x=>x.type==="expense"&&x.expenseCategory!=="AP Payment"&&x.status!=="planned"))+transferFees(month);const paidExpenses=sum(tx.filter(x=>x.type==="expense"&&x.expenseCategory!=="AP Payment"&&x.status==="paid"))+transferFees(month);const savings=sum(tx.filter(x=>x.type==="savings"&&x.status!=="planned"));const investments=sum(tx.filter(x=>x.type==="investment"&&x.status!=="planned"));const debtPayments=sum(tx.filter(x=>(x.type==="debt"||(x.type==="expense"&&x.expenseCategory==="AP Payment"))&&x.status!=="planned"));const ar=sum(tx.filter(x=>x.status==="receivable"||(x.type==="income"&&x.status==="pending")))+rec.filter(x=>!["collected","written off"].includes(x.status)).reduce((a,b)=>a+parseNum(b.outstandingMain),0);const ap=arapRows().filter(x=>x.arapType.startsWith("AP")&&x.month===month).reduce((a,b)=>a+parseNum(b.mainAmount),0);const budgetTotal=budgets.reduce((a,b)=>a+parseNum(b.mainAmount),0);const budgetUsage=budgetTotal?paidExpenses/budgetTotal*100:0;const netCash=paidIncome-paidExpenses-savings-investments-debtPayments;const cashRunway=paidExpenses?Math.max(netCash,0)/(paidExpenses/30):0;const savingsRate=income?((savings+investments)/income*100):0;const futureAllocationRate=income?((savings+investments+debtPayments)/income*100):0;const f=financeSummary();const liquid=Math.max(f.cash,0)+(f.goalsSaved||0)+ar;const shortObligations=ap+(f.debts||0);const liquidityRatio=shortObligations?liquid/shortObligations:liquid>0?99:0;const debtToAssets=f.totalAssets?((f.totalLiabilities||0)/f.totalAssets*100):0;const netWorth=f.netWorth||0;let score=0;score+=netCash>=0?18:0;score+=savingsRate>=20?18:savingsRate>=10?12:savingsRate>0?6:0;score+=liquidityRatio>=1.5?18:liquidityRatio>=1?12:liquidityRatio>0?6:0;score+=cashRunway>=30?16:cashRunway>=14?10:cashRunway>0?5:0;score+=budgetTotal?(budgetUsage<=90?15:budgetUsage<=100?10:4):8;score+=debtToAssets<=30?15:debtToAssets<=60?8:3;score=Math.min(100,Math.round(score));return{month,income,paidIncome,expenses,paidExpenses,savings,investments,debtPayments,ar,ap,budgetTotal,budgetUsage,netCash,cashRunway,savingsRate,futureAllocationRate,liquidityRatio,debtToAssets,netWorth,score}}
+function monthFinance(month){const p=currentProfile();const tx=(p.transactions||[]).filter(x=>x.month===month);const rec=(p.tradeReceivables||[]).filter(x=>x.month===month);const budgets=(p.budgets||[]).filter(x=>x.month===month);const sum=arr=>arr.reduce((a,b)=>a+parseNum(b.mainAmount),0);const paidIncome=sum(tx.filter(x=>x.type==="income"&&x.status==="paid"));const income=sum(tx.filter(x=>x.type==="income"&&x.status!=="planned"));const expenses=sum(tx.filter(x=>x.type==="expense"&&x.expenseCategory!=="AP Payment"&&x.status!=="planned"))+transferFees(month);const paidExpenses=sum(tx.filter(x=>x.type==="expense"&&x.expenseCategory!=="AP Payment"&&x.status==="paid"))+transferFees(month);const savings=sum(tx.filter(x=>x.type==="savings"&&x.status!=="planned"));const investments=sum(tx.filter(x=>x.type==="investment"&&x.status!=="planned"))+funds(p).filter(r=>r.date.slice(0,7)===month).reduce((n,r)=>n+signedPrincipal(r),0);const debtPayments=sum(tx.filter(x=>(x.type==="debt"||(x.type==="expense"&&x.expenseCategory==="AP Payment"))&&x.status!=="planned"));const ar=sum(tx.filter(x=>x.status==="receivable"||(x.type==="income"&&x.status==="pending")))+rec.filter(x=>!["collected","written off"].includes(x.status)).reduce((a,b)=>a+parseNum(b.outstandingMain),0);const ap=arapRows().filter(x=>x.arapType.startsWith("AP")&&x.month===month).reduce((a,b)=>a+parseNum(b.mainAmount),0);const budgetTotal=budgets.reduce((a,b)=>a+parseNum(b.mainAmount),0);const budgetUsage=budgetTotal?paidExpenses/budgetTotal*100:0;const netCash=paidIncome-paidExpenses-savings-investments-debtPayments;const cashRunway=paidExpenses?Math.max(netCash,0)/(paidExpenses/30):0;const savingsRate=income?((savings+investments)/income*100):0;const futureAllocationRate=income?((savings+investments+debtPayments)/income*100):0;const f=financeSummary();const liquid=Math.max(f.cash,0)+(f.goalsSaved||0)+ar;const shortObligations=ap+(f.debts||0);const liquidityRatio=shortObligations?liquid/shortObligations:liquid>0?99:0;const debtToAssets=f.totalAssets?((f.totalLiabilities||0)/f.totalAssets*100):0;const netWorth=f.netWorth||0;let score=0;score+=netCash>=0?18:0;score+=savingsRate>=20?18:savingsRate>=10?12:savingsRate>0?6:0;score+=liquidityRatio>=1.5?18:liquidityRatio>=1?12:liquidityRatio>0?6:0;score+=cashRunway>=30?16:cashRunway>=14?10:cashRunway>0?5:0;score+=budgetTotal?(budgetUsage<=90?15:budgetUsage<=100?10:4):8;score+=debtToAssets<=30?15:debtToAssets<=60?8:3;score=Math.min(100,Math.round(score));return{month,income,paidIncome,expenses,paidExpenses,savings,investments,debtPayments,ar,ap,budgetTotal,budgetUsage,netCash,cashRunway,savingsRate,futureAllocationRate,liquidityRatio,debtToAssets,netWorth,score}}
 function monthlyReviewRows(){return allMonths().map(monthFinance)}
 function scorePill(score){return score>=75?"good":score>=50?"warn":"bad"}
 function renderMonthlyReviews(){if(!$("monthlyReviewCards"))return;const rows=monthlyReviewRows();const current=rows.find(r=>r.month===thisMonth())||rows[rows.length-1];if(!rows.length){$("monthlyReviewCards").innerHTML='<div class="alert warning">No monthly data yet. Add transactions first.</div>';$("monthlyReviewTable").innerHTML='<tr><td colspan="12">No monthly review data yet.</td></tr>';$("monthMovementTable").innerHTML='<tr><td colspan="7">No month-to-month movement yet.</td></tr>';renderPositionTestMeanings();renderDashboardReviewSummary(null);return}$("monthlyReviewCards").innerHTML=[
@@ -468,14 +483,14 @@ function debtOutstandingForPayment(debtId,ignoreTransactionId=""){const debt=(cu
 function selectedDebtTarget(){const value=$("transactionDebtId")?.value||"",ignore=$("transactionId")?.value||"";if(value.startsWith("debt:")){const id=value.slice(5),d=(currentProfile()?.debts||[]).find(x=>x.id===id);return d?{kind:"debt",id,name:d.name,outstanding:debtOutstandingForPayment(id,ignore)}:null}if(value.startsWith("ap:")){const id=value.slice(3),bill=(currentProfile()?.transactions||[]).find(x=>x.id===id);return bill?{kind:"ap",id,name:bill.description||bill.category||"Unlabelled bill",outstanding:payableOutstanding(id,ignore)}:null}return null}
 function renderDebtPaymentInfo(){const box=$("transactionDebtInfo");if(!box)return;const target=selectedDebtTarget();if(!target){box.className="alert warning";box.textContent="Select an existing debt or unpaid bill. Payments cannot be recorded without an outstanding balance.";return}box.className="alert good";box.innerHTML=`Selected ${target.kind==="ap"?"Accounts Payable bill":"registered debt"}: <strong>${escapeHtml(target.name)}</strong><br>Outstanding balance: <strong>${money(target.outstanding)}</strong>. The payment cannot exceed this amount.`}
 function renderGoalDebtOptions(){const p=currentProfile();const goalOpts='<option value="">No savings goal</option>'+(p?.goals||[]).map(g=>`<option value="${escapeHtml(g.id)}">${escapeHtml(g.name)}</option>`).join("");const cur=$("transactionDebtId")?.value||"",ignore=$("transactionId")?.value||"",apOnly=$("transactionType")?.value==="expense"&&$("transactionExpenseCategory")?.value==="AP Payment";let debtOpts='<option value="">Choose an existing debt or payable</option>';if(!apOnly)debtOpts+='<optgroup label="Registered debts / loans">'+(p?.debts||[]).filter(d=>debtOutstandingForPayment(d.id,ignore)>0).map(d=>`<option value="debt:${escapeHtml(d.id)}">${escapeHtml(d.lender?d.lender+" — ":"")}${escapeHtml(d.name)} · ${money(debtOutstandingForPayment(d.id,ignore))} outstanding</option>`).join("")+'</optgroup>';const bills=(p?.transactions||[]).filter(x=>x.type==="expense"&&(x.status==="payable"||x.status==="pending")&&payableOutstanding(x.id,ignore)>0);debtOpts+='<optgroup label="Unpaid Accounts Payable bills">'+bills.map(x=>`<option value="ap:${escapeHtml(x.id)}">${escapeHtml(x.description||x.category||"Unlabelled bill")} · ${money(payableOutstanding(x.id,ignore))} outstanding</option>`).join("")+'</optgroup>';const receivableOpts='<option value="">Choose an open receivable</option>'+(p?.tradeReceivables||[]).filter(r=>!["collected","written off"].includes(r.status)&&tradeReceivableOutstanding(r,ignore)>0).map(r=>`<option value="${escapeHtml(r.id)}">${escapeHtml(r.debtor)} — ${escapeHtml(r.category)} — ${money(tradeReceivableOutstanding(r,ignore))} outstanding</option>`).join("");if($("transactionGoalId")){const goalCur=$("transactionGoalId").value;$("transactionGoalId").innerHTML=goalOpts;if(goalCur)$("transactionGoalId").value=goalCur}if($("transactionDebtId")){ $("transactionDebtId").innerHTML=debtOpts;if(cur&&Array.from($("transactionDebtId").options).some(o=>o.value===cur))$("transactionDebtId").value=cur;else $("transactionDebtId").value=""}if($("transactionReceivableId")){const recvCur=$("transactionReceivableId").value;$("transactionReceivableId").innerHTML=receivableOpts;if(recvCur)$("transactionReceivableId").value=recvCur}}
-function accountEffects(){const p=currentProfile();const effects={};(p?.accounts||[]).forEach(a=>effects[a.id]={tx:0,transfer:0});(p?.transactions||[]).filter(x=>x.status!=="planned"&&x.accountId).forEach(x=>{if(!effects[x.accountId])effects[x.accountId]={tx:0,transfer:0};const amt=parseNum(x.mainAmount);if(x.type==="income"&&x.status!=="receivable"&&x.status!=="pending")effects[x.accountId].tx+=amt;else if(["expense","savings","debt","investment"].includes(x.type)&&!["payable","pending"].includes(x.status))effects[x.accountId].tx-=amt;});(p?.transfers||[]).forEach(t=>{if(!effects[t.fromAccountId])effects[t.fromAccountId]={tx:0,transfer:0};if(!effects[t.toAccountId])effects[t.toAccountId]={tx:0,transfer:0};effects[t.fromAccountId].transfer-=parseNum(t.mainAmount)+transferFeeMain(t);effects[t.toAccountId].transfer+=parseNum(t.mainAmount);});return effects}
+function accountEffects(){const p=currentProfile();const effects={};(p?.accounts||[]).forEach(a=>effects[a.id]={tx:0,transfer:0});(p?.transactions||[]).filter(x=>x.status!=="planned"&&x.accountId).forEach(x=>{if(!effects[x.accountId])effects[x.accountId]={tx:0,transfer:0};const amt=parseNum(x.mainAmount);if(x.type==="income"&&x.status!=="receivable"&&x.status!=="pending")effects[x.accountId].tx+=amt;else if(["expense","savings","debt","investment"].includes(x.type)&&!["payable","pending"].includes(x.status))effects[x.accountId].tx-=amt;});(p?.transfers||[]).forEach(t=>{if(!effects[t.fromAccountId])effects[t.fromAccountId]={tx:0,transfer:0};if(!effects[t.toAccountId])effects[t.toAccountId]={tx:0,transfer:0};effects[t.fromAccountId].transfer-=parseNum(t.mainAmount)+transferFeeMain(t);effects[t.toAccountId].transfer+=parseNum(t.mainAmount);});for(const r of funds(p)){if(effects[r.accountId])effects[r.accountId].transfer-=signedPrincipal(r)+fundingFee(r);}return effects}
 function accountBalances(){const p=currentProfile();const effects=accountEffects();return (p?.accounts||[]).map(a=>{const e=effects[a.id]||{tx:0,transfer:0};const opening=parseNum(a.openingMain);return{...a,txEffect:e.tx,transferEffect:e.transfer,balance:opening+e.tx+e.transfer};})}
-function saveAccount(e){e.preventDefault();const rate=parseNum($("accountRate").value)||1;const opening=convert($("accountOpening").value,rate);const item={id:$("accountId").value||makeId(),name:$("accountName").value.trim(),type:$("accountType").value,opening:parseNum($("accountOpening").value),currency:$("accountCurrency").value,rateToMain:rate,openingMain:opening,status:$("accountStatus").value,note:$("accountNote").value.trim(),updatedAt:nowIso()};recordSave("accounts",item,"accountId");clearAccountForm()}
-function clearAccountForm(){["accountId","accountName","accountOpening","accountNote"].forEach(id=>$(id)&&($(id).value=""));if($("accountRate"))$("accountRate").value=1;if($("accountStatus"))$("accountStatus").value="active";renderAccountOptions()}
-function editAccount(id){const x=(currentProfile().accounts||[]).find(a=>a.id===id);if(!x)return;Object.entries({accountId:x.id,accountName:x.name,accountType:x.type,accountOpening:x.opening,accountCurrency:x.currency,accountRate:x.rateToMain,accountStatus:x.status,accountNote:x.note}).forEach(([k,v])=>$(k).value=v??"");showTab("accounts")}
+function saveAccount(e){e.preventDefault();const rate=parseNum($("accountRate").value)||1;const opening=convert($("accountOpening").value,rate);const item={id:$("accountId").value||makeId(),name:$("accountName").value.trim(),type:$("accountType").value,opening:parseNum($("accountOpening").value),currency:$("accountCurrency").value,rateToMain:rate,openingMain:opening,openingDate:$("accountOpeningDate").value,status:$("accountStatus").value,note:$("accountNote").value.trim(),updatedAt:nowIso()};recordSave("accounts",item,"accountId");clearAccountForm()}
+function clearAccountForm(){["accountId","accountName","accountOpening","accountOpeningDate","accountNote"].forEach(id=>$(id)&&($(id).value=""));if($("accountRate"))$("accountRate").value=1;if($("accountStatus"))$("accountStatus").value="active";renderAccountOptions()}
+function editAccount(id){const x=(currentProfile().accounts||[]).find(a=>a.id===id);if(!x)return;Object.entries({accountId:x.id,accountName:x.name,accountType:x.type,accountOpening:x.opening,accountOpeningDate:x.openingDate,accountCurrency:x.currency,accountRate:x.rateToMain,accountStatus:x.status,accountNote:x.note}).forEach(([k,v])=>$(k).value=v??"");showTab("accounts")}
 function renderAccounts(){if(!$("accountsTable"))return;const rows=accountBalances();const total=rows.filter(x=>x.status!=="inactive").reduce((a,b)=>a+parseNum(b.balance),0);if($("accountsSummary"))$("accountsSummary").innerHTML=[["Total Account Balance",money(total)],["Active Accounts",rows.filter(x=>x.status!=="inactive").length],["Accounts Registered",rows.length]].map(c=>`<div class="metric-card"><p>${c[0]}</p><h3>${c[1]}</h3></div>`).join("");$("accountsTable").innerHTML=rows.map(x=>`<tr><td>${escapeHtml(x.name)}</td><td>${escapeHtml(x.type)}</td><td>${money(x.openingMain)}</td><td>${money(x.txEffect)}</td><td>${money(x.transferEffect)}</td><td>${money(x.balance)}</td><td><span class="pill ${x.status==='active'?'good':'zero'}">${escapeHtml(x.status)}</span></td><td>${escapeHtml(x.note)}</td><td><button onclick="editAccount('${x.id}')">Edit</button> <button class="danger-btn" onclick="removeRecord('accounts','${x.id}')">Delete</button></td></tr>`).join("")||'<tr><td colspan="9">No accounts registered yet.</td></tr>';}
 function transferFeeMain(t){const fee=Number(t?.feeMain||0);return Number.isFinite(fee)&&fee>0?fee:0}
-function transferFees(month){return (currentProfile()?.transfers||[]).filter(t=>!month||t.month===month).reduce((sum,t)=>sum+transferFeeMain(t),0)}
+function transferFees(month){return (currentProfile()?.transfers||[]).filter(t=>!month||t.month===month).reduce((sum,t)=>sum+transferFeeMain(t),0)+funds(currentProfile()).filter(r=>!month||r.date.slice(0,7)===month).reduce((s,r)=>s+fundingFee(r),0)}
 function saveTransfer(e){e.preventDefault();if($("transferFromAccount").value===$("transferToAccount").value)return alert("Choose two different accounts for a transfer.");const rate=parseNum($("transferRate").value)||1;const item={id:$("transferId").value||makeId(),date:$("transferDate").value,month:$("transferMonth").value,fromAccountId:$("transferFromAccount").value,fromAccountName:selectedAccountName($("transferFromAccount").value),toAccountId:$("transferToAccount").value,toAccountName:selectedAccountName($("transferToAccount").value),amount:parseNum($("transferAmount").value),currency:$("transferCurrency").value,rateToMain:rate,mainAmount:convert($("transferAmount").value,rate),fee:parseNum($("transferFee").value),feeMain:convert($("transferFee").value,rate),reference:$("transferReference").value.trim(),note:$("transferNote").value.trim(),updatedAt:nowIso()};if(isMonthClosed(item.month)&&!confirm("This month is closed. Save this transfer anyway?"))return;
 if(!Number.isFinite(item.mainAmount)||item.mainAmount<=0||!Number.isFinite(item.fee)||item.fee<0||!Number.isFinite(item.feeMain)||!Number.isFinite(item.mainAmount+item.feeMain)||!Number.isFinite(rate)||rate<=0||!item.fromAccountId||!item.toAccountId)return alert("Enter a positive transfer, a fee of zero or more, and choose two accounts.");
 if(![item.fromAccountId,item.toAccountId].every(id=>(currentProfile().accounts||[]).some(a=>a.id===id)))return alert("Choose existing accounts for this transfer.");
@@ -519,7 +534,7 @@ function renderImprovementProgress(){const p=currentProfile();const checks=[["Lo
 function saveSettings(e){e.preventDefault();const p=currentProfile();p.mainCurrency=$("settingCurrency").value;p.monthlyIncomeTarget=parseNum($("settingIncomeTarget").value);p.monthlySavingTarget=parseNum($("settingSavingTarget").value);p.emergencyFundTarget=parseNum($("settingEmergencyTarget").value);markLocalSave();alert("Settings saved locally.")}
 function loadSettingsIntoForm(force=true){const p=currentProfile();if(!p||!$("settingCurrency"))return;if(force||document.activeElement?.id?.startsWith("setting")===false){$("settingCurrency").value=p.mainCurrency||"TWD";$("settingIncomeTarget").value=p.monthlyIncomeTarget||"";$("settingSavingTarget").value=p.monthlySavingTarget||"";$("settingEmergencyTarget").value=p.emergencyFundTarget||""}}
 function exportJson(){checkOwner();downloadJson("pilotprofit-personal-budget-local-backup.json",store);localStorage.setItem(BACKUP_KEY,nowIso());renderAll()}
-function exportCsv(){checkOwner();const p=currentProfile();if(!p)return;const rows=[["Type","Date","Month","Category/Name","Amount Main Currency","Description/Note"]];p.transactions.forEach(x=>rows.push([x.type,x.date,x.month,x.projectId?`${x.category} | Project: ${x.projectName} (${x.projectImpact})`:x.category,x.mainAmount,x.description]));(p.tradeReceivables||[]).forEach(x=>rows.push(["trade receivable",x.date,x.month,x.debtor+" - "+x.category,x.outstandingMain,x.description]));p.budgets.forEach(x=>rows.push(["budget","",x.month,x.category,x.mainAmount,""]));p.goals.forEach(x=>rows.push(["goal","","",x.name,x.savedMain,x.note]));p.debts.forEach(x=>rows.push(["debt","","",x.name,x.outstandingMain,x.note]));(p.assets||[]).forEach(x=>rows.push(["asset",x.date,"",x.name,x.currentMain,x.note]));(p.projects||[]).forEach(x=>rows.push(["project",x.date,x.month,x.name,x.budgetMain,x.note]));(p.netWorthItems||[]).forEach(x=>rows.push(["net worth item",x.date,"",x.name,x.mainValue,x.note]));(p.transfers||[]).forEach(t=>{rows.push(["transfer",t.date,t.month,t.fromAccountName+" → "+t.toAccountName,t.mainAmount,t.note]);if(transferFeeMain(t))rows.push(["expense",t.date,t.month,"Switching / Transfer Fees",transferFeeMain(t),"Fee for transfer "+t.id]);});downloadCsv("pilotprofit-personal-budget-records.csv",rows)}
+function exportCsv(){checkOwner();const p=currentProfile();if(!p)return;const rows=[["Type","Date","Month","Category/Name","Amount Main Currency","Description/Note"]];p.transactions.forEach(x=>rows.push([x.type,x.date,x.month,x.projectId?`${x.category} | Project: ${x.projectName} (${x.projectImpact})`:x.category,x.mainAmount,x.description]));(p.tradeReceivables||[]).forEach(x=>rows.push(["trade receivable",x.date,x.month,x.debtor+" - "+x.category,x.outstandingMain,x.description]));p.budgets.forEach(x=>rows.push(["budget","",x.month,x.category,x.mainAmount,""]));p.goals.forEach(x=>rows.push(["goal","","",x.name,x.savedMain,x.note]));p.debts.forEach(x=>rows.push(["debt","","",x.name,x.outstandingMain,x.note]));(p.assets||[]).forEach(x=>rows.push(["asset",x.date,"",x.name,x.currentMain,x.note]));(p.projects||[]).forEach(x=>rows.push(["project",x.date,x.month,x.name,x.budgetMain,x.note]));(p.netWorthItems||[]).forEach(x=>rows.push(["net worth item",x.date,"",x.name,x.mainValue,x.note]));(p.transfers||[]).forEach(t=>{rows.push(["transfer",t.date,t.month,t.fromAccountName+" → "+t.toAccountName,t.mainAmount,t.note]);if(transferFeeMain(t))rows.push(["expense",t.date,t.month,"Switching / Transfer Fees",transferFeeMain(t),"Fee for transfer "+t.id]);});for(const r of funds(p)){rows.push(["module "+r.kind,r.date,r.date.slice(0,7),moduleNames[r.module],signedPrincipal(r),r.id]);if(r.fee)rows.push(["expense",r.date,r.date.slice(0,7),"Transfer fees",fundingFee(r),r.id]);}downloadCsv("pilotprofit-personal-budget-records.csv",rows)}
 function downloadJson(name,data){const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();URL.revokeObjectURL(a.href)}
 function downloadCsv(name,rows){const csv=rows.map(r=>r.map(v=>`"${String(v??"").replace(/"/g,'""')}"`).join(",")).join("\n");const blob=new Blob([csv],{type:"text/csv"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();URL.revokeObjectURL(a.href)}
 const BUDGET_MODULE='budgeting';
@@ -536,7 +551,11 @@ function stageBudget(){
   try{
     checkOwner();
     localStorage.setItem(STORE_KEY+':draft',store.updatedAt);
-    const payload={module:BUDGET_MODULE,ownerId:budgetUser.id,store};
+    const p=currentProfile();
+    const payload={module:BUDGET_MODULE,ownerId:budgetUser.id,store,
+      budgetFunding:{version:1,ownerId:budgetUser.id,profileId:p.id,currency:p.mainCurrency,
+        accounts:p.accounts.map(({id,name,status})=>({id,name,status})),
+        funding:funds(p).map(r=>({...r}))}};
     AurumCloud.module.autoSave(BUDGET_MODULE,payload,{delayMs:10000});
     const cached=AurumCloud.module.getCached(BUDGET_MODULE);
     if(cached?.state?.store?.updatedAt!==store.updatedAt)throw Error('Cloud queue could not retain this edit. Export JSON and free device storage.');
@@ -553,7 +572,7 @@ function validStore(value){
 }
 function showBudget(value){
   if(!validStore(value))throw Error('Unsupported budget snapshot. Your saved copy has been preserved.');
-  store=migrateStore(value); activeProfileId=store.profiles[0].id;store.activeProfileId=activeProfileId;
+  checkFunds(value.profiles[0]);store=migrateStore(value); activeProfileId=store.profiles[0].id;store.activeProfileId=activeProfileId;
   $('budgetGate').hidden=true;openApp();window.BudgetFX.paintAll();
 }
 function readDraft(){
@@ -660,7 +679,7 @@ function chooseProfile(data){
     if(!confirm('Replace the budget for '+trackerUsername()+' ('+(budgetUser.email||budgetUser.id)+')'+' with "'+(p.username||'Profile')+'"? Your current budget will be downloaded first.'))return;
     downloadJson('budget-before-import.json',store);
     delete p.password;delete p.recoveryAnswer;delete p.recoveryQuestion;delete p.linkedPortfolioReviewed;
-    p.id=p.id||makeId();
+    p.id=p.id||makeId();try{checkFunds(p);}catch(e){alert(e.message);return;}
     store=migrateStore({...defaultStore(),updatedAt:store.updatedAt,profiles:[p],activeProfileId:p.id});activeProfileId=p.id;
     saveStore();location.reload();
   };
@@ -698,81 +717,17 @@ window.setInterval(checkIdle,1000);
 window.addEventListener('pageshow',()=>{checkSession();checkIdle();});
 
 
-function totals(){const p=currentProfile();if(!p)return{};const tx=p.transactions||[];const sum=arr=>arr.reduce((a,b)=>a+parseNum(b.mainAmount),0);const month=thisMonth();const monthTx=tx.filter(x=>x.month===month);const isEarnedIncome=x=>x.type==="income"&&!x.receivableId;const income=sum(monthTx.filter(x=>isEarnedIncome(x)&&x.status!=="planned"));const expenses=sum(monthTx.filter(x=>x.type==="expense"&&x.expenseCategory!=="AP Payment"&&x.status!=="planned"))+transferFees(month);const savings=sum(monthTx.filter(x=>x.type==="savings"&&x.status!=="planned"));const debtPayments=sum(monthTx.filter(x=>(x.type==="debt"||(x.type==="expense"&&x.expenseCategory==="AP Payment"))&&x.status!=="planned"));const investments=sum(monthTx.filter(x=>x.type==="investment"&&x.status!=="planned"));const allIncome=sum(tx.filter(x=>x.type==="income"&&x.status!=="planned"&&!['receivable','pending'].includes(x.status)));const allOut=sum(tx.filter(x=>["expense","savings","debt","investment"].includes(x.type)&&x.status!=="planned"&&!['payable','pending'].includes(x.status)));const accountsTotal=accountBalances().filter(x=>x.status!=="inactive").reduce((a,b)=>a+parseNum(b.balance),0);const cash=accountBalances().length?accountsTotal:allIncome-allOut-transferFees();const debtOutstanding=(p.debts||[]).filter(d=>d.status!=="paid").reduce((a,b)=>a+parseNum(b.outstandingMain),0);const goalsSaved=(p.goals||[]).reduce((a,b)=>a+parseNum(b.savedMain),0);const monthlyNet=income-expenses-savings-debtPayments-investments;const savingRate=income?((savings+investments)/income*100):0;const avgDaily=expenses/30;const runway=avgDaily?cash/avgDaily:0;return{month,income,expenses,savings,debtPayments,investments,monthlyNet,savingRate,cash,debtOutstanding,goalsSaved,runway,accountsTotal}}
-function financeSummary(){const p=currentProfile();const t=totals();const nw=p?.netWorthItems||[];const registeredAssets=(p?.assets||[]).filter(x=>x.status==="active").reduce((a,b)=>a+parseNum(b.currentMain),0);const netWorthManualAssets=nw.filter(x=>x.type==="asset").reduce((a,b)=>a+parseNum(b.mainValue),0);const accountTotal=accountBalances().filter(x=>x.status!=="inactive").reduce((a,b)=>a+parseNum(b.balance),0);const netAssets=registeredAssets+netWorthManualAssets+accountTotal;const netLiabilities=nw.filter(x=>x.type==="liability").reduce((a,b)=>a+parseNum(b.mainValue),0);const debts=(p?.debts||[]).filter(d=>d.status!=="paid").reduce((a,b)=>a+parseNum(b.outstandingMain),0);const ar=arapRows().filter(x=>x.arapType.startsWith("AR")).reduce((a,b)=>a+parseNum(b.mainAmount),0);const ap=arapRows().filter(x=>x.arapType.startsWith("AP")).reduce((a,b)=>a+parseNum(b.mainAmount),0);const activeProjects=(p?.projects||[]).filter(x=>!["completed","cancelled"].includes(x.status));const projectBudget=activeProjects.reduce((a,b)=>a+parseNum(b.budgetMain),0);const projectFunding=activeProjects.reduce((a,b)=>a+parseNum(b.fundingMain)+projectTransactionTotals(b.id).funding,0);const projectSpent=activeProjects.reduce((a,b)=>a+parseNum(b.spentMain)+projectTransactionTotals(b.id).spent,0);const totalAssets=netAssets+ar+(t.goalsSaved||0);const totalLiabilities=netLiabilities+ap;const netWorth=totalAssets-totalLiabilities;return{...t,accountTotal,registeredAssets,netWorthManualAssets,netAssets,netLiabilities,debts,ar,ap,projectBudget,projectFunding,projectSpent,totalAssets,totalLiabilities,netWorth}}
+function totals(){const p=currentProfile();if(!p)return{};const tx=p.transactions||[];const sum=arr=>arr.reduce((a,b)=>a+parseNum(b.mainAmount),0);const month=thisMonth();const monthTx=tx.filter(x=>x.month===month);const isEarnedIncome=x=>x.type==="income"&&!x.receivableId;const income=sum(monthTx.filter(x=>isEarnedIncome(x)&&x.status!=="planned"));const expenses=sum(monthTx.filter(x=>x.type==="expense"&&x.expenseCategory!=="AP Payment"&&x.status!=="planned"))+transferFees(month);const savings=sum(monthTx.filter(x=>x.type==="savings"&&x.status!=="planned"));const debtPayments=sum(monthTx.filter(x=>(x.type==="debt"||(x.type==="expense"&&x.expenseCategory==="AP Payment"))&&x.status!=="planned"));const investments=sum(monthTx.filter(x=>x.type==="investment"&&x.status!=="planned"))+funds(p).filter(r=>r.date.slice(0,7)===month).reduce((n,r)=>n+signedPrincipal(r),0);const allIncome=sum(tx.filter(x=>x.type==="income"&&x.status!=="planned"&&!['receivable','pending'].includes(x.status)));const allOut=sum(tx.filter(x=>["expense","savings","debt","investment"].includes(x.type)&&x.status!=="planned"&&!['payable','pending'].includes(x.status)));const accountsTotal=accountBalances().filter(x=>x.status!=="inactive").reduce((a,b)=>a+parseNum(b.balance),0);const cash=accountBalances().length?accountsTotal:allIncome-allOut-transferFees();const debtOutstanding=(p.debts||[]).filter(d=>d.status!=="paid").reduce((a,b)=>a+parseNum(b.outstandingMain),0);const goalsSaved=(p.goals||[]).reduce((a,b)=>a+parseNum(b.savedMain),0);const monthlyNet=income-expenses-savings-debtPayments-investments;const savingRate=income?((savings+investments)/income*100):0;const avgDaily=expenses/30;const runway=avgDaily?cash/avgDaily:0;return{month,income,expenses,savings,debtPayments,investments,monthlyNet,savingRate,cash,debtOutstanding,goalsSaved,runway,accountsTotal}}
+function financeSummary(){const p=currentProfile();const t=totals();const nw=p?.netWorthItems||[];const registeredAssets=(p?.assets||[]).filter(x=>x.status==="active").reduce((a,b)=>a+parseNum(b.currentMain),0);const netWorthManualAssets=nw.filter(x=>x.type==="asset").reduce((a,b)=>a+parseNum(b.mainValue),0);const accountTotal=accountBalances().filter(x=>x.status!=="inactive").reduce((a,b)=>a+parseNum(b.balance),0);const netAssets=registeredAssets+netWorthManualAssets+accountTotal;const netLiabilities=nw.filter(x=>x.type==="liability").reduce((a,b)=>a+parseNum(b.mainValue),0);const debts=(p?.debts||[]).filter(d=>d.status!=="paid").reduce((a,b)=>a+parseNum(b.outstandingMain),0);const ar=arapRows().filter(x=>x.arapType.startsWith("AR")).reduce((a,b)=>a+parseNum(b.mainAmount),0);const ap=arapRows().filter(x=>x.arapType.startsWith("AP")).reduce((a,b)=>a+parseNum(b.mainAmount),0);const activeProjects=(p?.projects||[]).filter(x=>!["completed","cancelled"].includes(x.status));const projectBudget=activeProjects.reduce((a,b)=>a+parseNum(b.budgetMain),0);const projectFunding=activeProjects.reduce((a,b)=>a+parseNum(b.fundingMain)+projectTransactionTotals(b.id).funding,0);const projectSpent=activeProjects.reduce((a,b)=>a+parseNum(b.spentMain)+projectTransactionTotals(b.id).spent,0);const totalAssets=netAssets+ar+(t.goalsSaved||0);const totalLiabilities=netLiabilities+ap;const netWorth=totalAssets-totalLiabilities;return applyReportBalance({...t,accountTotal,registeredAssets,netWorthManualAssets,netAssets,netLiabilities,debts,ar,ap,projectBudget,projectFunding,projectSpent,totalAssets,totalLiabilities,netWorth},p)}
 function allMonths(){const p=currentProfile();if(!p)return[];const months=new Set();[...(p.transactions||[]),...(p.tradeReceivables||[]),...(p.budgets||[]),...(p.projects||[]),...(p.transfers||[])].forEach(x=>{if(x.month)months.add(x.month)});return Array.from(months).sort()}
-function monthlyCashFlowRows(){const p=currentProfile();if(!p)return[];const months=[...new Set([...(p.transactions||[]).map(x=>x.month),...(p.tradeReceivables||[]).map(x=>x.month),...(p.transfers||[]).map(x=>x.month)].filter(Boolean))].sort();return months.map(m=>{const tx=(p.transactions||[]).filter(x=>x.month===m);const rec=(p.tradeReceivables||[]).filter(x=>x.month===m);const sum=arr=>arr.reduce((a,b)=>a+parseNum(b.mainAmount),0);const cashIn=sum(tx.filter(x=>x.type==="income"&&x.status==="paid"))+rec.reduce((a,b)=>a+parseNum(b.receivedMain),0);const expenses=sum(tx.filter(x=>x.type==="expense"&&x.expenseCategory!=="AP Payment"&&x.status==="paid"))+transferFees(m);const savings=sum(tx.filter(x=>x.type==="savings"&&x.status!=="planned"));const investments=sum(tx.filter(x=>x.type==="investment"&&x.status!=="planned"));const debt=sum(tx.filter(x=>(x.type==="debt"||(x.type==="expense"&&x.expenseCategory==="AP Payment"))&&x.status!=="planned"));const expected=arapRows().filter(x=>x.month===m).reduce((a,b)=>a+parseNum(b.mainAmount),0)+sum(tx.filter(x=>x.status==="planned"));return{month:m,transfers:(p.transfers||[]).filter(t=>t.month===m).reduce((a,t)=>a+parseNum(t.mainAmount),0),cashIn,expenses,savings,investments,debt,net:cashIn-expenses-savings-investments-debt,expected}})}
+function monthlyCashFlowRows(){const p=currentProfile();if(!p)return[];const months=[...new Set([...(p.transactions||[]).map(x=>x.month),...(p.tradeReceivables||[]).map(x=>x.month),...(p.transfers||[]).map(x=>x.month),...funds(p).map(x=>x.date.slice(0,7))].filter(Boolean))].sort();return months.map(m=>{const tx=(p.transactions||[]).filter(x=>x.month===m);const rec=(p.tradeReceivables||[]).filter(x=>x.month===m);const sum=arr=>arr.reduce((a,b)=>a+parseNum(b.mainAmount),0);const cashIn=sum(tx.filter(x=>x.type==="income"&&x.status==="paid"))+rec.reduce((a,b)=>a+parseNum(b.receivedMain),0);const expenses=sum(tx.filter(x=>x.type==="expense"&&x.expenseCategory!=="AP Payment"&&x.status==="paid"))+transferFees(m);const savings=sum(tx.filter(x=>x.type==="savings"&&x.status!=="planned"));const investments=sum(tx.filter(x=>x.type==="investment"&&x.status!=="planned"));const debt=sum(tx.filter(x=>(x.type==="debt"||(x.type==="expense"&&x.expenseCategory==="AP Payment"))&&x.status!=="planned"));const expected=arapRows().filter(x=>x.month===m).reduce((a,b)=>a+parseNum(b.mainAmount),0)+sum(tx.filter(x=>x.status==="planned"));const linked=funds(p).filter(r=>r.date.slice(0,7)===m).reduce((n,r)=>n+signedPrincipal(r),0);return{month:m,transfers:(p.transfers||[]).filter(t=>t.month===m).reduce((a,t)=>a+parseNum(t.mainAmount),0),cashIn,expenses,savings,investments:investments+linked,debt,net:cashIn-expenses-savings-investments-debt-linked,expected}})}
 function renderCashFlowFixture(){const rows=monthlyCashFlowRows();const f=financeSummary();if($("cashFlowSummary"))$("cashFlowSummary").innerHTML=[["Cash In This Month",money(f.income)],["Cash Out This Month",money((f.expenses||0)+(f.savings||0)+(f.investments||0)+(f.debtPayments||0))],["Net Cash Movement",money(f.monthlyNet)],["Account Balance",money(f.accountTotal)],["Cash Runway",`${(f.runway||0).toFixed(1)} days`]].map(c=>`<div class="metric-card"><p>${c[0]}</p><h3>${c[1]}</h3></div>`).join("");if($("cashFlowTable"))$("cashFlowTable").innerHTML=rows.map(r=>`<tr><td>${escapeHtml(r.month)}</td><td>${money(r.cashIn)}</td><td>${money(r.expenses)}</td><td>${money(r.savings)}</td><td>${money(r.investments)}</td><td>${money(r.debt)}</td><td>${money(r.net)}</td><td>${money(r.expected)}<br><span class="small">Transfers: ${money(r.transfers)}</span></td></tr>`).join("")||'<tr><td colspan="8">No cash flow data yet.</td></tr>'}
-function renderStatementsFixture(){const f=financeSummary();if($("statementsBox"))$("statementsBox").innerHTML=[["Personal Net Worth",money(f.netWorth)],["Total Personal Assets",money(f.totalAssets)],["Total Personal Liabilities",money(f.totalLiabilities)],["Money Expected (AR)",money(f.ar)],["Bills Due (AP)",money(f.ap)],["Account Balances",money(f.accountTotal)]].map(c=>`<div class="metric-card"><p>${c[0]}</p><h3>${c[1]}</h3></div>`).join("");if($("incomeStatementTable"))$("incomeStatementTable").innerHTML=`<tr><td>Income this month</td><td>${money(f.income)}</td><td>Money received or earned this month.</td></tr><tr><td>Expenses this month</td><td>${money(f.expenses)}</td><td>Personal spending recorded this month.</td></tr><tr><td>Savings and investments</td><td>${money((f.savings||0)+(f.investments||0))}</td><td>Money moved toward future value.</td></tr><tr><td>Debt and AP payments</td><td>${money(f.debtPayments)}</td><td>Debt repayments and AP bill payments recorded as cash outflows.</td></tr><tr><td>Monthly surplus / deficit</td><td>${money(f.monthlyNet)}</td><td>Income minus expenses, savings, investments, and debt payments.</td></tr>`;if($("positionStatementTable"))$("positionStatementTable").innerHTML=`<tr><td>Cash / bank account balances</td><td>${money(f.accountTotal)}</td><td>Balances from registered accounts plus transactions and transfers.</td></tr><tr><td>Assets registered</td><td>${money(f.registeredAssets)}</td><td>Assets entered in the Assets page.</td></tr><tr><td>Other net-worth assets</td><td>${money(f.netWorthManualAssets)}</td><td>Extra assets manually entered in this combined section.</td></tr><tr><td>Debts outstanding</td><td>${money(f.debts)}</td><td>Outstanding debts from the Debts page.</td></tr><tr><td>Other liabilities</td><td>${money(f.netLiabilities)}</td><td>Liabilities manually entered in this combined section.</td></tr><tr><td><strong>Net worth</strong></td><td><strong>${money(f.netWorth)}</strong></td><td>Total assets minus total liabilities.</td></tr>`}
 window.addEventListener("load",startBudget);
 </script>
 <script>
 (function(){
   'use strict';
-  var busy = false;
-  var snapshot = null;
-  var manualCats = ['investment profit','investment loss','investment profit/loss','investment profit / loss'];
-
-  function moneyTwd(v){
-    try{return new Intl.NumberFormat('en-US',{style:'currency',currency:'TWD',maximumFractionDigits:2}).format(Number(v)||0);}
-    catch(e){return 'NT$ '+(Number(v)||0).toFixed(2);}
-  }
-  function unwrap(envelope){
-    var state=envelope&&envelope.state&&typeof envelope.state==='object'?envelope.state:envelope||{};
-    var raw=state.raw&&typeof state.raw==='object'?state.raw:(state.data&&typeof state.data==='object'?state.data:state);
-    var summary=state.publishedSummary||raw.summary||state.summary||{};
-    return {raw:raw,summary:summary};
-  }
-  function setStatus(kind,message){
-    var el=document.getElementById('investmentTrackerStatus');
-    if(!el)return;
-    el.className='alert '+(kind==='good'?'good':kind==='danger'?'danger':'warning');
-    el.textContent=message;
-  }
-  function renderMetrics(){
-    var box=document.getElementById('investmentTrackerMetrics');
-    if(!box)return;
-    var cards=snapshot?[
-      ['ETF Portfolio Value',moneyTwd(snapshot.etfValue)],
-      ['CFD Account Value',moneyTwd(snapshot.cfdValue)],
-      ['Investment Profit / Loss',moneyTwd(snapshot.totalProfitLoss)]
-    ]:[
-      ['ETF Portfolio Value','Not connected'],
-      ['CFD Account Value','Not connected'],
-      ['Investment Profit / Loss','Not connected']
-    ];
-    box.innerHTML=cards.map(function(c){
-      return '<div class="metric-card"><p>'+c[0]+'</p><h3>'+c[1]+'</h3></div>';
-    }).join('');
-    var p=typeof currentProfile==='function'?currentProfile():null;
-    var checkbox=document.getElementById('includeInvestmentPortfolioInNetWorth');
-    if(p)renderOverlap(p);
-    if(checkbox)checkbox.checked=p?p.linkedPortfolioReviewed===true&&p.includeInvestmentPortfolioInNetWorth===true:true;
-    var fx=document.getElementById('investmentTwdRate');
-    if(fx)fx.value=window.BudgetFX?.quote('TWD',p?.mainCurrency||'TWD')??'';
-  }
-  function manualAssets(profile){
-    return [
-      ...profile.assets.filter(x=>x.status==='active').map(x=>({key:'asset:'+x.id,name:x.name,value:x.currentMain})),
-      ...profile.netWorthItems.filter(x=>x.type==='asset').map(x=>({key:'register:'+x.id,name:x.name,value:x.mainValue}))
-    ];
-  }
-  function renderOverlap(profile){
-    const box=document.getElementById('overlapChoices');box.replaceChildren();
-    const assets=manualAssets(profile);if(!assets.length)return;
-    const help=document.createElement('p');help.textContent='Select manual assets that already represent the linked ETF or CFD portfolio. Their manual values are replaced only while linked values are included.';box.append(help);
-    for(const asset of assets){
-      const label=document.createElement('label'),input=document.createElement('input');
-      input.type='checkbox';input.style.width='auto';
-      input.checked=(profile.portfolioOverlap||[]).includes(asset.key);
-      input.onchange=()=>{
-        const ids=new Set(profile.portfolioOverlap||[]);
-        if(input.checked)ids.add(asset.key);else ids.delete(asset.key);
-        profile.portfolioOverlap=Array.from(ids);markLocalSave();
-      };
-      label.append(input,document.createTextNode(' '+asset.name+' · '+money(asset.value)));box.append(label);
-    }
-  }
+  var manualCats=['investment profit','investment loss','investment profit/loss','investment profit / loss'];
   function isLinkedCategory(item){
     return manualCats.indexOf(String(item&&item.category||'').trim().toLowerCase())>=0;
   }
@@ -818,79 +773,6 @@ window.addEventListener("load",startBudget);
     };
   }
 
-  var oldFinanceSummary=window.financeSummary;
-  if(typeof oldFinanceSummary==='function'){
-    window.financeSummary=function(){
-      var f=oldFinanceSummary.apply(this,arguments);
-      var p=typeof currentProfile==='function'?currentProfile():null;
-      var value=snapshot?snapshot.totalValue:0;
-      var include=p?p.linkedPortfolioReviewed===true&&p.includeInvestmentPortfolioInNetWorth===true:true;
-      var rate=window.BudgetFX?.quote('TWD',p?.mainCurrency||'TWD')||0;
-      var convertedValue=value*rate;
-      var convertedProfit=(snapshot?snapshot.totalProfitLoss:0)*rate;
-      f.investmentValueTwd=value;
-      f.investmentProfitLossTwd=snapshot?snapshot.totalProfitLoss:0;
-      f.investmentPortfolioValue=convertedValue;
-      f.investmentProfitLoss=convertedProfit;
-      f.investmentFxRate=rate;
-      f.includeInvestment=Boolean(snapshot)&&include&&rate>0;
-      f.investmentRateMissing=include&&rate<=0;
-      if(f.includeInvestment){
-        const overlap=manualAssets(p).filter(a=>(p.portfolioOverlap||[]).includes(a.key)).reduce((n,a)=>n+Number(a.value||0),0);
-        f.netAssets=(Number(f.netAssets)||0)+convertedValue-overlap;
-        f.totalAssets=(Number(f.totalAssets)||0)+convertedValue-overlap;
-        f.netWorth=f.totalAssets-f.totalLiabilities;
-      }
-      return f;
-    };
-  }
-
-  var oldStatements=window.renderStatementsFixture;
-  if(typeof oldStatements==='function'){
-    window.renderStatementsFixture=function(){
-      oldStatements.apply(this,arguments);
-      var f=typeof financeSummary==='function'?financeSummary():{};
-      if(!f.includeInvestment && currentProfile()?.includeInvestmentPortfolioInNetWorth && currentProfile()?.linkedPortfolioReviewed){
-        const title=document.querySelector('#statementsBox .metric-card p');
-        if(title)title.textContent='Personal Net Worth (linked portfolio unavailable)';
-      }
-      var incomeTable=document.getElementById('incomeStatementTable');
-      var positionTable=document.getElementById('positionStatementTable');
-      var cards=document.getElementById('statementsBox');
-      if(incomeTable&&!document.getElementById('investmentPnlStatementRow')){
-        var tr=document.createElement('tr');
-        tr.id='investmentPnlStatementRow';
-        tr.innerHTML='<td>Investment profit / loss (Investor App, all time)</td><td>'+(snapshot&&f.investmentFxRate>0?money(f.investmentProfitLoss||0):'Not connected')+'</td><td>Live ETF + CFD tracker performance in TWD. Kept separate from monthly cash income; ETF performance may include unrealized market changes.</td>';
-        incomeTable.appendChild(tr);
-      }else if(incomeTable){
-        var cells=document.getElementById('investmentPnlStatementRow').children;
-        if(cells[1])cells[1].textContent=(snapshot&&f.investmentFxRate>0?money(f.investmentProfitLoss||0):'Not connected');
-      }
-      if(positionTable&&!document.getElementById('investmentPortfolioPositionRow')){
-        var tr2=document.createElement('tr');
-        tr2.id='investmentPortfolioPositionRow';
-        tr2.innerHTML='<td>Investment portfolio (ETF + CFD)</td><td>'+(snapshot&&f.investmentFxRate>0?money(f.investmentPortfolioValue||0):'Not connected')+'</td><td>Read-only value from the Investor App; '+(f.includeInvestment?'included in total assets':f.investmentRateMissing?'waiting for an automatic TWD conversion rate':'excluded from total assets by choice')+'.</td>';
-        var anchor=positionTable.querySelector('tr:last-child');
-        positionTable.insertBefore(tr2,anchor||null);
-      }else if(positionTable){
-        var c=document.getElementById('investmentPortfolioPositionRow').children;
-        if(c[1])c[1].textContent=(snapshot&&f.investmentFxRate>0?money(f.investmentPortfolioValue||0):'Not connected');
-        if(c[2])c[2].textContent='Read-only value from the Investor App; '+(f.includeInvestment?'included in total assets':f.investmentRateMissing?'waiting for an automatic TWD conversion rate':'excluded from total assets by choice')+'.';
-      }
-      if(cards&&!document.getElementById('investmentTrackerStatementCards')){
-        var wrap=document.createElement('div');
-        wrap.id='investmentTrackerStatementCards';
-        wrap.innerHTML='<div class="metric-card"><p>Investment Portfolio Value (TWD)</p><h3>'+(snapshot?moneyTwd(f.investmentValueTwd):'Not connected')+'</h3></div><div class="metric-card"><p>Investment Profit / Loss (TWD)</p><h3>'+(snapshot?moneyTwd(f.investmentProfitLossTwd):'Not connected')+'</h3></div>';
-        cards.appendChild(wrap);
-      }else if(cards){
-        var metrics=document.getElementById('investmentTrackerStatementCards').children;
-        if(metrics[0])metrics[0].querySelector('h3').textContent=(snapshot?moneyTwd(f.investmentValueTwd):'Not connected');
-        if(metrics[1])metrics[1].querySelector('h3').textContent=(snapshot?moneyTwd(f.investmentProfitLossTwd):'Not connected');
-      }
-      renderMetrics();
-    };
-  }
-
   var oldPreview=window.previewTransactionBeforeSave;
   if(typeof oldPreview==='function'){
     window.previewTransactionBeforeSave=function(e){
@@ -904,83 +786,6 @@ window.addEventListener("load",startBudget);
     };
   }
 
-  async function refresh(showAlert){
-    if(busy)return;
-    busy=true;
-    var button=document.getElementById('refreshInvestmentTracker');
-    if(button){button.disabled=true;button.textContent='Refreshing…';}
-    try{
-      var cloud=window.AurumCloud;
-      if(!cloud||!cloud.module||typeof cloud.module.load!=='function'||typeof cloud.initialize!=='function'){
-        throw new Error('Shared Investor App cloud files are unavailable. This page must be served with the Investor App shared folder.');
-      }
-      await cloud.initialize();
-      var user=cloud.auth&&typeof cloud.auth.getUser==='function'?cloud.auth.getUser():null;
-      if(!user||!user.id)throw new Error('Sign in through the Investor App first. This page reuses that session and does not create another login.');
-      await window.BudgetFX.refresh();
-      var results=await Promise.all([cloud.module.load('etf'),cloud.module.load('cfd')]);
-      checkOwner();
-      const [etf,cfd]=results.map((result,index)=>{
-        const name=['ETF','CFD'][index];
-        if(result?.source!=='cloud')throw Error(name+' cloud summary unavailable. Refresh after reconnecting.');
-        const summary=unwrap(result).summary;
-        const currency=summary.currency==='NTD'?'TWD':summary.currency;
-        const rate=currency && window.BudgetFX.quote(currency,'TWD');
-        if(!rate)throw Error(name+' currency or exchange rate unavailable.');
-        for(const key of ['current_value','profit_loss']){
-          if(typeof summary[key]!=='number'||!Number.isFinite(summary[key]))throw Error(name+' summary is incomplete.');
-        }
-        return {value:summary.current_value*rate,profit:summary.profit_loss*rate};
-      });
-      var etfValue=etf.value,cfdValue=cfd.value,etfPnl=etf.profit,cfdPnl=cfd.profit;
-      snapshot={
-        userId:user.id,
-        etfValue:etfValue,
-        cfdValue:cfdValue,
-        totalValue:etfValue+cfdValue,
-        totalProfitLoss:etfPnl+cfdPnl,
-        updatedAt:new Date().toISOString()
-      };
-      setStatus('good','Investor App connected · ETF and CFD cloud data loaded · refreshed '+new Date(snapshot.updatedAt).toLocaleString()+'. Values are read-only and shown in TWD.');
-      renderMetrics();
-      if(typeof renderFinanceFixtures==='function')renderFinanceFixtures();
-      if(typeof renderMonthlyReviews==='function')renderMonthlyReviews();
-      if(showAlert)alert('Investor App data refreshed. Statements and Net Worth now show the latest ETF and CFD values.');
-    }catch(error){
-      snapshot=null;
-      setStatus('warning',error&&error.message?error.message:'Could not load Investor App data. Sign in to the tracker and retry.');
-      renderMetrics();
-      if(typeof renderFinanceFixtures==='function')renderFinanceFixtures();
-      if(showAlert)alert(error&&error.message?error.message:'Could not load Investor App data.');
-    }finally{
-      busy=false;
-      if(button){button.disabled=false;button.textContent='Refresh from Investor App';}
-    }
-  }
-  window.refreshInvestmentTracker=function(showAlert){return refresh(Boolean(showAlert));};
-  window.addEventListener('load',function(){
-    var btn=document.getElementById('refreshInvestmentTracker');
-    if(btn)btn.addEventListener('click',function(){refresh(true);});
-    var fx=document.getElementById('investmentTwdRate');
-
-    var option=document.getElementById('includeInvestmentPortfolioInNetWorth');
-    if(option)option.addEventListener('change',function(){
-      var p=typeof currentProfile==='function'?currentProfile():null;
-      if(!p)return;
-      if(option.checked&&!confirm('Include the linked ETF and CFD values? Confirm that you selected any manual assets that represent these portfolios.')){option.checked=false;return;}
-      p.linkedPortfolioReviewed=true;
-      p.includeInvestmentPortfolioInNetWorth=option.checked;
-      if(typeof saveStore==='function')saveStore();
-      if(typeof renderFinanceFixtures==='function')renderFinanceFixtures();
-    });
-    if(typeof activeProfileId!=='undefined'&&activeProfileId)refresh(false);
-  });
-  document.addEventListener('visibilitychange',function(){
-    if(document.visibilityState==='visible'&&typeof activeProfileId!=='undefined'&&activeProfileId)refresh(false);
-  });
-  window.setInterval(function(){
-    if(document.visibilityState==='visible'&&typeof activeProfileId!=='undefined'&&activeProfileId)refresh(false);
-  },60000);
 })();
 </script>
 <script>
@@ -1111,7 +916,7 @@ window.BudgetFX = (() => {
     const settings=window.saveSettings;
     window.saveSettings=function(event){
       const p=currentProfile(),next=el('settingCurrency').value;
-      if(next!==p.mainCurrency&&Object.values(fields).some(([key])=>(p[key]||[]).length)){
+      if(next!==p.mainCurrency&&(funds(p).length||Object.values(fields).some(([key])=>(p[key]||[]).length))){
         event.preventDefault();el('settingCurrency').value=p.mainCurrency;
         alert('This budget already has records in '+p.mainCurrency+'. Its main currency is kept to preserve those balances. You can still enter TWD, USD or SZL transactions with automatic conversion.');return;
       }
@@ -1126,6 +931,332 @@ window.BudgetFX = (() => {
   return {quote,refresh,prepare,paintAll};
 })();
 
+</script>
+<script>
+/* Budgeting owns the bank side of funding. Other modules publish observations
+   under state.budgetReporting, never write the budget or infer a legacy match.
+   Version 1 has ownerId, currency (budget main currency), funding[], periods[].
+   funding echoes id, accountId, kind, date, currency, amount, fee, rate.
+   periods carry from,to,opening,closing,deposits,withdrawals,realized,
+   unrealized,fx,fees and optional sources[] with date, reference, description.
+   All period amounts use booked/report-date rates supplied by the publisher. */
+const moduleNames = {etf:'ETF Portfolio', cfd:'CFD Journal', cash_savings:'Cash Savings'};
+const modulePages = {etf:'etf-portfolio', cfd:'cfd-journal', cash_savings:'cash-savings'};
+let moduleReads = {}, readSequence = 0;
+const funds = p => Array.isArray(p?.moduleFunding) ? p.moduleFunding : [];
+const numeric = n => typeof n === 'number' && Number.isFinite(n);
+const cents = n => Math.round((n + Number.EPSILON)*100)/100;
+const signedPrincipal = r => cents(r.amount*r.rate)*(r.kind==='deposit'?1:-1);
+const fundingFee = r => cents(r.fee*r.rate);
+const validDate = d => typeof d==='string' && /^\d{4}-\d{2}-\d{2}$/.test(d) && !Number.isNaN(Date.parse(d+'T00:00:00Z')) && new Date(d+'T00:00:00Z').toISOString().slice(0,10)===d;
+function validFunding(r,p){
+  return r && Object.hasOwn(moduleNames,r.module) && ['deposit','withdrawal'].includes(r.kind)
+    && typeof r.id==='string' && r.id && validDate(r.date) && r.base===p.mainCurrency
+    && (p.accounts||[]).some(a=>a.id===r.accountId) && ['USD','TWD','SZL'].includes(r.currency)
+    && numeric(r.amount)&&r.amount>0 && numeric(r.fee)&&r.fee>=0 && numeric(r.rate)&&r.rate>0;
+}
+function checkFunds(p){
+  if(p?.moduleFunding!==undefined&&!Array.isArray(p.moduleFunding))throw Error("Invalid module funding list.");
+  const seen=new Set();
+  for(const r of funds(p)){
+    if(!validFunding(r,p)||seen.has(r.id))throw Error('Invalid or duplicate module funding record. Review the JSON backup.');
+    seen.add(r.id);
+  }
+}
+function fundingOptions(){
+  const p=currentProfile();if(!p)return;
+  const select=$('fundAccount'),previous=select.value;
+  const existing=funds(p).find(r=>r.id===$('fundKey').value);
+  const withdrawals=$('fundKind').value==='withdrawal';
+  const origins=new Set(funds(p).filter(r=>r.kind==='deposit'&&r.module===$('fundModule').value&&r.date<=($('fundDate').value||today())).map(r=>r.accountId));
+  const accounts=p.accounts.filter(a=>!withdrawals||origins.has(a.id)).filter(a=>a.status!=='inactive'||a.id===existing?.accountId);
+  select.replaceChildren(...accounts.map(a=>new Option(a.name,a.id)));
+  if(accounts.some(a=>a.id===previous))select.value=previous;
+  if(!$('fundDate').value)$('fundDate').value=today();
+  const currency=$('fundCurrency').value;
+  const rate=existing?.currency===currency?existing.rate:currency===p.mainCurrency?1:window.BudgetFX?.quote(currency,p.mainCurrency);
+  $('fundRate').value=rate||'Unavailable';
+}
+function clearFunding(){
+  $('fundForm').reset();$('fundKey').value='';fundingOptions();
+}
+function saveFunding(e){
+  e.preventDefault();checkOwner();fundingOptions();
+  const p=currentProfile(), id=$('fundKey').value||makeId();
+  const r={id,module:$('fundModule').value,kind:$('fundKind').value,date:$('fundDate').value,
+    accountId:$('fundAccount').value,amount:Number($('fundAmount').value),fee:Number($('fundFee').value),
+    currency:$('fundCurrency').value,rate:Number($('fundRate').value),base:p.mainCurrency};
+  if(!validFunding(r,p)||r.date>today())return alert('Choose a registered account, a current or earlier date, and a currency with a usable rate.');
+  const next=[...funds(p).filter(x=>x.id!==id),r];
+  if(!hasFundingOrigins(next))return alert('A withdrawal must return to an account that funded this module on or before that date.');
+  const old=funds(p).find(x=>x.id===id);
+  if((isMonthClosed(r.date.slice(0,7))||(old&&isMonthClosed(old.date.slice(0,7))))&&!confirm('Change funding in a closed month?'))return;
+  p.moduleFunding=next;markLocalSave();clearFunding();
+}
+function hasFundingOrigins(rows){
+  return rows.filter(r=>r.kind==='withdrawal').every(w=>rows.some(d=>d.kind==='deposit'&&d.accountId===w.accountId&&d.module===w.module&&d.date<=w.date));
+}
+function editFunding(r){
+  for(const [field,value] of Object.entries({Key:r.id,Module:r.module,Kind:r.kind,Date:r.date,Amount:r.amount,Fee:r.fee,Currency:r.currency}))$('fund'+field).value=value;
+  fundingOptions();$('fundAccount').value=r.accountId;
+}
+function el(tag,text){const n=document.createElement(tag);if(text!==undefined)n.textContent=text;return n;}
+function button(text,action){const b=el('button',text);b.type='button';b.onclick=action;return b;}
+function renderFunding(){
+  const p=currentProfile();fundingOptions();
+  const box=$('fundList');box.replaceChildren();
+  for(const r of funds(p)){
+    const line=el('p',r.date+' · '+moduleNames[r.module]+' · '+r.kind+' '+r.amount+' '+r.currency+' · '+(p.accounts.find(a=>a.id===r.accountId)?.name||'Unknown account')+' · Ref '+r.id+' ');
+    line.append(button('Edit',()=>editFunding(r)),button('Delete',()=>{
+      checkOwner();if(!hasFundingOrigins(funds(p).filter(x=>x.id!==r.id)))return alert('A withdrawal still uses this funding account.');
+      if(!confirm('Remove this bank posting and reconcile its reference in the module?'))return;
+      p.moduleFunding=funds(p).filter(x=>x.id!==r.id);clearFunding();markLocalSave();
+    }));box.append(line);
+  }
+}
+async function refreshInvestmentTracker(){
+  if(!budgetUser||!currentProfile())return;
+  const seq=++readSequence,owner=budgetUser.id;moduleReads={};renderStatementsFixture();
+  await window.BudgetFX.refresh();
+  await Promise.all(Object.keys(moduleNames).map(async key=>{
+    let item;
+    try{
+      const env=await AurumCloud.module.load(key);checkOwner();
+      if(env?.source!=='cloud'||!env.state||env.dirty)throw Error('Current cloud data unavailable');
+      const state=env.state,feed=state.budgetReporting;
+      if([state.ownerUserId,state.raw?.ownerUserId,feed?.ownerId].some(id=>id&&id!==owner))throw Error('User mismatch');
+      item={summary:state.publishedSummary||state.raw?.summary,updated:state.updatedAt,feed:feed?.version===1&&feed.ownerId===owner?feed:null};
+    }catch(e){item={error:e.message};}
+    if(seq===readSequence&&budgetUser?.id===owner&&window.AurumCloud.auth.getUser()?.id===owner){moduleReads[key]=item;renderFinanceFixtures();}
+  }));
+}
+function inspectModule(key,p,from,to){
+  const read=moduleReads[key],feed=read?.feed;
+  const periods=feed?.currency===p.mainCurrency&&Array.isArray(feed.periods)?feed.periods.filter(r=>r.from===from&&r.to===to):[];
+  const period=periods.length===1?periods[0]:null;
+  const fields=['opening','closing','deposits','withdrawals','realized','unrealized','fx','fees'];
+  const complete=period&&fields.every(k=>numeric(period[k]))&&['deposits','withdrawals','fees'].every(k=>period[k]>=0);
+  if(complete){
+    const delta=cents(period.closing-period.opening-period.deposits+period.withdrawals-period.realized-period.unrealized-period.fx+period.fees);
+    return {period,delta,value:period.closing,source:key};
+  }
+  const s=read?.summary, currency=s?.currency==='NTD'?'TWD':s?.currency;
+  const rate=currency===p.mainCurrency?1:window.BudgetFX?.quote(currency,p.mainCurrency);
+  const stamp=new Date(read?.updated);
+  const recent=Number.isFinite(stamp.getTime())&&stamp.toDateString()===new Date().toDateString();
+  return {value:to===today()&&recent&&numeric(s?.current_value)&&rate>0?cents(s.current_value*rate):null,
+    reason:read?.error||(!read?'Module data not loaded':'Dated performance unavailable'),source:key};
+}
+function matching(key,p,asOf){
+  const local=funds(p).filter(r=>r.module===key&&r.date<=asOf),remote=moduleReads[key]?.feed?.funding;
+  if(!Array.isArray(remote))return ['Funding ledger unavailable'];
+  const rows=remote.filter(r=>r&&validDate(r.date)&&r.date<=asOf),messages=[];
+  if(remote.some(r=>!r||!validDate(r.date)))messages.push('Invalid module funding date');
+  for(const id of new Set([...local,...rows].map(r=>r.id))){
+    const a=local.filter(r=>r.id===id),b=rows.filter(r=>r.id===id);
+    const issue=a.length>1||b.length>1?'Duplicate reference':!a.length?'Missing Budgeting side':!b.length?'Missing module side':
+      ['accountId','kind','date','currency','amount','rate','fee'].some(f=>a[0][f]!==b[0][f])?'Posting differs':'';
+    if(issue)messages.push(issue+' · '+(id||'no reference'));
+  }
+  return messages;
+}
+function makeStatements(p,from,to){
+  const ledger=new Map(),warnings=new Set(),modules={};
+  function post(group,name,amount,ref){
+    if(!numeric(amount)){warnings.add('Missing amount · '+name);return;}
+    const key=group+'|'+name;
+    if(!ledger.has(key))ledger.set(key,{group,name,net:0,refs:[]});
+    const row=ledger.get(key);row.net=cents(row.net+amount);row.refs.push({amount,ref});
+  }
+  function dated(record){
+    if(!validDate(record.date)){warnings.add('Undated record · '+record.id);return false;}return record.date<=to;
+  }
+  function result(group,name,value,r){
+    if(r.date<from)post('equity','Accumulated result before period',value,r);
+    else post(group,name,value,r);
+  }
+  function initial(group,name,value,r){
+    post(group,name,value,r);post('equity','Opening capital and register adjustments',-value,r);
+  }
+  const bank=id=>'Cash / Bank — '+(p.accounts.find(a=>a.id===id)?.name||'Unassigned')+(id?' ['+id+']':'');
+  for(const a of p.accounts){
+    if(!a.openingMain)continue;
+    if(to!==today()&&!validDate(a.openingDate)){warnings.add('Opening date unavailable · '+a.name);continue;}
+    if(a.openingDate>to)continue;
+    initial('asset',bank(a.id),a.openingMain,a);
+  }
+  for(const x of p.transactions){
+    if(x.status==='planned'||!dated(x))continue;
+    if(['investment profit','investment loss','investment profit/loss','investment profit / loss'].includes(String(x.category).toLowerCase())){warnings.add('Legacy manually entered investment result excluded · '+x.id);continue;}
+    for(const j of transactionJournalEntries(x)){
+      let name=j.account, group='asset',v=j.debit-j.credit;
+      if(name.startsWith('Cash / Bank'))name=bank(x.accountId);
+      else if(name.startsWith('Accounts Receivable'))name='Accounts receivable';
+      else if(name.startsWith('Accounts Payable')){name='Accounts payable';group='liability';}
+      else if(x.type==='debt'&&j.debit){name='Debt — '+(x.debtId||x.debtName);group='liability';}
+      else if(name.startsWith('Income'))group='income';
+      else if(/^(Expense|Project Cost)/.test(name))group='expense';
+      if(group==='income'||group==='expense')result(group,name,v,x);else post(group,name,v,x);
+    }
+  }
+  for(const r of p.tradeReceivables.filter(dated)){
+    post('asset','Accounts receivable',r.amountMain,r);
+    result('income','Income — '+r.category,-r.amountMain,r);
+    if(r.receivedMain){post('asset','Accounts receivable',-r.receivedMain,r);post('asset',bank(),r.receivedMain,r);warnings.add('Receipt account/date unconfirmed · '+r.id);}
+    if(['collected','written off'].includes(r.status)&&tradeReceivableOutstanding(r)>0)warnings.add('Review receivable closing entries · '+r.id);
+  }
+  for(const t of p.transfers.filter(dated)){
+    const fee=transferFeeMain(t);
+    post('asset',bank(t.fromAccountId),-t.mainAmount-fee,t);
+    post('asset',bank(t.toAccountId),t.mainAmount,t);if(fee)result('expense','Transfer fees',fee,t);
+  }
+  for(const r of funds(p).filter(dated)){
+    const signed=signedPrincipal(r),fee=fundingFee(r);
+    post('asset',bank(r.accountId),-signed-fee,r);
+    post('asset','Funding awaiting module reconciliation',signed,r);
+    if(fee)result('expense','Transfer fees',fee,r);
+  }
+  const matched=new Set();
+  for(const [key,label] of Object.entries(moduleNames)){
+    const m=inspectModule(key,p,from,to);m.issues=matching(key,p,to);modules[key]=m;
+    if(m.issues.length)warnings.add(label+' · '+m.issues.join(', '));
+    if(m.period&&[m.period.opening,m.period.closing,m.period.realized,m.period.unrealized,m.period.fx,m.period.fees,m.period.deposits,m.period.withdrawals].some(n=>n!==0)&&!m.period.sources?.length)warnings.add(label+' · source records unavailable');
+    if(!m.period)warnings.add(label+' · '+m.reason);
+    if(m.delta)warnings.add(label+' · closing balance differs by '+m.delta);
+    const included=incl(p,key);
+    if(!included){warnings.add(label+' excluded pending inclusion review');continue;}
+    if(!m.period)continue;
+    for(const [id,linked] of Object.entries(p.assetModuleMatches||{}))if(linked===key)matched.add(id);
+    const ref={module:key,description:label+' valuation',date:to,details:m.period?.sources};
+    post('asset',label,m.value,ref);
+    if(m.period){
+      const r=m.period;
+      post('equity',label+' · opening carrying value',-r.opening,ref);
+      const prior=funds(p).filter(x=>x.module===key&&x.date<from).reduce((n,x)=>n+signedPrincipal(x),0);
+      if(prior){post('equity',label+' · opening carrying value',prior,ref);post('asset','Funding awaiting module reconciliation',-prior,ref);}
+      post('asset','Funding awaiting module reconciliation',r.withdrawals-r.deposits,ref);
+      for(const [name,value] of [['Realized result',r.realized],['Unrealized valuation change',r.unrealized],['Currency movement',r.fx],['Module fees',-r.fees]]){
+        if(value)post(value>0?'income':'expense',label+' · '+name,-value,ref);
+      }
+    }
+  }
+  if(['etf','cfd'].every(k=>incl(p,k)&&modules[k].period))for(const id of p.portfolioOverlap||[])if(!Object.hasOwn(p.assetModuleMatches||{},id))matched.add(id);
+  for(const [collection,key] of [[p.assets,'asset'],[p.netWorthItems,'register']]){
+    for(const a of collection){
+      if(matched.has(key+':'+a.id)||!dated(a))continue;
+      if(to<today()&&(!a.updatedAt||a.updatedAt.slice(0,10)>to)){warnings.add('Historical valuation unavailable · '+a.name);continue;}
+      if(key==='asset'&&a.status!=='active')continue;
+      const liability=a.type==='liability';
+      initial(liability?'liability':'asset',a.name,(liability?-1:1)*(key==='asset'?a.currentMain:a.mainValue),a);
+    }
+  }
+  for(const d of p.debts){
+    if(to!==today()){warnings.add('Historical debt balance unavailable · '+d.name);continue;}
+    const payments=p.transactions.filter(x=>x.debtId===d.id&&x.type==='debt'&&x.status==='paid'&&x.date<=to).reduce((s,x)=>s+x.mainAmount,0);
+    initial('liability','Debt — '+d.id,-(d.outstandingMain+payments),d);
+  }
+  if(p.goals.some(g=>g.savedMain))warnings.add('Review saved goal balances against savings postings');
+  return {ledger:[...ledger.values()],warnings:[...warnings],modules};
+}
+function reportTable(box,title,heads,rows,totals){
+  const card=el('div');card.className='card reportSheet';card.append(el('p',trackerUsername()),el('h2',title));
+  const table=el('table'),header=table.createTHead().insertRow();
+  for(const h of heads)header.append(el('th',h));
+  const body=table.createTBody();
+  for(const r of rows){
+    const tr=body.insertRow(),cell=tr.insertCell();
+    if(r.refs?.length){
+      const detail=el('details');detail.append(el('summary',r.name));cell.append(detail);
+      for(const {ref,amount} of r.refs){
+        const line=el('p',[ref.date,ref.name||ref.description||ref.category,ref.reference||ref.id,money(amount)].filter(Boolean).join(' · '));
+        if(ref.module&&Object.hasOwn(modulePages,ref.module)){
+          const a=el('a',moduleNames[ref.module]);a.href='../'+modulePages[ref.module]+'/index.html';line.append(' ',a);
+          for(const s of Array.isArray(ref.details)?ref.details:[])line.append(el('span',' · '+[s.date,s.reference,s.description].filter(Boolean).join(' ')));
+        }detail.append(line);
+      }
+    }else cell.textContent=r.name;
+    for(const v of r.values)tr.insertCell().textContent=v;
+  }
+  const foot=table.createTFoot().insertRow();for(const s of totals)foot.insertCell().textContent=s;
+  card.append(table);box.append(card);
+}
+function matchOptions(p){
+  const box=$('assetMatches');box.replaceChildren();
+  for(const [key,label] of Object.entries(moduleNames)){
+    const item=el('label'),input=el('input');input.type='checkbox';input.style.width='auto';
+    input.checked=incl(p,key);input.onchange=()=>{checkOwner();p.reportIncludes={...p.reportIncludes,[key]:input.checked};markLocalSave();};
+    item.append(input,' Include '+label+' ');box.append(item);
+  }
+  for(const [type,arr] of [['asset',p.assets.filter(a=>a.status==='active')],['register',p.netWorthItems.filter(a=>a.type==='asset')]]){
+    for(const a of arr){
+      const id=type+':'+a.id,label=el('label',a.name+' '),select=el('select');
+      select.add(new Option('Separate manual asset',''));
+      for(const [key,name] of Object.entries(moduleNames))select.add(new Option(name,key));
+      select.value=p.assetModuleMatches?.[id]||'';
+      select.onchange=()=>{checkOwner();p.assetModuleMatches={...p.assetModuleMatches,[id]:select.value};markLocalSave();};
+      label.append(select);box.append(label);
+    }
+  }
+}
+function renderStatementsFixture(){
+  const p=currentProfile();if(!p)return;
+  const from=$('reportFrom'),to=$('reportTo');
+  if(!from.value)from.value=thisMonth()+'-01';if(!to.value)to.value=today();
+  renderFunding();matchOptions(p);
+  const box=$('correlationReports');box.replaceChildren();
+  if(from.value>to.value||to.value>today()){$('reportStatus').textContent='Choose a valid period ending today or earlier.';return;}
+  const {ledger,warnings,modules}=makeStatements(p,from.value,to.value);
+  if((p.portfolioOverlap||[]).length&&!p.assetModuleMatches)warnings.push('Review legacy ETF/CFD matches and assign a specific module.');
+  const total=rows=>cents(rows.reduce((n,r)=>n+r.net,0));
+  const display=n=>n<0?'('+money(-n)+')':money(n);
+  const dr=ledger.reduce((n,r)=>n+Math.max(0,r.net),0),cr=ledger.reduce((n,r)=>n+Math.max(0,-r.net),0);
+  if(cents(dr-cr))warnings.push('Trial balance difference '+display(cents(dr-cr)));
+  $('reportStatus').textContent=warnings.length?'Incomplete · '+warnings.join(' | '):'All three module periods loaded and reconciled.';
+  const scope=p.mainCurrency+' · ';
+  reportTable(box,'Trial Balance', [scope+'as at '+to.value,'Dr','Cr'],ledger.map(r=>({...r,values:[r.net>0?display(r.net):'',r.net<0?display(-r.net):'']})),['Totals',display(dr),display(cr)]);
+  const operating=ledger.filter(r=>['income','expense'].includes(r.group));
+  reportTable(box,'Income Statement',[scope+from.value+' to '+to.value,'Amount'],operating.map(r=>({...r,values:[display(-r.net)]})),['Net result'+(warnings.length?' (partial)':''),display(-total(operating))]);
+  const position=ledger.filter(r=>r.group==='asset'||r.group==='liability'),items=[];
+  for(const group of ['asset','liability']){
+    const rows=position.filter(r=>r.group===group);items.push({name:group==='asset'?'Assets':'Liabilities',values:['']},...rows.map(r=>({...r,values:[display(group==='asset'?r.net:-r.net)]})),{name:'Total '+(group==='asset'?'assets':'liabilities'),values:[display((group==='asset'?1:-1)*total(rows))]});
+  }
+  reportTable(box,'Balance Sheet',[scope+'as at '+to.value,'Amount'],items,['Net assets'+(warnings.length?' (partial)':''),display(total(position))]);
+  const equity=ledger.filter(r=>r.group==='equity');
+  reportTable(box,'Capital reconciliation',['Capital','Amount'],[...equity.map(r=>({...r,values:[display(-r.net)]})),{name:'Period result',values:[display(-total(operating))]}],['Closing capital'+(warnings.length?' (partial)':''),display(-total(equity)-total(operating))]);
+  const card=el('div');card.className='card';card.append(el('h2','Module reconciliation'));
+  for(const [key,m] of Object.entries(modules)){
+    const line=el('p',moduleNames[key]+' · '+(m.period?'Opening '+display(m.period.opening)+' + deposits '+display(m.period.deposits)+' − withdrawals '+display(m.period.withdrawals)+' + realized '+display(m.period.realized)+' + unrealized '+display(m.period.unrealized)+' + currency movement '+display(m.period.fx)+' − module fees '+display(m.period.fees)+' → reported closing '+display(m.value)+' · difference '+display(m.delta):m.reason+(numeric(m.value)?' · current summary '+display(m.value):''))+' · '+(m.issues.join(', ')||'Funding references matched'));
+    card.append(line);
+  }
+  box.append(card);
+}
+function incl(p,key){
+  return p.reportIncludes?.[key] ?? (key!=='cash_savings' && p.linkedPortfolioReviewed===true && p.includeInvestmentPortfolioInNetWorth===true);
+}
+function applyReportBalance(f,p){
+  const matched=new Set(),available=new Set();let addition=0;
+  for(const key of Object.keys(moduleNames)){
+    const m=inspectModule(key,p,thisMonth()+'-01',today());
+    if(incl(p,key)&&numeric(m.value)){available.add(key);addition+=m.value;}
+  }
+  for(const [id,key] of Object.entries(p.assetModuleMatches||{}))if(available.has(key))matched.add(id);
+  if(available.has('etf')&&available.has('cfd'))for(const id of p.portfolioOverlap||[])if(!Object.hasOwn(p.assetModuleMatches||{},id))matched.add(id);
+  for(const a of p.assets)if(a.status==='active'&&matched.has('asset:'+a.id))addition-=a.currentMain;
+  for(const a of p.netWorthItems)if(a.type==='asset'&&matched.has('register:'+a.id))addition-=a.mainValue;
+  f.totalAssets+=addition;f.netAssets+=addition;f.netWorth=f.totalAssets-f.totalLiabilities;return f;
+}
+$('fundForm').addEventListener('submit',saveFunding);
+$('fundClear').onclick=clearFunding;
+for(const id of ['fundCurrency','fundDate','fundModule','fundKind'])$(id).onchange=fundingOptions;
+$('refreshInvestmentTracker').onclick=refreshInvestmentTracker;
+for(const id of ['reportFrom','reportTo'])$(id).onchange=renderStatementsFixture;
+
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='visible'&&budgetUser&&!leaving)refreshInvestmentTracker();
+});
+window.setInterval(()=>{
+  if(document.visibilityState==='visible'&&budgetUser&&!leaving)refreshInvestmentTracker();
+},60000);
 </script>
 </body>
 </html>

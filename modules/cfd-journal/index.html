@@ -697,7 +697,15 @@ button{cursor:pointer}
       <div class="fund-stat"><div class="k">Funding + Realised Trading P/L</div><div class="v" id="fEstimatedValue">$0.00</div></div>
     </div>
 
-    <div class="group">
+<div class="group"><h3>Budgeting references and reporting</h3><p>Record the bank movement in <a href="../budgeting/index.html">Budgeting → Transfers</a>, then load its reference here. For foreign transfers enter the actual USD credited or debited by the broker.</p>
+<button class="btn" id="cfdLoadRefs">Load Budgeting references</button><p id="cfdLinkStatus" role="status"></p>
+<label>Budgeting account and movement<select id="cfdBudgetRef"></select></label>
+<details><summary>Prepare a dated statement</summary><div class="grid">
+<label>Period beginning<input type="date" id="cfdFrom"></label><label>As at<input type="date" id="cfdTo"></label>
+<label>Observation date<input type="date" id="cfdQuoteDay"></label><label>Budget currency per USD<input type="number" step="any" min="0" id="cfdQuote"></label>
+<label>Total broker open P/L on observation date (USD)<input type="number" step="0.01" id="cfdMark"></label><label>Broker closing equity on observation date (USD, optional)<input type="number" step="0.01" id="cfdEquity"></label></div>
+<button class="btn" id="cfdPrepare">Save observations and prepare period</button><p id="cfdPeriodStatus" role="status"></p>
+<label>Trade ID or funding reference from statement<input id="cfdTrace"></label><button class="btn" id="cfdOpenSource">Open source record</button></details></div>    <div class="group">
       <div class="group-title"><h3>Record Cash Movement</h3><span>One ledger entry per actual movement</span></div>
       <div class="grid">
         <div class="field"><label class="required">Date</label><input id="fundDate" type="date" /></div>
@@ -706,7 +714,7 @@ button{cursor:pointer}
         <div class="field"><label class="required">Amount (USD)</label><input id="fundAmount" type="number" step="0.01" min="0" placeholder="100.00" /></div>
         <div class="field"><label class="required">USD → TWD Rate</label><input id="fundFxRate" type="number" step="0.000001" min="0" placeholder="e.g. 31.650000" /><div class="help">TWD per USD at the time of the actual cash movement. Auto-filled from the shared FX cache when available and editable for the broker/bank rate actually used.</div></div>
         <div class="field"><label>TWD Value at Transaction</label><input id="fundTwdValue" readonly placeholder="Calculated automatically" /></div>
-        <div class="field"><label>Broker / Account</label><input id="fundAccount" placeholder="e.g. Capital.com · CFD $100" /></div>
+        <div class="field"><label>SZL per USD for SZL funding</label><input id="fundSourceRate" type="number" step="any" min="0" /></div><div class="field"><label>Broker / Account</label><input id="fundAccount" placeholder="e.g. Capital.com · CFD $100" /></div>
         <div class="field"><label>Method</label><select id="fundMethod"><option value="">Not recorded</option><option>Bank Transfer</option><option>Card</option><option>Mobile Money</option><option>Cash</option><option>Internal Transfer</option><option>Other</option></select></div>
         <div class="field"><label>Reference</label><input id="fundReference" placeholder="Transaction/reference number" /></div>
         <div class="field"><label>Notes</label><input id="fundNotes" placeholder="Reason or funding note" /></div>
@@ -1474,24 +1482,233 @@ function populateFundingFxRate(){
   else if(!getValue('fundFxRate')) setValue('fundFxRate','');
   updateFundingTwdPreview();
 }
+// Budgeting owns bank postings. The journal owns USD broker movements and trade evidence.
+let budgetDirectory=null, editingFunding=null, readingBudget=0, fundingBusy=false;
+const budgetCurrencies=['USD','TWD','SZL'];
+const finite=n=>typeof n==='number'&&Number.isFinite(n);
+const statementMoney=n=>Math.round((n+Number.EPSILON)*100)/100;
+const dated=d=>typeof d==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(d)&&Number.isFinite(Date.parse(d))&&new Date(d).toISOString().slice(0,10)===d;
+const preceding=d=>new Date(Date.parse(d)-86400000).toISOString().slice(0,10);
+function config(){
+  const c=cloudRuntime.cloudBaseState?.raw?.statementSettings;
+  const result=c?.ownerId&&c.ownerId===cloudRuntime.user?.id?deepClone(c):{ownerId:cloudRuntime.user?.id,rates:{},marks:{},ranges:[]};
+  try{
+    const cache=JSON.parse(localStorage.getItem('pilotprofit_fx_usd_v1'));
+    if(cache?.base_code==='USD'&&finite(cache.time_last_update_unix)){
+      const day=new Date(cache.time_last_update_unix*1000).toISOString().slice(0,10);
+      for(const cur of budgetCurrencies)if(finite(cache.rates?.[cur])&&cache.rates[cur]>0&&(day<=nowParts().date)){
+        (result.rates[cur]||={})[day]??=cache.rates[cur];
+      }
+    }
+  }catch{/* Missing dated quotes can be entered from broker records. */}
+  return result;
+}
+function storeConfig(c){
+  const base=cloudRuntime.cloudBaseState||{};
+  cloudRuntime.cloudBaseState={...base,raw:{...base.raw,statementSettings:c}};
+}
+function goodLink(b){return b?.module==='cfd'&&typeof b.id==='string'&&b.id&&typeof b.accountId==='string'&&b.accountId&&dated(b.date)&&
+  ['deposit','withdrawal'].includes(b.kind)&&budgetCurrencies.includes(b.currency)&&budgetCurrencies.includes(b.base)&&
+  finite(b.amount)&&b.amount>0&&finite(b.fee)&&b.fee>=0&&finite(b.rate)&&b.rate>0;}
+function sameLink(a,b){return !!a&&!!b&&['id','module','accountId','kind','date','base','currency','amount','fee','rate'].every(k=>a[k]===b[k]);}
+function echoFunding(x){
+  const b=x.budgetLink;
+  if(!goodLink(b)||x.budgetOwner!==cloudRuntime.user.id)return {id:'legacy-cfd:'+x.id,date:x.date};
+  let amount=b.amount;
+  if(b.currency==='USD')amount=x.amount;
+  else if(b.base==='USD')amount=statementMoney(x.amount/b.rate);
+  else if(b.currency==='TWD'&&finite(x.fxRateTwdAtTransaction))amount=statementMoney(x.amount*x.fxRateTwdAtTransaction);
+  else if(b.currency==='SZL')amount=finite(x.sourcePerUsd)&&x.sourcePerUsd>0?statementMoney(x.amount*x.sourcePerUsd):null;
+  // The actual broker amount is booked to cents in USD. Round-trip conversion
+  // can differ by half a USD cent expressed in the source currency.
+  const perUsd=b.currency==='USD'?1:b.base==='USD'?1/b.rate:b.currency==='TWD'?x.fxRateTwdAtTransaction:x.sourcePerUsd;
+  if(finite(amount)&&perUsd>0&&Math.abs(amount-b.amount)<=0.005*perUsd+0.005)amount=b.amount;
+  return {...b,date:x.date,kind:x.type.toLowerCase(),amount};
+
+}
+function fundingChoices(){
+  const sel=$('cfdBudgetRef'),old=sel.value;
+  sel.replaceChildren(new Option('Select a Budgeting movement',''));
+  for(const b of budgetDirectory?.funding||[]){
+    if(funding.some(x=>x.id!==editingFunding&&x.budgetLink?.id===b.id))continue;
+    const account=budgetDirectory.accounts.find(a=>a.id===b.accountId);
+    sel.add(new Option(b.date+' · '+account.name+' · '+b.kind+' '+b.amount+' '+b.currency+' · '+b.id,b.id));
+  }
+  sel.value=old;
+}
+async function loadBudgetDirectory(){
+  const ticket=++readingBudget,owner=cloudRuntime.user?.id;
+  try{
+    const env=await AurumCloud.module.load('budgeting');
+    if(ticket!==readingBudget||!sessionOwnershipValid()||cloudRuntime.user.id!==owner)return false;
+    const d=env?.state?.budgetFunding;
+    if(env?.source!=='cloud'||env.dirty||env.state.ownerId!==owner||d?.ownerId!==owner||d.version!==1||
+      !budgetCurrencies.includes(d.currency)||!Array.isArray(d.accounts)||!Array.isArray(d.funding))throw Error('Save the updated Budgeting module and load its synced references.');
+    const rows=d.funding.filter(b=>b?.module==='cfd');
+    if(rows.some(b=>!goodLink(b)||b.base!==d.currency||!d.accounts.some(a=>a.id===b.accountId)||
+      b.kind==='withdrawal'&&!rows.some(r=>r.kind==='deposit'&&r.accountId===b.accountId&&r.date<=b.date))||
+      new Set(rows.map(b=>b.id)).size!==rows.length)throw Error('Review invalid or duplicate CFD references in Budgeting.');
+    budgetDirectory={...d,funding:rows};fundingChoices();
+    const issues=[];
+    for(const b of rows)if(!funding.some(x=>sameLink(echoFunding(x),b)))issues.push(b.id);
+    for(const x of funding)if(!rows.some(b=>sameLink(echoFunding(x),b)))issues.push(x.budgetLink?.id||x.id);
+    $('cfdLinkStatus').textContent=issues.length?'Review unmatched or changed records: '+[...new Set(issues)].join(', '):'All funding references match.';
+    return true;
+  }catch(e){if(ticket===readingBudget){budgetDirectory=null;fundingChoices();$('cfdLinkStatus').textContent=e.message;}return false;}
+}
+function chooseFunding(){
+  const b=budgetDirectory?.funding.find(x=>x.id===getValue('cfdBudgetRef'));if(!b)return;
+  const old=funding.find(x=>x.id===editingFunding);
+  setValue('fundType',b.kind==='deposit'?'Deposit':'Withdrawal');setValue('fundDate',b.date);
+  if(b.currency==='USD')setValue('fundAmount',b.amount);
+  else if(b.base==='USD')setValue('fundAmount',statementMoney(b.amount*b.rate));
+  else if(!old)setValue('fundAmount','');
+  if(b.currency==='USD'&&b.base==='TWD')setValue('fundFxRate',b.rate);
+  updateFundingTwdPreview();
+}
+function editPosting(id){
+  const row=funding.find(x=>x.id===id);if(!row)return;editingFunding=id;fundingChoices();
+  for(const [field,value] of Object.entries({Date:row.date,Time:row.time,Type:row.type,Amount:row.amount,FxRate:row.fxRateTwdAtTransaction,Reference:row.reference,Account:row.account,SourceRate:row.sourcePerUsd,Method:row.method,Notes:row.notes}))setValue('fund'+field,value??'');
+  setValue('cfdBudgetRef',row.budgetLink?.id||'');updateFundingTwdPreview();$('addFundBtn').textContent='Save ledger changes';
+}
+function checkedLinks(rows,allowExistingMismatch=false){
+  const seen=new Set();
+  for(const x of rows){if(!x.budgetLink)continue;const b=x.budgetLink;
+    if(!goodLink(b)||x.budgetOwner!==cloudRuntime.user?.id||(!allowExistingMismatch&&!sameLink(echoFunding(x),b))||seen.has(b.id))throw Error('Invalid, duplicate, or other-user CFD funding reference.');
+    seen.add(b.id);
+  }
+}
+function periodReport(c,from,to){
+  const currency=c.currency,prior=preceding(from),events=[],sources=[];
+  const rate=day=>currency==='USD'?1:c.rates?.[currency]?.[day];
+  function add(day,usd,reference,label,kind,booked){
+    if(!dated(day)||!finite(usd))throw Error('Missing date or amount for '+reference);
+    if(day<=to)events.push({day,usd,reference,label,kind,booked});
+  }
+  for(const x of funding){
+    if(x.currency&&x.currency!=='USD')throw Error('Confirm broker currency for '+x.id);
+    const sign=x.type==='Deposit'?1:-1,b=x.budgetLink;
+    const basis=b?.base===currency?statementMoney(b.amount*b.rate):currency==='USD'?x.amount:currency==='TWD'?x.twdAtTransaction:null;
+    add(x.date,sign*x.amount,b?.id||x.id,'Broker funding '+x.id,sign>0?'deposits':'withdrawals',finite(basis)?sign*basis:null);
+  }
+  for(const t of trades){
+    if(t.status==='DRAFT')continue;
+    const entry=t.entry||{},exit=t.result?.exitDate;
+    if(!dated(entry.date)){throw Error('Confirm entry date for '+t.id);}
+    if(entry.date>to)continue;
+    const entryCost=num(entry.entryCommission)+num(entry.spreadCost);
+    if(entryCost)add(entry.date,-entryCost,t.id,'Entry costs','fees');
+    for(const a of t.management||[]){
+      if(num(a.partialRealizedPnl))add(a.date,num(a.partialRealizedPnl),t.id,'Partial close '+(a.id||''),'realized');
+    }
+    if(t.status==='CLOSED'){
+      if(!dated(exit))throw Error('Confirm exit date for '+t.id);
+      if(exit<=to){
+        const m=resultMetrics(t,t.result);if(!m.pnlKnown)throw Error('Missing final P/L for '+t.id);
+        add(exit,m.finalGross,t.id,'Final close','realized');
+        const cost=m.costs-entryCost;if(cost)add(exit,-cost,t.id,'Closing costs and financing','fees');
+      }
+    }
+  }
+  function positionMark(day){
+    const open=trades.filter(t=>t.status!=='DRAFT'&&t.entry?.date<=day&&(t.status!=='CLOSED'||t.result?.exitDate>day));
+    if(!open.length)return 0;
+    const mark=c.marks?.[day];if(!finite(mark))throw Error('Enter broker open P/L for '+day);
+    sources.push({date:day,reference:open.map(t=>t.id).join(', '),description:'Broker open P/L '+mark+' USD'});return mark;
+  }
+  const valued=(usd,day)=>{if(!usd)return 0;const r=rate(day);if(!finite(r)||r<=0)throw Error('Enter '+currency+' per USD for '+day);return usd*r;};
+  const openingCash=events.filter(e=>e.day<from).reduce((n,e)=>n+e.usd,0);
+  const openingMark=positionMark(prior),closingMark=positionMark(to);
+  const opening=valued(openingCash+openingMark,prior);
+  let closingCash=openingCash,fx=openingCash?valued(openingCash,to)-valued(openingCash,prior):0;
+  const totals={deposits:0,withdrawals:0,realized:0,fees:0};
+  for(const e of events){
+    sources.push({date:e.day,reference:e.reference,description:e.label+' · '+e.usd+' USD'});
+    if(e.day<from)continue;
+    const base=finite(e.booked)?e.booked:valued(e.usd,e.day);
+    closingCash+=e.usd;fx+=valued(e.usd,to)-base;
+    totals[e.kind]+=e.kind==='withdrawals'||e.kind==='fees'?-base:base;
+  }
+  // Express fair-value changes at the closing rate. FX on opening open P/L
+  // belongs in the currency line along with FX on opening cash.
+  fx+=valued(openingMark,to)-valued(openingMark,prior);
+  const unrealized=valued(closingMark-openingMark,to),closing=valued(closingCash+closingMark,to);
+  if(totals.fees<0){totals.realized-=totals.fees;totals.fees=0;}
+  const row={from,to,opening:statementMoney(opening),closing:statementMoney(closing),unrealized:statementMoney(unrealized),fx:statementMoney(fx),sources};
+  for(const [k,v] of Object.entries(totals))row[k]=statementMoney(v);
+  const residual=statementMoney(row.closing-row.opening-row.deposits+row.withdrawals-row.realized-row.unrealized-row.fx+row.fees);
+  if(Math.abs(residual)<=0.03)row.fx=statementMoney(row.fx+residual);
+  row.ledgerClosing=row.closing;
+  row.brokerVerified=finite(c.equity?.[to]);
+  if(row.brokerVerified){
+    row.closing=statementMoney(valued(c.equity[to],to));
+    row.sources.push({date:to,reference:'Broker closing equity',description:c.equity[to]+' USD · ledger '+row.ledgerClosing+' '+currency});
+  }
+  if(finite(c.equity?.[prior])){
+    row.opening=statementMoney(valued(c.equity[prior],prior));
+    row.sources.push({date:prior,reference:'Broker opening equity',description:c.equity[prior]+' USD'});
+  }
+  row.difference=statementMoney(row.closing-row.opening-row.deposits+row.withdrawals-row.realized-row.unrealized-row.fx+row.fees);
+  return row;
+}
+function budgetPublication(){
+  const c=config();if(budgetDirectory)c.currency=budgetDirectory.currency;
+  if(!budgetCurrencies.includes(c.currency))return {settings:c,feed:null};
+  const day=nowParts().date,months=[{from:day.slice(0,7)+'-01',to:day},{from:day.slice(0,4)+'-01-01',to:day},...(c.ranges||[])];
+  const feed={version:1,ownerId:cloudRuntime.user.id,currency:c.currency,funding:funding.map(echoFunding),periods:[]};
+  for(const r of new Map(months.map(r=>[r.from+'/'+r.to,r])).values()){
+    try{feed.periods.push(periodReport(c,r.from,r.to));}catch{/* Unavailable dates must stay incomplete in Budgeting. */}
+  }
+  return {settings:c,feed};
+}
+async function prepareStatement(){
+  if(!mutationAllowed()||!cloudRuntime.cloudReadVerified||!await loadBudgetDirectory()||!mutationAllowed())return;
+  const c=config();c.currency=budgetDirectory.currency;
+  const day=getValue('cfdQuoteDay'),fx=getNumber('cfdQuote'),mark=getNumber('cfdMark'),equity=getNumber('cfdEquity');
+  const from=getValue('cfdFrom'),to=getValue('cfdTo');
+  try{
+    if(!dated(from)||!dated(to)||from>to||to>nowParts().date)throw Error('Choose a valid statement period.');
+    if(fx!=null||mark!=null||equity!=null){
+      if(!dated(day)||day>nowParts().date)throw Error('Choose the broker observation date.');
+      if(fx!=null){
+        if(fx<=0||c.currency==='USD'&&fx!==1)throw Error('Enter a positive reporting-currency rate. USD to USD is 1.');
+        const rates=c.rates[c.currency]||={};
+        if(rates[day]!=null&&rates[day]!==fx&&!confirm('Replace the saved exchange rate for '+day+' and recalculate affected statements?'))return;
+        rates[day]=fx;
+      }
+      if(equity!=null){
+        c.equity||={};
+        if(c.equity[day]!=null&&c.equity[day]!==equity&&!confirm('Replace the saved broker closing equity for '+day+'?'))return;
+        c.equity[day]=equity;
+      }
+      if(mark!=null){if(c.marks[day]!=null&&c.marks[day]!==mark&&!confirm('Replace the broker open P/L for '+day+'?'))return;c.marks[day]=mark;}
+    }
+    if(!c.ranges.some(r=>r.from===from&&r.to===to))c.ranges.push({from,to});
+    storeConfig(c);markLocalMutation();setValue('cfdQuote','');setValue('cfdMark','');setValue('cfdEquity','');
+    const r=periodReport(c,from,to);$('cfdPeriodStatus').textContent='Prepared closing balance '+r.closing+' '+c.currency+(r.brokerVerified?' · period reconciliation difference '+r.difference:' · calculated from ledger; broker equity unconfirmed')+'. Load module figures in Budgeting after sync.';
+  }catch(e){$('cfdPeriodStatus').textContent=e.message;}
+}
+
 function publishedCfdSummary(){
   const ft=fundingTotals();
   const realised=realisedTradingNet();
   const open=trades.filter(t=>String(t?.status||'').toUpperCase()==='OPEN').length;
   const closed=trades.filter(t=>String(t?.status||'').toUpperCase()==='CLOSED'&&t.result).length;
-  const account=ft.net+realised;
+  const known=trades.every(t=>t.status!=='CLOSED'||t.result&&resultMetrics(t,t.result).pnlKnown);
+  const account=known?ft.net+realised:null;
   return {
-    module:'cfd',currency:'USD',current_value:account,total_contributed:ft.net,profit_loss:realised,
-    detail:`${open} open · ${closed} closed · account ${money(account)} · realised trading P/L ${money(realised)}`
+    module:'cfd',currency:'USD',current_value:account,total_contributed:ft.net,profit_loss:known?realised:null,
+    detail:!known?'Closed-trade P/L unavailable':`${open} open · ${closed} closed · account ${money(account)} · realised trading P/L ${money(realised)}`
   };
 }
 function repairPublishedSummary(cloudState){
   if (!sessionOwnershipValid() || cloudRuntime.conflictLocked) return false;
   const summary=publishedCfdSummary();
   const fields=['module','currency','current_value','total_contributed','profit_loss'];
-  if (fields.every(key=>cloudState.publishedSummary?.[key]===summary[key])) return false;
+  const publication=budgetPublication();
+  if (JSON.stringify(publication.feed)===JSON.stringify(cloudState.budgetReporting)&&fields.every(key=>cloudState.publishedSummary?.[key]===summary[key])) return false;
   // A summary repair must preserve even fields this version of the journal does not edit.
-  const snapshot={...deepClone(cloudState),publishedSummary:summary};
+  const snapshot={...deepClone(cloudState),raw:{...cloudState.raw,statementSettings:publication.settings},budgetReporting:publication.feed,publishedSummary:summary};
   AurumCloud.module.autoSave(CLOUD_MODULE_ID,snapshot,{
     schemaVersion:Math.max(SCHEMA_VERSION,Number(snapshot.schemaVersion)||0),delayMs:AUTO_SAVE_MS
   });
@@ -1502,9 +1719,10 @@ function repairPublishedSummary(cloudState){
 function buildCloudState(){
   const base=isObject(cloudRuntime.cloudBaseState)?deepClone(cloudRuntime.cloudBaseState):{};
   const raw=isObject(base.raw)?deepClone(base.raw):{};
+  const publication=budgetPublication();
   return {
     ...base,
-    module:CLOUD_MODULE_ID,
+    budgetReporting:publication.feed,module:CLOUD_MODULE_ID,
     source:'cfd-module',
     updatedAt:new Date().toISOString(),
     legacyScope:cloudRuntime.compatibilityScope||cloudRuntime.username||base.legacyScope||null,
@@ -1512,7 +1730,7 @@ function buildCloudState(){
     schemaVersion:SCHEMA_VERSION,
     reportingCurrency:'USD',
     raw:{
-      ...raw,
+      ...raw,statementSettings:publication.settings,
       trades:deepClone(trades),
       funding:deepClone(funding),
       ownerUserId:cloudRuntime.user?.id||null,
@@ -1557,7 +1775,7 @@ function cloudStateParts(cloudState){
     throw new Error('CFD ledger is incomplete. Current records have been retained.');
   }
   const checkedTrades=sanitizeTradeCollection(cloudTrades);
-  const checkedFunding=sanitizeFundingCollection(cloudFunding);
+  const checkedFunding=sanitizeFundingCollection(cloudFunding);checkedLinks(checkedFunding,true);
   if(checkedTrades.length!==cloudTrades.length || checkedFunding.length!==cloudFunding.length){
     throw new Error('CFD ledger contains unreadable records. Current records have been retained.');
   }
@@ -2134,19 +2352,29 @@ function fundingTotals(){
   return {deposits,withdrawals,net:deposits-withdrawals};
 }
 function realisedTradingNet(){ return trades.filter(t=>t.status==='CLOSED'&&t.result).reduce((s,t)=>{const m=resultMetrics(t,t.result);return s+(m.pnlKnown?m.net:0);},0); }
-function openFunding(){ const n=nowParts(); setValue('fundDate',n.date); setValue('fundTime',n.time); setValue('fundType',''); setValue('fundMethod',''); populateFundingFxRate(); $('fundsModal').classList.remove('hidden'); renderFunding(); setTimeout(()=>$('fundAmount').focus(),0); }
+function openFunding(){ editingFunding=null;const n=nowParts();setValue('cfdFrom',n.date.slice(0,7)+'-01');setValue('cfdTo',n.date);setValue('cfdQuoteDay',n.date);setValue('cfdBudgetRef','');setValue('fundAmount','');setValue('fundSourceRate','');setValue('fundReference','');setValue('fundNotes','');$('addFundBtn').textContent='Add Ledger Entry';loadBudgetDirectory(); setValue('fundDate',n.date); setValue('fundTime',n.time); setValue('fundType',''); setValue('fundMethod',''); populateFundingFxRate(); $('fundsModal').classList.remove('hidden'); renderFunding(); setTimeout(()=>$('fundAmount').focus(),0); }
 function closeFunding(){ $('fundsModal').classList.add('hidden'); hideValidation('fundValidation'); }
-function addFunding(){
-  if(!mutationAllowed()) return;
+async function addFunding(){
+  if(fundingBusy||!mutationAllowed()||!cloudRuntime.cloudReadVerified)return;
+  const ref=getValue('cfdBudgetRef'),link=budgetDirectory?.funding.find(x=>x.id===ref),old=funding.find(x=>x.id===editingFunding);
+  if(!link)return showValidation('fundValidation',['Select a synced Budgeting reference.']);
+  fundingBusy=true;
+  try{
+    if(!await loadBudgetDirectory()||!mutationAllowed()||!sameLink(link,budgetDirectory.funding.find(x=>x.id===ref))||
+      getValue('cfdBudgetRef')!==ref||old!==funding.find(x=>x.id===editingFunding))return showValidation('fundValidation',['Review the current reference and retry.']);
+  }finally{fundingBusy=false;}
   const cachedRate=currentTwdPerUsd();
   const twdPerUsd=getNumber('fundFxRate');
   const rawAmount=getNumber('fundAmount');
   const rateSource=twdPerUsd!=null&&cachedRate!=null&&Math.abs(twdPerUsd-cachedRate)<=Math.max(0.000001,cachedRate*0.000001)?'shared-rate-cache':'manual';
-  const item={id:fundingUid(),date:getValue('fundDate'),time:getValue('fundTime'),type:getValue('fundType'),amount:rawAmount,currency:'USD',fxRateTwdAtTransaction:twdPerUsd,twdAtTransaction:twdPerUsd!=null&&twdPerUsd>0&&rawAmount!=null&&rawAmount>0?rawAmount*twdPerUsd:null,fxRateSource:rateSource,account:getValue('fundAccount').trim(),method:getValue('fundMethod'),reference:getValue('fundReference').trim(),notes:getValue('fundNotes').trim(),createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
+  const item={...old,id:old?.id||fundingUid(),budgetOwner:cloudRuntime.user.id,budgetLink:deepClone(link),sourcePerUsd:getNumber('fundSourceRate'),date:getValue('fundDate'),time:getValue('fundTime'),type:getValue('fundType'),amount:rawAmount,currency:'USD',fxRateTwdAtTransaction:twdPerUsd,twdAtTransaction:twdPerUsd!=null&&twdPerUsd>0&&rawAmount!=null&&rawAmount>0?rawAmount*twdPerUsd:null,fxRateSource:rateSource,account:getValue('fundAccount').trim(),method:getValue('fundMethod'),reference:getValue('fundReference').trim(),notes:getValue('fundNotes').trim(),createdAt:old?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString()};
   const errors=[]; if(!item.date) errors.push('Date is required.'); if(!item.time) errors.push('Time is required.'); if(!['Deposit','Withdrawal'].includes(item.type)) errors.push('Choose Deposit or Withdrawal.'); if(!(item.amount>0)) errors.push('Amount must be greater than zero.'); if(!(item.fxRateTwdAtTransaction>0)) errors.push('USD → TWD transaction-time rate is required so unified monthly analysis remains historically accurate.');
-  if(funding.some(x=>sameFundingIdentity(x,item))) errors.push('This funding movement appears to be an exact duplicate.');
+  if(item.date!==link.date||item.type.toLowerCase()!==link.kind||link.currency==='USD'&&item.amount!==link.amount||link.base==='USD'&&item.amount!==statementMoney(link.amount*link.rate))errors.push('Broker date, direction and USD amount must agree with the selected movement.');
+  if(link.currency==='SZL'&&link.base!=='USD'&&!(item.sourcePerUsd>0))errors.push('Enter the actual broker conversion rate in SZL per USD.');
+  if(!sameLink(echoFunding(item),link))errors.push('The USD broker posting and its conversion rate do not match the Budgeting movement.');
+  if(funding.some(x=>x.id!==item.id&&(x.budgetLink?.id===ref||sameFundingIdentity(x,item)))) errors.push('This funding movement appears to be an exact duplicate.');
   if(errors.length){ showValidation('fundValidation',errors); toast('Funding entry needs attention',errors[0]); return; }
-  hideValidation('fundValidation'); funding.unshift(item); saveFundingStore(); ['fundAmount','fundReference','fundNotes','fundTwdValue'].forEach(id=>setValue(id,'')); populateFundingFxRate(); toast(`${item.type} recorded`,`${money(item.amount)} added with a permanent transaction-time TWD basis.`);
+  hideValidation('fundValidation'); if(old)funding=funding.map(x=>x.id===old.id?item:x);else funding.unshift(item);editingFunding=null;setValue('cfdBudgetRef','');$('addFundBtn').textContent='Add Ledger Entry';saveFundingStore();fundingChoices();loadBudgetDirectory(); ['fundAmount','fundReference','fundNotes','fundTwdValue'].forEach(id=>setValue(id,'')); populateFundingFxRate(); toast(`${item.type} recorded`,`${money(item.amount)} added with a permanent transaction-time TWD basis.`);
 }
 function deleteFunding(id){ if(!mutationAllowed()) return; const item=funding.find(x=>x.id===id); if(!item) return; if(!confirm(`Delete this ${item.type.toLowerCase()} of ${money(item.amount)}?`)) return; funding=funding.filter(x=>x.id!==id); saveFundingStore(); toast('Funding entry deleted'); }
 function renderFunding(){
@@ -2154,7 +2382,8 @@ function renderFunding(){
   $('fDeposits').textContent=money(totals.deposits); $('fWithdrawals').textContent=money(totals.withdrawals); $('fNetFunding').textContent=money(totals.net); $('fNetFunding').className=`v ${totals.net>0?'positive':totals.net<0?'negative':''}`;
   $('fEstimatedValue').textContent=money(totals.net+realised); $('fEstimatedValue').className=`v ${totals.net+realised>0?'positive':totals.net+realised<0?'negative':''}`; $('fundCount').textContent=`${funding.length} entr${funding.length===1?'y':'ies'}`;
   const body=$('fundingBody'); if(!funding.length){ body.innerHTML='<tr><td colspan="7" class="muted" style="text-align:center;padding:22px">No deposits or withdrawals recorded yet.</td></tr>'; return; }
-  body.innerHTML=funding.map(x=>`<tr><td>${escapeHTML(x.date||'')} ${escapeHTML(x.time||'')}</td><td><span class="badge ${x.type==='Deposit'?'open':'closed'}">${escapeHTML(x.type)}</span></td><td>${escapeHTML(x.account||'—')}</td><td>${escapeHTML(x.method||'—')}</td><td>${escapeHTML(x.reference||'—')}${x.notes?`<div class="muted" style="margin-top:3px">${escapeHTML(x.notes)}</div>`:''}</td><td class="amount ${x.type==='Deposit'?'positive':'negative'}">${x.type==='Deposit'?'+':'−'}${money(x.amount)}</td><td><button class="delete-event" data-delete-fund="${x.id}" title="Delete funding entry">✕</button></td></tr>`).join('');
+  body.innerHTML=funding.map(x=>`<tr><td>${escapeHTML(x.date||'')} ${escapeHTML(x.time||'')}</td><td><span class="badge ${x.type==='Deposit'?'open':'closed'}">${escapeHTML(x.type)}</span></td><td>${escapeHTML(x.account||'—')}</td><td>${escapeHTML(x.method||'—')}</td><td>${escapeHTML(x.reference||'—')}${x.notes?`<div class="muted" style="margin-top:3px">${escapeHTML(x.notes)}</div>`:''}</td><td class="amount ${x.type==='Deposit'?'positive':'negative'}">${x.type==='Deposit'?'+':'−'}${money(x.amount)}</td><td><small>${escapeHTML(x.budgetLink?.id||x.id)}</small> <button class="btn" data-edit-fund="${escapeHTML(x.id)}">Edit / link</button><button class="delete-event" data-delete-fund="${escapeHTML(x.id)}" title="Delete funding entry">✕</button></td></tr>`).join('');
+  $$('[data-edit-fund]').forEach(b=>b.onclick=()=>editPosting(b.dataset.editFund));
   $$('[data-delete-fund]').forEach(b=>b.addEventListener('click',()=>deleteFunding(b.dataset.deleteFund)));
 }
 
@@ -2489,7 +2718,7 @@ async function exportData(){
     reportingCurrency:'USD',unifiedReportingCurrency:'TWD',
     security:{credentialsIncluded:false,authenticationTokensIncluded:false},
     trades,funding,
-    attachmentManifest:attachments,
+    statementSettings:config(),attachmentManifest:attachments,
     attachmentNote:'Attachment metadata is included. Binary files are stored separately in the authenticated user private Supabase Storage path and may also be cached locally for offline access.'
   };
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
@@ -2842,10 +3071,11 @@ function importData(file){
       const deduped=dedupeIncomingTrades(normalized);
       const rawFunding=Array.isArray(importRoot?.funding)?importRoot.funding:[];
       const fundingRows=rawFunding.map((x,i)=>normalizeFundingRecord(x,i)).filter(Boolean);
+      if(fundingRows.length!==rawFunding.length)throw Error('Invalid imported funding record.');checkedLinks(fundingRows);
       const existingMatches=deduped.trades.filter(t=>trades.some(x=>sameTradeIdentity(x,t))).length;
 
       showImportPreview({
-        fileName:file.name,
+        statementSettings:importRoot.statementSettings, fileName:file.name,
         schemaVersion:parsed?.schemaVersion??parsed?.modules?.cfd?.schemaVersion??importRoot?.schemaVersion??null,
         trades:deduped.trades,
         funding:fundingRows,
@@ -2872,7 +3102,23 @@ function commitImport(mode){
   if(!pendingImport) return;
   const p=pendingImport;
 
+  if(p.errors?.length)return;
+  const backup=p.statementSettings;
+  function restoreObservations(){
+    if(backup?.ownerId!==cloudRuntime.user.id)return;
+    const c=config();
+    for(const cur of budgetCurrencies)for(const [day,rate] of Object.entries(backup.rates?.[cur]||{})){
+      if(dated(day)&&finite(rate)&&rate>0)(c.rates[cur]||={})[day]??=rate;
+    }
+    for(const [day,value] of Object.entries(backup.marks||{}))if(dated(day)&&finite(value))c.marks[day]??=value;
+    for(const [day,v] of Object.entries(backup.equity||{}))if(dated(day)&&finite(v))(c.equity||={})[day]??=v;
+    for(const r of Array.isArray(backup.ranges)?backup.ranges:[])if(dated(r?.from)&&dated(r?.to)&&r.from<=r.to&&!c.ranges.some(x=>x.from===r.from&&x.to===r.to))c.ranges.push({from:r.from,to:r.to});
+    if(!c.currency&&budgetCurrencies.includes(backup.currency))c.currency=backup.currency;
+    storeConfig(c);
+  }
   if(mode==='merge'){
+    try{checkedLinks(mergeFundingCollections(funding,p.funding||[]).funding);}catch(e){return alert(e.message);}
+    restoreObservations();
     const mt=mergeTradeCollections(trades,p.trades);
     trades=mt.trades;
 
@@ -2897,7 +3143,7 @@ function commitImport(mode){
   if(mode==='replace'){
     if(!confirm(`Replace the current ${trades.length}-trade journal with ${p.trades.length} validated imported trades? Export a backup first if you need the current journal.`)) return;
 
-    trades=p.trades.map(deepClone);
+    restoreObservations();trades=p.trades.map(deepClone);
     if(p.fundingProvided) funding=p.funding.map(deepClone);
 
     persistLocalStores();
@@ -2911,6 +3157,14 @@ function commitImport(mode){
   }
 }
 
+$('cfdLoadRefs').onclick=loadBudgetDirectory;
+$('cfdBudgetRef').onchange=chooseFunding;
+$('cfdPrepare').onclick=prepareStatement;
+$('cfdOpenSource').onclick=()=>{const id=getValue('cfdTrace').trim();if(trades.some(t=>t.id===id)){closeFunding();selectTrade(id);}else {
+    const row=funding.find(x=>x.id===id||x.budgetLink?.id===id);
+    if(row){editPosting(row.id);$('cfdPeriodStatus').textContent=row.date+' · '+row.type+' · '+money(row.amount)+' · '+row.id;}
+    else $('cfdPeriodStatus').textContent='No matching trade or funding record.';
+  }};
 // Listeners
 $('loadCloud').addEventListener('click',()=>loadCloudNow());
 $('saveCloud').addEventListener('click',()=>saveCloudNow());
@@ -3050,6 +3304,7 @@ async function initializeModule(){
     cloudRuntime.lastActivityAt=Date.now();
     $('sessionGate').hidden=true;
     announceModuleReady();
+    loadBudgetDirectory().then(ok=>{if(ok&&sessionOwnershipValid()&&cloudRuntime.cloudReadVerified&&!cloudRuntime.conflictLocked&&cloudRuntime.cloudBaseState?.module)repairPublishedSummary(cloudRuntime.cloudBaseState);});
     setInterval(updateInactivityTimer,250);
     refreshMonthlyEvidence().catch(()=>null);
     retryEvidenceCloudQueue().catch(()=>null);

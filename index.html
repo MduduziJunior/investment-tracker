@@ -417,10 +417,10 @@
       </div>
 
       <section class="metrics" aria-label="Portfolio totals">
-        <article class="metric"><span>Total net worth</span><strong id="totalNetWorth">NT$0</strong><small>ETF + CFD + Cash Savings</small></article>
+        <article class="metric"><span>Tracked investment value</span><strong id="totalNetWorth">NT$0</strong><small>ETF + CFD + Cash Savings</small></article>
         <article class="metric"><span>Total contributed</span><strong id="totalContributed">NT$0</strong><small>Net capital committed</small></article>
-        <article class="metric"><span>Total profit / loss</span><strong id="totalProfitLoss">NT$0</strong><small>Current portfolio gain/loss</small></article>
-        <article class="metric"><span>Overall ROI</span><strong id="overallRoi">0.00%</strong><small>Profit ÷ net contributions</small></article>
+        <article class="metric"><span>Investment profit / loss</span><strong id="totalProfitLoss">NT$0</strong><small>ETF and CFD performance · savings FX shown separately</small></article>
+        <article class="metric"><span>ETF + CFD ROI</span><strong id="overallRoi">0.00%</strong><small>ETF and CFD profit ÷ their net contributions</small></article>
       </section>
 
       <div class="section-heading">
@@ -480,6 +480,9 @@
         </a>
       </section>
 
+      <div class="section-heading">
+        <div><h3>Budgeting reconciliation</h3><p id="correlationStatus" style="white-space:pre-line" aria-live="polite">Load the module reports to compare funding and period balances.</p><a href="./modules/budgeting/index.html">Open Budgeting for statements and source records →</a></div>
+      </div>
       <div class="section-heading">
         <div><h3>Month-to-Month Analysis</h3><p>Accounting-month history is user-specific and stored in Supabase. Capital flows use transaction-time NTD basis; performance excludes new capital.</p></div>
       </div>
@@ -757,11 +760,12 @@
         if (input === null || typeof input !== "object") return input;
         if (seen.has(input)) return null;
         seen.add(input);
-        if (Array.isArray(input)) return input.map(normalize);
-        return Object.keys(input).sort().reduce((obj, key) => {
+        const result = Array.isArray(input) ? input.map(normalize) : Object.keys(input).sort().reduce((obj, key) => {
           obj[key] = normalize(input[key]);
           return obj;
         }, {});
+        seen.delete(input);
+        return result;
       };
       try { return JSON.stringify(normalize(value)); }
       catch { return JSON.stringify(value); }
@@ -917,7 +921,7 @@
       state.compatibilityScope = scopeName;
       localStorage.setItem(ACTIVE_USER_KEY, scopeName);
 
-      if (scopeName === display) claimLegacyModuleData(scopeName);
+      if (scopeName === display && Object.values(MODULE_STORAGE).some(key=>localStorage.getItem(key)!=null) && confirm("Assign legacy investment records on this device to "+display+"? Cancel to keep them unassigned.")) claimLegacyModuleData(scopeName);
       return scopeName;
     }
 
@@ -975,7 +979,7 @@
         $("rateStatus").textContent = `Live · ${new Date(record.updatedAt).toLocaleString()}`;
         return record;
       } catch {
-        if (cached?.rates) {
+        if (cached?.rates && Date.now()-Date.parse(cached.updatedAt)>=0 && Date.now()-Date.parse(cached.updatedAt)<=7*86400000) {
           state.rates = { ...cached, source: "cached" };
           $("rateStatus").textContent = `Cached · ${new Date(cached.updatedAt).toLocaleString()}`;
           return state.rates;
@@ -985,7 +989,7 @@
           if (!response.ok) throw new Error("Backup exchange-rate service unavailable");
           const payload = await response.json();
           if (!payload.rates?.USD || !(payload.rates?.SZL || payload.rates?.ZAR)) throw new Error("Invalid backup rates");
-          const record = { rates: { ...payload.rates, TWD: 1, SZL: payload.rates.SZL || payload.rates.ZAR }, updatedAt: payload.date_last_updated || isoNow(), source: "live-backup" };
+          const record = { rates: { ...payload.rates, TWD: 1, SZL: payload.rates.SZL || payload.rates.ZAR }, updatedAt: payload.date || isoNow(), source: "live-backup" };
           writeJson(RATE_CACHE_KEY, record);
           state.rates = record;
           $("rateStatus").textContent = `Live backup · ${new Date(record.updatedAt).toLocaleDateString()}`;
@@ -1262,6 +1266,7 @@
     }
 
     function formatTwd(value) {
+      if(value==null || !Number.isFinite(Number(value))) return "—";
       const n = roundedForDisplay(value, 0);
       const sign = n < 0 ? "-" : "";
       return `${sign}NT$${twdNumber.format(Math.abs(n))}`;
@@ -1348,10 +1353,23 @@
       return store;
     }
 
+    function budgetPayload(store,owner,validateFunding=false) {
+      const payload={module:"budgeting",ownerId:owner,store};
+      const p=validateBudget(payload,owner).profiles[0];
+      const movements=p.moduleFunding||[];
+      if(validateFunding && (!Array.isArray(movements) || new Set(movements.map(r=>r?.id)).size!==movements.length ||
+        movements.some(r=>!r?.id || !investmentNames.includes(r.module) || !p.accounts.some(a=>a.id===r.accountId) ||
+          !["deposit","withdrawal"].includes(r.kind) || !["TWD","USD","SZL"].includes(r.currency) || r.base!==p.mainCurrency ||
+          !Number.isFinite(r.amount) || r.amount<=0 || !Number.isFinite(r.rate) || r.rate<=0 || !Number.isFinite(r.fee) || r.fee<0)))
+        throw Error("Review invalid or duplicate budget funding references before restoring the backup.");
+      return {...payload,budgetFunding:{version:1,ownerId:owner,profileId:p.id,currency:p.mainCurrency,
+        accounts:p.accounts.map(({id,name,status})=>({id,name,status})),funding:deepClone(p.moduleFunding||[])}};
+    }
+
     function deviceBudget(owner = state.session?.userId) {
       const raw = localStorage.getItem(budgetKey(owner));
       if (!raw) return null;
-      const payload = { module: "budgeting", ownerId: owner, store: JSON.parse(raw) };
+      const payload = budgetPayload(JSON.parse(raw),owner);
       validateBudget(payload, owner);
       return payload;
     }
@@ -1372,7 +1390,7 @@
       const envelope = await AurumCloud.module.load("budgeting");
       budgetKey(owner);
       if (localStorage.getItem(key) !== before) throw new Error("Budget changed in another tab. Retry the cloud load.");
-      if (envelope && envelope.source !== "cloud") throw new Error("Budgeting returned a device copy. Open Budgeting to review pending changes.");
+      if (envelope && (envelope.source !== "cloud" || envelope.dirty)) throw new Error("Budgeting returned a device copy. Open Budgeting to review pending changes.");
       if (!AurumCloud.getStatus().online) throw new Error("Reconnect to check the budget.");
       const remote = envelope && validateBudget(envelope.state, owner);
       const local = deviceBudget(owner)?.store;
@@ -1673,41 +1691,108 @@
       return { key, deposits, withdrawals, net: normalizeZero(deposits - withdrawals) };
     }
 
-    function renderDashboard(rows) {
-      const local = getLocalModuleBundle();
-      const normalized = rows.filter(row => {
-        const name = row.module === "cash" ? "cash_savings" : row.module;
-        return state.investmentStores.has(name) || moduleHasData(name, local[name]);
-      }).map(row => ({
-        ...row,
-        module: String(row.module || "").toLowerCase(),
-        valueTwd: toTwd(row.current_value, row.currency),
-        contributedTwd: toTwd(row.total_contributed, row.currency),
-        profitTwd: toTwd(row.profit_loss, row.currency)
-      }));
+    const investmentNames = ["etf","cfd","cash_savings"];
+    function checkModuleOwner(snapshot,owner) {
+      const raw=snapshot?.raw || {};
+      const owners=[snapshot?.ownerUserId,raw.ownerUserId,snapshot?.budgetReporting?.ownerId,
+        raw.cashReport?.ownerId,raw.statementSettings?.ownerId,raw.budgetReportSettings?.ownerId];
+      for(const records of [raw.records,raw.transactions,raw.funding]) {
+        if(Array.isArray(records)) for(const record of records) if(record?.budgetLink) owners.push(record.budgetOwner || "unassigned");
+      }
+      if(owners.some(id=>id && id!==owner)) throw Error("Module data belongs to a different account.");
+    }
 
-      const totals = normalized.reduce((sum, row) => ({
-        value: sum.value + row.valueTwd,
-        contributed: sum.contributed + row.contributedTwd
-      }), { value: 0, contributed: 0 });
-      totals.value = normalizeZero(totals.value);
-      totals.contributed = normalizeZero(totals.contributed);
-      totals.profit = normalizeZero(totals.value - totals.contributed);
-      totals.roi = totals.contributed > ZERO_EPSILON ? normalizeZero(totals.profit / totals.contributed * 100) : 0;
-      state.totals = totals;
+    function verifiedModule(name) {
+      if(!state.cloudStoreCountKnown || !state.investmentStores.has(name) || !state.session?.userId) return null;
+      budgetKey();
+      const entry=AurumCloud.module.getCached(name);
+      if(!entry?.state || entry.dirty) return null;
+      checkModuleOwner(entry.state,state.session.userId);
+      return entry.state;
+    }
 
-      $("totalNetWorth").textContent = normalized.length === 3 ? formatTwd(totals.value) : "Incomplete";
-      $("totalContributed").textContent = normalized.length === 3 ? formatTwd(totals.contributed) : "—";
-      $("totalProfitLoss").textContent = normalized.length === 3 ? formatTwd(totals.profit) : "—";
-      $("overallRoi").textContent = normalized.length === 3 ? formatPlainPercent(totals.roi) : "—";
-
-      ["etf", "cfd", "cash"].forEach(module => {
-        const matches = normalized.filter(row => row.module === module || (module === "cash" && row.module === "cash_savings"));
-        const value = matches.reduce((sum, row) => sum + row.valueTwd, 0);
-        const profit = matches.reduce((sum, row) => sum + row.profitTwd, 0);
-        $(`${module}Value`).textContent = matches.length ? formatTwd(value) : "Unavailable";
-        $(`${module}Subvalue`).textContent = matches.length ? (matches[0].detail || `Profit / loss ${formatTwd(profit)}`) : "No module records found";
+    function publishedRows() {
+      return investmentNames.map(name=>{
+        const snapshot=verifiedModule(name), summary=snapshot?.publishedSummary;
+        const valid=summary && [name,name==="cash_savings"?"cash":name].includes(summary.module);
+        if(!valid) return {module:name,detail:"Load the module and publish its summary."};
+        const row={...summary,module:name};
+        if(name==="cfd" && Array.isArray(snapshot.raw?.funding)){
+          let net=0;
+          for(const r of snapshot.raw.funding){
+            const kind=normalizedToken(r.type);
+            if(!["deposit","withdrawal"].includes(kind)) continue;
+            const basis=directTransactionTwdBasis(r) || (r.budgetLink?.base==="TWD"?r.budgetLink.amount*r.budgetLink.rate:0) || Number(r.amount)*Number(r.fxRateTwdAtTransaction);
+            if(!(basis>0) || !Number.isFinite(basis)){net=null;break;}
+            net+=(kind==="deposit"?1:-1)*basis;
+          }
+          row.contributedTwd=Number.isFinite(summary.total_contributed) && (snapshot.raw.funding.length || summary.total_contributed===0)?net:null;
+        }
+        return row;
       });
+    }
+
+    function reportingTwd(amount,currency) {
+      if(!Number.isFinite(amount)) return null;
+      if(["TWD","NTD"].includes(currency)) return amount;
+      const rate=state.rates?.rates?.[currency];
+      if(!["USD","SZL"].includes(currency) || !(rate>0) || !Number.isFinite(rate)) return null;
+      const age=Date.now()-Date.parse(state.rates.updatedAt);
+      return age>=0 && age<=7*86400000 ? amount/rate : null;
+    }
+
+    function investmentTotals(rows) {
+      const sum=(field,names)=> {
+        const values=names.map(name=>{
+          const row=rows.find(r=>r.module===name);
+          if(row && field==="total_contributed" && Object.hasOwn(row,"contributedTwd")) return row.contributedTwd;
+          return row && (field==="total_contributed" || row.valuationComplete!==false)
+            ? reportingTwd(row[field],row.currency) : null;
+        });
+        return values.every(Number.isFinite)?values.reduce((a,b)=>a+b,0):null;
+      };
+      const value=sum("current_value",investmentNames), contributed=sum("total_contributed",investmentNames);
+      const profit=sum("profit_loss",["etf","cfd"]), tradingCapital=sum("total_contributed",["etf","cfd"]);
+      return {value,contributed,profit,roi:profit!==null && tradingCapital>0?100*profit/tradingCapital:null};
+    }
+
+    function reportLines(name,feed,profile,day) {
+      if(!profile || feed?.version!==1 || feed.ownerId!==state.session.userId || feed.currency!==profile.mainCurrency || !Array.isArray(feed.funding))
+        return name+" · funding and period report unavailable";
+      const local=(profile.moduleFunding||[]).filter(r=>r.module===name && r.date<=day);
+      const remote=feed.funding.filter(r=>r?.date<=day), issues=[];
+      for(const id of new Set([...local,...remote].map(r=>r.id))) {
+        const a=local.filter(r=>r.id===id),b=remote.filter(r=>r.id===id);
+        if(a.length!==1 || b.length!==1 || !profile.accounts.some(ac=>ac.id===a[0].accountId) ||
+          ["kind","date","module","accountId","currency","base","rate","amount","fee"].some(k=>a[0][k]!==b[0][k])) issues.push(id||"missing ID");
+      }
+      const notes=[name,issues.length?"Review funding: "+issues.join(", "):local.length+" matched funding movement(s)"];
+      const periods=(feed.periods||[]).filter(r=>r.from===day.slice(0,7)+"-01" && r.to===day);
+      const r=periods[0];
+      if(periods.length===1 && ["opening","closing","deposits","withdrawals","realized","unrealized","fx","fees"].every(k=>Number.isFinite(r[k]))) {
+        const delta=Math.round((r.closing-r.opening-r.deposits+r.withdrawals-r.realized-r.unrealized-r.fx+r.fees)*100)/100;
+        notes.push(feed.currency+" · realized "+r.realized+" · unrealized "+r.unrealized+" · FX "+r.fx+" · fees "+r.fees+" · reconciliation difference "+delta);
+        if(r.openingDifference || r.closingDifference) notes.push("Review broker endpoint differences");
+        if(r.sources?.length) notes.push("Source: "+r.sources.at(-1).reference);
+      } else notes.push("Month-to-date statement pending");
+      return notes.join(" · ");
+    }
+
+    function renderDashboard(rows) {
+      const t=state.totals=investmentTotals(rows);
+      const money=n=>Number.isFinite(n)?formatTwd(n):"Unavailable";
+      $("totalNetWorth").textContent=money(t.value);
+      $("totalContributed").textContent=money(t.contributed);
+      $("totalProfitLoss").textContent=money(t.profit);
+      $("overallRoi").textContent=Number.isFinite(t.roi)?formatPlainPercent(t.roi):"—";
+      for(const row of rows) {
+        const id=row.module==="cash_savings"?"cash":row.module;
+        $(id+"Value").textContent=money(row.valuationComplete===false?null:reportingTwd(row.current_value,row.currency));
+        $(id+"Subvalue").textContent=id==="cash"?"Savings FX · "+money(reportingTwd(row.profit_loss,row.currency)):row.detail||"Published module summary";
+      }
+      const profile=state.budgetStatus==="Loaded from cloud" && state.cloudStoreCountKnown && !localStorage.getItem(budgetKey()+":draft") && !localStorage.getItem(budgetKey()+":conflict") ? deviceBudget()?.store.profiles[0]:null;
+      const d=new Date(),day=monthKey(d)+"-"+String(d.getDate()).padStart(2,"0");
+      $("correlationStatus").textContent=investmentNames.map(name=>reportLines(name,verifiedModule(name)?.budgetReporting,profile,day)).join("\n");
     }
 
     function bundleFingerprint(bundle = getLocalModuleBundle()) {
@@ -1835,12 +1920,12 @@
       renderBudgetCard();
       const bundle = getLocalModuleBundle();
       state.analysisPeriodKey = activeAnalysisMonthKey(bundle);
-      const summaries = [calculateEtfSummary(bundle.etf), calculateCfdSummary(bundle.cfd), calculateCashSummary(bundle.cash_savings)];
+      const summaries = publishedRows();
       // This card reports authenticated Supabase stores, not whether a local
       // module currently contains transactions. Empty modules are still valid
       // cloud stores and must not make a confirmed 3/3 result fall back to 2/3.
       renderCloudStoreCount();
-      state.currentFlows = calculateCurrentMonthFlows(bundle, state.analysisPeriodKey);
+      state.currentFlows = verifiedFlows(state.analysisPeriodKey);
       $("monthDeposits").textContent = formatTwd(state.currentFlows.deposits);
       $("monthWithdrawals").textContent = formatTwd(state.currentFlows.withdrawals);
       if ($("monthDepositsNote")) $("monthDepositsNote").textContent = `${monthLabel(state.analysisPeriodKey)} · transaction-time NTD basis`;
@@ -1851,11 +1936,14 @@
 
     async function refreshDashboard(options = {}) {
       if (!state.session?.userId) return;
+      const owner=state.session.userId;
       $("refreshButton").disabled = true;
       $("refreshButton").textContent = "Updating…";
       try {
         if (!state.rates || options.refreshRates) await updateExchangeRates();
+        budgetKey(owner);
         state.summaries = await loadModuleSummaries();
+        budgetKey(owner);
         renderDashboard(state.summaries);
         const currentFingerprint = bundleFingerprint();
         if (state.lastObservedFingerprint && currentFingerprint !== state.lastObservedFingerprint && !state.suppressAutoSave && options.detectChanges !== false) {
@@ -1952,13 +2040,14 @@
       const owner = state.session.userId;
       state.cloudStoreCountKnown = false;
       state.budgetStatus = "Cloud load unverified";
-      const merge = options.merge !== false;
+      
       setSyncState("Loading all modules…");
       setCloudStatus("warn", "Loading from cloud");
       state.suppressAutoSave = true;
 
       try {
         if (state.conflictLock) {
+          if(options.initial || !confirm("Use the cloud revision and discard the conflicting queued edits? Cancel to export a backup first.")) throw Error("Cloud conflict pending.");
           const conflictedModules = state.conflictModules.filter(name => Object.values(MODULE_NAMES).includes(name));
           discardPendingCloudModuleWrites(conflictedModules.length ? conflictedModules : Object.values(MODULE_NAMES));
           state.conflictLock = false;
@@ -1969,13 +2058,18 @@
         state.investmentStores.clear();
         const cloudRawByModule = {};
         for (const moduleName of [MODULE_NAMES.etf, MODULE_NAMES.cfd, MODULE_NAMES.cash]) {
-          const envelope = await getCloudModuleEnvelope(moduleName, { acceptCloudOnConflict: true });
+          const envelope = await getCloudModuleEnvelope(moduleName, { acceptCloudOnConflict: false });
           budgetKey(owner);
-          if (envelope && envelope.source !== "cloud") throw new Error(moduleName + " returned a device copy. Retry the cloud load.");
+          if(!AurumCloud.getStatus().online) throw Error("Connection interrupted while loading modules.");
+          if (envelope && (envelope.source !== "cloud" || envelope.dirty)) throw new Error(moduleName + " returned a device copy. Retry the cloud load.");
           if (envelope?.state) {
+            checkModuleOwner(envelope.state,owner);
             const cloudRaw = extractCloudRaw(moduleName, envelope.state);
             cloudRawByModule[moduleName] = deepClone(cloudRaw);
-            applyCloudModuleToLocal(moduleName, envelope.state, merge);
+            const deviceRaw=getLocalModuleBundle()[moduleName];
+            // On startup preserve any device-only ledger until the owner chooses Load All.
+            if(!options.initial || !moduleHasData(moduleName,deviceRaw))
+              applyCloudModuleToLocal(moduleName,envelope.state,false);
             state.investmentStores.add(moduleName);
             found++;
           }
@@ -1986,7 +2080,9 @@
         // are derived and are not copied into a section ledger. Without this
         // read, the first Unified save after opening the dashboard can use an
         // empty/stale base revision and correctly trigger conflict protection.
-        await getCloudModuleEnvelope(MODULE_NAMES.unified, { acceptCloudOnConflict: true });
+        const unifiedEnvelope=await getCloudModuleEnvelope(MODULE_NAMES.unified, { acceptCloudOnConflict: false });
+        budgetKey(owner);
+        if(unifiedEnvelope && (unifiedEnvelope.source!=="cloud" || unifiedEnvelope.dirty)) throw Error("Unified cloud revision unavailable.");
 
         if (await loadBudget(owner)) found++;
         state.cloudStoreCount = found;
@@ -1997,7 +2093,7 @@
         const needsUpload = [MODULE_NAMES.etf, MODULE_NAMES.cfd, MODULE_NAMES.cash].some(moduleName => {
           const localRaw = localAfterLoad[moduleName];
           const cloudRaw = cloudRawByModule[moduleName];
-          if (!cloudRaw) return moduleHasData(moduleName, localRaw);
+          if (!cloudRaw) return false;
           return stableStringify(localRaw) !== stableStringify(cloudRaw);
         });
         state.lastObservedFingerprint = bundleFingerprint(localAfterLoad);
@@ -2005,11 +2101,12 @@
         state.conflictLock = false;
         state.conflictModules = [];
         await refreshDashboard({ detectChanges: false, reason: "cloud-load" });
-        setSyncState(needsUpload ? "Loaded · local migration changes pending" : "Loaded from cloud");
-        showToast("Cloud load complete", `${found}/4 module states were found${needsUpload ? " · local module data still needs synchronization" : ""}.`);
+        setSyncState(needsUpload ? "Loaded · device copies differ" : "Loaded from cloud");
+        showToast("Cloud load complete", `${found}/4 module states were found${needsUpload ? " · export to preserve differing device records" : ""}.`);
         return { found, needsUpload };
       } catch (error) {
         state.cloudStoreCountKnown = false;
+        state.summaries=publishedRows();renderDashboard(state.summaries);
         renderCloudStoreCount();
         throw error;
       } finally {
@@ -2033,18 +2130,11 @@
     }
 
     function stageAllCurrentModuleStates() {
-      if (!state.session?.userId || !state.cloudStoreCountKnown) return false;
-      const bundle = getLocalModuleBundle();
-      const etfSummary = calculateEtfSummary(bundle.etf);
-      const cfdSummary = calculateCfdSummary(bundle.cfd);
-      const cashSummary = calculateCashSummary(bundle.cash_savings);
-      state.summaries = [etfSummary, cfdSummary, cashSummary];
+      if (!state.session?.userId || !state.cloudStoreCountKnown || state.conflictLock) return false;
+      state.summaries=publishedRows();
       renderDashboard(state.summaries);
-      state.currentFlows = calculateCurrentMonthFlows(bundle);
-      if (state.investmentStores.has("etf") || moduleHasData("etf", bundle.etf)) AurumCloud.module.stage(MODULE_NAMES.etf, buildCloudModuleState(MODULE_NAMES.etf, bundle.etf, etfSummary), { schemaVersion: cloudSchemaVersion(MODULE_NAMES.etf) });
-      if (state.investmentStores.has("cfd") || moduleHasData("cfd", bundle.cfd)) AurumCloud.module.stage(MODULE_NAMES.cfd, buildCloudModuleState(MODULE_NAMES.cfd, bundle.cfd, cfdSummary), { schemaVersion: cloudSchemaVersion(MODULE_NAMES.cfd) });
-      if (state.investmentStores.has("cash_savings") || moduleHasData("cash_savings", bundle.cash_savings)) AurumCloud.module.stage(MODULE_NAMES.cash, buildCloudModuleState(MODULE_NAMES.cash, bundle.cash_savings, cashSummary), { schemaVersion: 1 });
-      if (state.investmentStores.size === 3) AurumCloud.module.stage(MODULE_NAMES.unified, buildUnifiedCloudState(etfSummary, cfdSummary, cashSummary), { schemaVersion: 1 });
+      if(!Number.isFinite(state.totals.value)) return false;
+      AurumCloud.module.stage(MODULE_NAMES.unified,buildUnifiedCloudState(...state.summaries),{schemaVersion:1});
       return true;
     }
 
@@ -2061,33 +2151,17 @@
 
       try {
         const bundle = getLocalModuleBundle();
-        const etfSummary = calculateEtfSummary(bundle.etf);
-        const cfdSummary = calculateCfdSummary(bundle.cfd);
-        const cashSummary = calculateCashSummary(bundle.cash_savings);
-        state.summaries = [etfSummary, cfdSummary, cashSummary];
+        if(online) await AurumCloud.sync.flush();
+        budgetKey(owner);
+        state.summaries=publishedRows();
         renderDashboard(state.summaries);
-        state.currentFlows = calculateCurrentMonthFlows(bundle);
-        $("monthDeposits").textContent = formatTwd(state.currentFlows.deposits);
-        $("monthWithdrawals").textContent = formatTwd(state.currentFlows.withdrawals);
-        const jobs = [
-          [MODULE_NAMES.etf, buildCloudModuleState(MODULE_NAMES.etf, bundle.etf, etfSummary)],
-          [MODULE_NAMES.cfd, buildCloudModuleState(MODULE_NAMES.cfd, bundle.cfd, cfdSummary)],
-          [MODULE_NAMES.cash, buildCloudModuleState(MODULE_NAMES.cash, bundle.cash_savings, cashSummary)]
-        ];
-
-        for (const [moduleName, payload] of jobs) {
+        state.currentFlows=verifiedFlows(state.analysisPeriodKey || monthKey());
+        if(!state.conflictLock && state.investmentStores.size===3 && Number.isFinite(state.totals.value)){
+          await AurumCloud.module.save(MODULE_NAMES.unified,buildUnifiedCloudState(...state.summaries),{schemaVersion:1});
           budgetKey(owner);
-          if (!state.investmentStores.has(moduleName) && !moduleHasData(moduleName, bundle[moduleName])) continue;
-          const result = await AurumCloud.module.save(moduleName, payload, { schemaVersion: cloudSchemaVersion(moduleName) });
-          budgetKey(owner);
-          if (online && !result.queued && !state.conflictLock) state.investmentStores.add(moduleName);
-          if (state.conflictLock) break;
+          if(online && !state.conflictLock) await saveCurrentMonthlySnapshot();
         }
-        if (!state.conflictLock && state.investmentStores.size === 3) {
-          await AurumCloud.module.save(MODULE_NAMES.unified, buildUnifiedCloudState(etfSummary, cfdSummary, cashSummary), { schemaVersion: 1 });
-        }
-        if (!state.conflictLock && state.investmentStores.size === 3) await saveCurrentMonthlySnapshot();
-        if (online && !state.conflictLock) await AurumCloud.sync.flush();
+        if(online && !state.conflictLock) await AurumCloud.sync.flush();
 
         state.lastSavedFingerprint = bundleFingerprint(bundle);
         state.lastObservedFingerprint = state.lastSavedFingerprint;
@@ -2105,9 +2179,16 @@
           }
           if (AurumCloud.sync.pending().length) throw new Error("Cloud writes are still queued. Retry after synchronization.");
           // Budgeting stages its own edits. Flush above, then verify its revision without resaving a stale copy.
+          for(const name of investmentNames){
+            if(!state.investmentStores.has(name) && AurumCloud.module.getCached(name)?.state){
+              const env=await AurumCloud.module.load(name);budgetKey(owner);
+              if(env?.source==="cloud" && !env.dirty && env.state){checkModuleOwner(env.state,owner);state.investmentStores.add(name);}
+            }
+          }
           state.cloudStoreCount = state.investmentStores.size + Number(await loadBudget(owner));
           setSyncState("Synced");
           state.cloudStoreCountKnown = true;
+          state.summaries=publishedRows();renderDashboard(state.summaries);
           renderCloudStoreCount();
           $("lastCloudSync").textContent = new Date().toLocaleString();
           if (!options.silent) showToast("Cloud save complete", "Investment modules synchronized. " + state.budgetStatus + ".");
@@ -2164,18 +2245,50 @@
       }, AUTO_SAVE_DELAY_MS);
     }
 
+    function verifiedFlows(key) {
+      const pending={key,deposits:null,withdrawals:null,net:null};
+      let deposits=0,withdrawals=0;
+      for(const name of investmentNames){
+        const snapshot=verifiedModule(name);
+        if(!snapshot) return pending;
+        const field={etf:"transactions",cfd:"funding",cash_savings:"records"}[name];
+        const records=snapshot.raw?.[field];
+        if(!Array.isArray(records)) return pending;
+        for(const r of records){
+          if(recordAccountingMonth(r)!==key) continue;
+          const kind=normalizedToken(r.kind||r.type);
+          let direction=kind,amount;
+          if(name==="etf"){
+            if(["buy","sell"].includes(kind) && etfCashRoute(r,kind)==="external"){
+              direction=kind==="buy"?"deposit":"withdrawal";
+              amount=Number(r.qty)*Number(r.price)+(kind==="buy"?1:-1)*Number(r.fees||0);
+            } else amount=Number(r.amount);
+          } else {
+            amount=directTransactionTwdBasis(r);
+            if(!amount && r.budgetLink?.base==="TWD") amount=r.budgetLink.amount*r.budgetLink.rate;
+            if(!amount && name==="cfd" && r.fxRateTwdAtTransaction>0) amount=r.amount*r.fxRateTwdAtTransaction;
+            if(!amount && name==="cash_savings" && r.sourceCurrency==="TWD") amount=r.sourceAmount;
+          }
+          if(!["deposit","withdrawal"].includes(direction)) continue;
+          if(!(amount>0) || !Number.isFinite(amount)) return pending;
+          if(direction==="deposit") deposits+=amount; else withdrawals+=amount;
+        }
+      }
+      return {key,deposits,withdrawals,net:deposits-withdrawals};
+    }
+
     function currentSnapshotObject(targetKey = null) {
       const key = targetKey || state.analysisPeriodKey || activeAnalysisMonthKey();
       const normalized = state.summaries.map(row => ({ ...row, module: String(row.module || "").toLowerCase(), valueTwd: toTwd(row.current_value, row.currency) }));
       const valueOf = module => normalized.filter(row => row.module === module || (module === "cash" && row.module === "cash_savings")).reduce((sum, row) => sum + row.valueTwd, 0);
-      const flow = calculateCurrentMonthFlows(getLocalModuleBundle(), key);
+      const flow = verifiedFlows(key);
       return {
         key,
         label: monthLabel(key),
         netWorth: state.totals.value,
         totalContributed: state.totals.contributed,
-        profitLoss: state.totals.profit,
-        roi: state.totals.roi,
+        profitLoss: Number.isFinite(state.totals.value) && Number.isFinite(state.totals.contributed) ? state.totals.value-state.totals.contributed : null,
+        roi: Number.isFinite(state.totals.value) && state.totals.contributed>0 ? (state.totals.value-state.totals.contributed)/state.totals.contributed*100 : null,
         etfValue: valueOf("etf"),
         cfdValue: valueOf("cfd"),
         cashValue: valueOf("cash"),
@@ -2188,7 +2301,9 @@
     }
 
     async function saveCurrentMonthlySnapshot() {
+      if(![state.totals.value,state.totals.contributed,state.totals.profit].every(Number.isFinite)) return;
       const snap = currentSnapshotObject();
+      if(!Number.isFinite(snap.netCapitalFlow) || !Number.isFinite(snap.roi) || snap.key!==monthKey()) return;
       const range = monthStartEnd(snap.key);
       const bundle = getLocalModuleBundle();
       const cash = cashAnalysisAtMonth(bundle.cash_savings, snap.key, true);
@@ -2405,7 +2520,7 @@
     }
 
     function analysisSeries() {
-      const reconstructed = reconstructedMonthlySeries();
+      const reconstructed = state.cloudStoreCountKnown && state.investmentStores.size===3 ? reconstructedMonthlySeries() : [];
       const activeKey = state.analysisPeriodKey || activeAnalysisMonthKey();
       const map = new Map(reconstructed.map(item => [item.key, deepClone(item)]));
       for (const item of state.monthlySnapshots) {
@@ -2414,7 +2529,8 @@
         map.set(item.key, deepClone(item));
       }
       const current = currentSnapshotObject(activeKey);
-      map.set(current.key, current);
+      if([current.netWorth,current.totalContributed,current.profitLoss,current.roi,current.netCapitalFlow].every(Number.isFinite)) map.set(current.key,current);
+      else map.delete(current.key);
       return [...map.values()].sort((a, b) => compareMonthKeys(a.key, b.key)).slice(-MAX_MONTHS);
     }
 
@@ -2443,8 +2559,8 @@
       const activeKey = state.analysisPeriodKey || activeAnalysisMonthKey();
       const matchedIndex = series.findIndex(item => item.key === activeKey);
       const currentIndex = matchedIndex >= 0 ? matchedIndex : Math.max(0, series.length - 1);
-      const current = series[currentIndex] || series.at(-1);
-      const previous = currentIndex > 0 ? series[currentIndex - 1] : null;
+      const current = matchedIndex>=0 ? series[currentIndex] : null;
+      const previous = current && currentIndex > 0 ? series[currentIndex - 1] : null;
 
       $("momGrowth").textContent = current?.rawGrowth == null ? "—" : formatPercent(current.rawGrowth);
       $("adjustedGrowth").textContent = current?.adjustedGrowth == null ? "—" : formatPercent(current.adjustedGrowth);
@@ -2454,7 +2570,7 @@
       setMetricTone("momGrowthCard", current?.rawGrowth);
       setMetricTone("adjustedGrowthCard", current?.adjustedGrowth);
 
-      if (current) {
+      if (current?.key===activeKey) {
         $("monthDeposits").textContent = formatTwd(current.deposits);
         $("monthWithdrawals").textContent = formatTwd(current.withdrawals);
         if ($("monthDepositsNote")) $("monthDepositsNote").textContent = `${current.label} · transaction-time NTD basis`;
@@ -2584,14 +2700,24 @@
         appVersion: window.AURUM_SUPABASE_CONFIG?.APP_VERSION || "unknown",
         exportedAt: isoNow(),
         reportingCurrency: "TWD",
-        profile: { username: state.profile?.username || state.profile?.display_name || "Investor" },
+        profile: { ownerId:state.session.userId, username: state.profile?.username || state.profile?.display_name || "Investor" },
         modules: {
-          etf: buildCloudModuleState(MODULE_NAMES.etf, bundle.etf, calculateEtfSummary(bundle.etf)),
-          cfd: buildCloudModuleState(MODULE_NAMES.cfd, bundle.cfd, calculateCfdSummary(bundle.cfd)),
-          cash_savings: buildCloudModuleState(MODULE_NAMES.cash, bundle.cash_savings, calculateCashSummary(bundle.cash_savings)),
+          ...Object.fromEntries(investmentNames.flatMap(name=>{
+            const snapshot=AurumCloud.module.getCached(name)?.state;
+            if(snapshot){
+              checkModuleOwner(snapshot,state.session.userId);
+              return [[name,deepClone(snapshot)]];
+            }
+            return moduleHasData(name,bundle[name])?[[name,{module:name,raw:deepClone(bundle[name])}]]:[];
+          })),
           ...(deviceBudget() ? { budgeting: deviceBudget() } : {}),
           unified: { schemaVersion: 1, calculationVersion: ANALYSIS_CALCULATION_VERSION, analysisPeriodKey: state.analysisPeriodKey || activeAnalysisMonthKey(), totals: deepClone(state.totals), currentMonthFlows: deepClone(state.currentFlows), updatedAt: isoNow() }
         },
+        deviceCopies:Object.fromEntries(investmentNames.flatMap(name=>{
+          const base=AurumCloud.module.getCached(name)?.state;
+          return base && moduleHasData(name,bundle[name]) && stableStringify(bundle[name])!==stableStringify(extractCloudRaw(name,base))
+            ? [[name,deepClone(bundle[name])]]:[];
+        })),
         periodSnapshots: deepClone(state.monthlySnapshots),
         security: { credentialsIncluded: false, authenticationTokensIncluded: false },
         evidence: { privateStorageFilesIncluded: false, note: "Budget records retain embedded proof attachments. CFD files remain in private Supabase Storage." }
@@ -2702,12 +2828,25 @@
 
       const modules = detectImportedModules(payload);
       const names = Object.keys(modules);
-      const cfdRaw = modules.cfd && extractCloudRaw("cfd", modules.cfd);
+      if(payload?.profile?.ownerId && payload.profile.ownerId!==owner) throw Error("Backup belongs to a different account.");
+      if(!state.cloudStoreCountKnown) throw Error("Load all modules before merging a backup.");
+      for(const name of investmentNames){
+        const incoming=modules[name] || (name==="cash_savings"?modules.cash:null);
+        if(!incoming) continue;
+        checkModuleOwner(incoming,owner);
+        if(AurumCloud.module.getCached(name)?.dirty) throw Error("Sync pending "+name+" changes before merging.");
+      }
+
+      
+      const deviceCopies=payload.deviceCopies||{};
+      for(const name of investmentNames) if(deviceCopies[name]) checkModuleOwner({raw:deviceCopies[name]},owner);
+      const includeDevice=investmentNames.some(name=>deviceCopies[name]) && confirm("Also merge the separate device copies included in this backup? They may contain older or unsynced records.");
       const cfdEvidence = modules.cfd?.raw?.evidenceIndex;
       if (cfdEvidence && Object.values(cfdEvidence).some(item => item?.storagePath && !item.storagePath.startsWith(owner + "/"))) {
         throw new Error("CFD evidence in this backup belongs to a different account.");
       }
       if (cfdEvidence && Object.keys(cfdEvidence).length && !state.cloudStoreCountKnown) throw new Error("Load all modules before restoring CFD evidence links.");
+      if (names.some(n=>!["etf","cfd","cash","cash_savings","unified","budgeting"].includes(n))) throw Error("Unrecognized module in this backup.");
       if (!names.length && !Array.isArray(payload?.periodSnapshots)) throw new Error("No recognizable ETF, CFD, Cash Savings or Unified backup data was found.");
       if (!confirm(`Merge data from ${file.name} into the currently signed-in profile? Existing records will be preserved where possible.`)) return;
 
@@ -2722,7 +2861,7 @@
           const restored = deepClone(incoming);
           restored.updatedAt = isoNow();
           // The budget is a linked ledger. Restore its IDs and recorded FX rates together.
-          const payload = { module: "budgeting", ownerId: owner, store: restored };
+          const payload = budgetPayload(restored,owner,true);
           localStorage.setItem(key + ":draft", restored.updatedAt);
           localStorage.setItem(key, JSON.stringify(restored));
           AurumCloud.module.autoSave("budgeting", payload, { delayMs: AUTO_SAVE_DELAY_MS });
@@ -2734,28 +2873,33 @@
       let importedSnapshots = 0;
       let moduleChanged = false;
       try {
-        if (modules.etf) {
-          writeEtfLocal(extractCloudRaw("etf", modules.etf) || modules.etf.raw || modules.etf, true);
-        }
-        if (modules.cfd) {
-          const ledger = writeCfdLocal(cfdRaw, true);
-          if (cfdEvidence && Object.keys(cfdEvidence).length) {
-            const snapshot = buildCloudModuleState("cfd", ledger, calculateCfdSummary(ledger, true));
-            const currentIndex = snapshot.raw.evidenceIndex || {};
-            // Restore missing references without replaying old uploads or deletions.
-            const additions = Object.entries(cfdEvidence).filter(([key, item]) =>
-              !Object.hasOwn(currentIndex, key) && item?.storagePath && !item.pendingDelete);
-            if (additions.length) {
-              snapshot.raw.evidenceIndex = { ...currentIndex, ...Object.fromEntries(additions.map(([key, item]) =>
-                [key, { ...item, pendingUpload: false, pendingDelete: false }])) };
-              AurumCloud.module.autoSave("cfd", snapshot, { schemaVersion: snapshot.schemaVersion, delayMs: AUTO_SAVE_DELAY_MS });
-              moduleChanged = true;
-            }
+        for(const name of investmentNames){
+          const incoming=modules[name] || (name==="cash_savings"?modules.cash:null);
+          if(!incoming) continue;
+          budgetKey(owner);
+          checkModuleOwner(incoming,owner);
+          const cached=AurumCloud.module.getCached(name);
+          if(cached?.dirty) throw Error("Sync pending "+name+" changes before merging.");
+          const base=cached?.state || {};
+          if(!(includeDevice && deviceCopies[name]) && stableStringify(incoming)===stableStringify(base)) continue;
+          const raw=includeDevice && deviceCopies[name]?deepMerge(extractCloudRaw(name,incoming),deviceCopies[name]):extractCloudRaw(name,incoming);
+          const writer={etf:writeEtfLocal,cfd:writeCfdLocal,cash_savings:writeCashLocal}[name];
+          const local=writer(deepMerge(extractCloudRaw(name,base)||{},raw),true);
+          const merged=authoritativeRawForCloud(name,{...(incoming.raw||{}),...(base.raw||{})},local);
+          for(const key of ["cashReport","statementSettings","budgetReportSettings"]){
+            if(incoming.raw?.[key]) merged[key]=deepMerge(incoming.raw[key],base.raw?.[key]||{});
           }
-        }
-        if (modules.cash_savings || modules.cash) {
-          const source = modules.cash_savings || modules.cash;
-          writeCashLocal(extractCloudRaw("cash_savings", source) || source.raw || source, true);
+          if(name==="cfd" && cfdEvidence) merged.evidenceIndex={...Object.fromEntries(Object.entries(cfdEvidence)
+            .filter(([,v])=>v?.storagePath && !v.pendingDelete).map(([k,v])=>[k,{...v,pendingUpload:false,pendingDelete:false}])),...base.raw?.evidenceIndex};
+          if(stableStringify(merged)===stableStringify(base.raw)) continue;
+          const exact=stableStringify(merged)===stableStringify(incoming.raw);
+          const snapshot={...incoming,...base,module:name,raw:merged,updatedAt:isoNow(),
+            budgetReporting:exact?incoming.budgetReporting||null:null,
+            publishedSummary:exact?incoming.publishedSummary||null:null};
+          if(!exact) { snapshot.summary=null; snapshot.raw.summary=null; }
+          snapshot.schemaVersion=Math.max(cloudSchemaVersion(name),Number(incoming.schemaVersion)||0);
+          AurumCloud.module.autoSave(name,snapshot,{schemaVersion:snapshot.schemaVersion,delayMs:AUTO_SAVE_DELAY_MS});
+          moduleChanged=true;
         }
         importedSnapshots = await importPeriodSnapshots(payload.periodSnapshots || []);
         await loadMonthlySnapshots();
@@ -2764,7 +2908,7 @@
         state.lastObservedFingerprint = afterFingerprint;
         await refreshDashboard({ detectChanges: false, reason: "json-import" });
         if (moduleChanged) {
-          showToast("JSON merge complete", `${names.length || 0} module area(s) merged${importedSnapshots ? ` · ${importedSnapshots} changed monthly snapshot(s) imported` : ""}. Auto-save will run in 10 seconds.`);
+          showToast("JSON merge complete", `${names.length || 0} module area(s) merged${importedSnapshots ? ` · ${importedSnapshots} changed monthly snapshot(s) imported` : ""}. Auto-save will run in 10 seconds. Open each changed investment module and load its ledger to refresh derived reports.`);
         } else if (importedSnapshots) {
           setSyncState("Snapshot history updated · module data unchanged");
           showToast("JSON history updated", `${importedSnapshots} changed monthly snapshot(s) imported. Module data was already identical, so no unnecessary module save was scheduled.`);
@@ -2992,9 +3136,7 @@
       }
 
       state.lastObservedFingerprint = bundleFingerprint();
-      if (initialLoad?.needsUpload) {
-        scheduleAutoSave("Local module migration pending");
-      }
+      if(initialLoad?.needsUpload) showToast("Device records differ","Export All JSON to preserve the device copy. Load All replaces the local ledgers with the cloud copies.");
       startIdleTimer();
       updateStatusFromCloud();
     }
@@ -3149,7 +3291,7 @@
 
     window.addEventListener("storage", event => {
       if (!state.session?.userId || !event.key) return;
-      if (event.key.startsWith(budgetKey())) renderBudgetCard();
+      if (event.key.startsWith(budgetKey())) {renderBudgetCard();renderDashboard(publishedRows());}
       if (Object.values(MODULE_STORAGE).some(base => event.key === moduleStorageKey(base))) {
         refreshDashboard({ reason: "module storage changed" }).catch(() => null);
       }

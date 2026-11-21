@@ -80,6 +80,15 @@
 
   <div class="panel hidden" id="holdings"><div class="panelhead"><div><span class="cap">HOLDINGS</span><h3>Current positions</h3></div><small>FIFO cost basis · online/saved/manual price fallback</small></div><div class="scroll"><table><thead><tr><th>ETF</th><th>UNITS</th><th>AVG. FIFO COST</th><th>MARKET PRICE</th><th>MARKET VALUE</th><th>TOTAL RETURN</th><th>PRICE</th></tr></thead><tbody id="holdbody"></tbody></table><div class="empty" id="holdempty">No holdings yet. Add a cash deposit and your first ETF purchase.</div></div></div>
 
+<details class="panel"><summary><b>Budgeting funding and statements</b></summary>
+<p>Record reserve deposits, withdrawals, external purchases and external sale proceeds in <a href="../budgeting/index.html">Budgeting → Transfers</a>. Link each movement once. Purchases or sales using ETF reserve cash stay inside the portfolio.</p>
+<button type="button" class="btn" id="loadBudgetRefs">Load Budgeting references</button><p id="etfBudgetStatus" role="status">References have not been loaded.</p>
+<div class="grid"><label>Existing ETF posting<select id="attachRecord"></select></label><label>Funding reference<select id="attachRef"></select></label><label>TWD per transfer currency, if neither currency is TWD<input id="attachRate" type="number" step="any"></label></div>
+<button class="btn" type="button" id="attachBtn">Match or update posting</button>
+<h3>Prepare dated statements</h3><div class="grid"><label>Period beginning<input id="reportStart" type="date"></label><label>As at<input id="reportEnd" type="date"></label>
+<label>Observation date<input id="valuationDate" type="date"></label><label>Reporting currency per TWD<input id="statementFx" type="number" step="any"></label><label>ETF ticker<input id="statementTicker"></label><label>Market price on observation date (TWD)<input id="statementPrice" type="number" step="any"></label><label>Cathay closing equity including reserve (TWD, optional)<input id="statementEquity" type="number" step="any"></label></div>
+<button class="btn" type="button" id="reportBtn">Save observations and prepare period</button><p id="statementStatus" role="status"></p>
+<label>Find transaction ID, funding reference or dated statement reference<input id="traceRef" type="text"></label><button class="btn" id="traceBtn" type="button">Find source record</button><p id="traceStatus"></p></details>
   <div class="panel hidden" id="transactions"><div class="panelhead"><div><span class="cap">LEDGER</span><h3>All ETF and cash transactions</h3></div><div><button class="btn" type="button" data-quick-add="deposit">＋ Deposit</button><button class="btn" type="button" data-quick-add="withdrawal">− Withdraw</button><button class="btn" type="button" data-quick-add="fee">Fee</button><button class="btn" type="button" data-quick-add="buy">Buy ETF</button><button class="btn" type="button" data-quick-add="sell">Sell</button><button class="btn" type="button" data-quick-add="dividend">Dividend</button></div></div><div class="scroll"><table><thead><tr><th>DATE</th><th>TYPE</th><th>ETF / NOTE</th><th>UNITS</th><th>EXECUTION PRICE / UNIT</th><th>EFFECTIVE COST / UNIT</th><th>TOTAL CASH MOVEMENT</th><th></th></tr></thead><tbody id="txbody"></tbody></table><div class="empty" id="txempty">No transactions recorded.</div></div></div>
 
   <div id="monthly" class="panel hidden"><div class="panelhead"><div><span class="cap">MONTHLY ANALYSIS</span><h3>ROI and portfolio net worth</h3></div><small>Capital-normalized monthly ROI removes deposits/withdrawals and prevents late-month cash flows from overstating performance</small></div><div class="scroll"><table><thead><tr><th>MONTH</th><th>DEPOSITS</th><th>WITHDRAWALS</th><th>PURCHASES</th><th>SALES</th><th>DIVIDENDS</th><th>FEES</th><th>NET WORTH</th><th>MONTHLY P/L</th><th>MONTHLY ROI</th><th>VALUE BASIS</th></tr></thead><tbody id="monthlyBody"></tbody></table><div class="empty" id="monthlyEmpty">Monthly analysis appears after transactions are recorded.</div></div><p class="data-note"><strong>*</strong> current provisional month · <strong>~</strong> historical estimate where no dated market-price snapshot exists. Purchases and sales are internal asset transfers; monthly P/L removes only external deposits/withdrawals. Market price history is stored with the ETF module in Supabase.</p></div>
@@ -92,7 +101,8 @@
 </section>
 </div>
 
-<div class="shade" id="shade"><form id="form"><div class="formhead"><div><span class="cap">NEW TRANSACTION</span><h2 id="formtitle">ETF Purchase</h2></div><button class="btn" type="button" data-close-form>×</button></div><input id="kind" type="hidden"><div class="grid"><label>Date<input id="date" type="date" required></label><div id="etffields" style="display:contents"><label>ETF<select id="ticker"></select></label><label>ETF name<input id="name" readonly></label><label>Exchange<input id="exchange" readonly value="TWSE"></label><label id="cashRouteWrap"><span id="cashRouteLabel">Purchase funding source</span><select id="cashRoute"><option value="external">External purchase account (normal)</option><option value="reserve">ETF reserve cash (special)</option></select></label><label id="purchaseTotalWrap">Total cash used, including fees<input id="purchaseTotal" type="number" min="0" step="any" placeholder="Total paid for the ETF purchase"></label><label id="qtyWrap">Units<input id="qty" type="number" min="0" step="any"></label><label id="priceWrap">Actual Cathay execution price / unit<input id="price" type="number" min="0" step="any"></label><label id="feesWrap">Trading fees<input id="txfees" type="number" min="0" step="any" value="0"></label><div class="pricehelper"><div><span class="cap">CURRENT VALUATION PRICE</span><b id="onlineUnitPrice">Select an ETF to check the latest price.</b><small>Online Taiwan-market data has first authority. Manual Cathay and execution prices are preserved as fallbacks without changing historical purchase costs.</small></div><div><span class="cap" id="executionPriceLabel">EXECUTION PRICE / UNIT</span><b id="executionUnitPrice">NT$0</b><small id="executionPriceHelp">The actual price paid for one ETF unit before fees.</small></div><div><span class="cap" id="effectiveCostLabel">EFFECTIVE COST / UNIT</span><b id="effectiveUnitCost">NT$0</b><small id="effectiveCostHelp">For purchases: (units × execution price + buy fees) ÷ units.</small></div><div><span class="cap" id="cashMovementLabel">TOTAL PURCHASE COST / NET SALE PROCEEDS</span><b id="tradeCashMovement">NT$0</b><small id="cashMovementHelp">The selected route decides whether ETF reserve cash changes.</small></div><div><span class="cap">AVAILABLE ETF RESERVE CASH</span><b id="availableFormCash">NT$0</b><small>Emergency/backup ETF cash. It changes only when the special reserve-cash route is selected, or for deposits, withdrawals, dividends and cash fees.</small></div><div><span class="cap">UNITS OWNED ON DATE</span><b id="unitsOwnedPreview">0</b><small id="unitsOwnedHelp">For sales, the requested units cannot exceed the units owned on the selected date.</small></div><div><span class="cap">ETF RESERVE CASH AFTER TRANSACTION</span><b id="cashAfterTrade">NT$0</b><small id="cashAfterHelp">Normal external trades do not change ETF reserve cash.</small></div></div></div><label id="amountwrap">Amount<input id="amount" type="number" min="0" step="any"></label><label>Currency<select id="currency"><option value="TWD">NTD (TWD)</option></select></label><label class="wide">Note<input id="note"></label></div><div class="formactions"><button class="btn" type="button" data-close-form>Cancel</button><button class="btn primary" type="submit" data-mutation>Save transaction</button></div></form></div>
+<div class="shade" id="shade"><form id="form"><div class="formhead"><div><span class="cap">NEW TRANSACTION</span><h2 id="formtitle">ETF Purchase</h2></div><button class="btn" type="button" data-close-form>×</button></div><input id="kind" type="hidden"><fieldset id="bookingFields" hidden><label>Budgeting movement<select id="bookingRef"></select></label>
+<label>TWD per source currency when neither currency is TWD<input id="postingRate" type="number" step="any"></label><button class="btn" type="button" id="formLoadRefs">Load references</button></fieldset><div class="grid"><label>Date<input id="date" type="date" required></label><div id="etffields" style="display:contents"><label>ETF<select id="ticker"></select></label><label>ETF name<input id="name" readonly></label><label>Exchange<input id="exchange" readonly value="TWSE"></label><label id="cashRouteWrap"><span id="cashRouteLabel">Purchase funding source</span><select id="cashRoute"><option value="external">External purchase account (normal)</option><option value="reserve">ETF reserve cash (special)</option></select></label><label id="purchaseTotalWrap">Total cash used, including fees<input id="purchaseTotal" type="number" min="0" step="any" placeholder="Total paid for the ETF purchase"></label><label id="qtyWrap">Units<input id="qty" type="number" min="0" step="any"></label><label id="priceWrap">Actual Cathay execution price / unit<input id="price" type="number" min="0" step="any"></label><label id="feesWrap">Trading fees<input id="txfees" type="number" min="0" step="any" value="0"></label><div class="pricehelper"><div><span class="cap">CURRENT VALUATION PRICE</span><b id="onlineUnitPrice">Select an ETF to check the latest price.</b><small>Online Taiwan-market data has first authority. Manual Cathay and execution prices are preserved as fallbacks without changing historical purchase costs.</small></div><div><span class="cap" id="executionPriceLabel">EXECUTION PRICE / UNIT</span><b id="executionUnitPrice">NT$0</b><small id="executionPriceHelp">The actual price paid for one ETF unit before fees.</small></div><div><span class="cap" id="effectiveCostLabel">EFFECTIVE COST / UNIT</span><b id="effectiveUnitCost">NT$0</b><small id="effectiveCostHelp">For purchases: (units × execution price + buy fees) ÷ units.</small></div><div><span class="cap" id="cashMovementLabel">TOTAL PURCHASE COST / NET SALE PROCEEDS</span><b id="tradeCashMovement">NT$0</b><small id="cashMovementHelp">The selected route decides whether ETF reserve cash changes.</small></div><div><span class="cap">AVAILABLE ETF RESERVE CASH</span><b id="availableFormCash">NT$0</b><small>Emergency/backup ETF cash. It changes only when the special reserve-cash route is selected, or for deposits, withdrawals, dividends and cash fees.</small></div><div><span class="cap">UNITS OWNED ON DATE</span><b id="unitsOwnedPreview">0</b><small id="unitsOwnedHelp">For sales, the requested units cannot exceed the units owned on the selected date.</small></div><div><span class="cap">ETF RESERVE CASH AFTER TRANSACTION</span><b id="cashAfterTrade">NT$0</b><small id="cashAfterHelp">Normal external trades do not change ETF reserve cash.</small></div></div></div><label id="amountwrap">Amount<input id="amount" type="number" min="0" step="any"></label><label>Currency<select id="currency"><option value="TWD">NTD (TWD)</option></select></label><label class="wide">Note<input id="note"></label></div><div class="formactions"><button class="btn" type="button" data-close-form>Cancel</button><button class="btn primary" type="submit" data-mutation>Save transaction</button></div></form></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../../shared/supabase-config.js"></script>
 <script src="../../shared/aurum-cloud.js"></script>
@@ -575,10 +585,11 @@
     // A successfully obtained online quote always has valuation authority.
     // Manual and execution prices are retained independently as offline fallbacks.
     if (online) return {...online, estimated:false};
-    const fallbackCandidates=[manual,legacySaved,execution].filter(quote=>quote?.price>0);
+    if (manual) return {...manual, estimated:false};
+    const fallbackCandidates=[legacySaved,execution].filter(quote=>quote?.price>0);
     if(fallbackCandidates.length){
       const chosen=fallbackCandidates.reduce((best,quote)=>quoteTimestamp(quote)>=quoteTimestamp(best)?quote:best);
-      return {...chosen,estimated:false};
+      return {...chosen,estimated:true};
     }
     if (fallbackPrice > 0) return {price:fallbackPrice,previousClose:fallbackPrice,change:0,source:'Cost fallback',updated:null,estimated:true};
     return {price:0,previousClose:0,change:0,source:'Unavailable',updated:null,estimated:true};
@@ -672,7 +683,7 @@
       if (q?.price > 0) candidate = q;
     }
     if (cutoff >= localDate()) return currentValuationQuote(normalizedTicker, executionRecord, latestFallback);
-    if (candidate) return { ...candidate, estimated:false };
+    if (candidate) return { ...candidate, estimated:!(isOnlineQuote(candidate)||/manual/i.test(candidate.source||'')) };
     if (latestFallback > 0) return { price:latestFallback, previousClose:latestFallback, change:0, source:'Historical transaction fallback', updated:null, estimated:true };
     return { price:0, previousClose:0, change:0, source:'Unavailable', updated:null, estimated:true };
   }
@@ -763,6 +774,7 @@
         const proceeds = soldQty * price - txFees;
         if (proceeds < -EPS) violations.push({type:'negative-sale-proceeds',record,shortage:Math.abs(proceeds)});
         const pnl = proceeds - soldCost;
+        options.realizations?.set(record.id,pnl);
         book.realised += pnl;
         realised += pnl;
         book.lastTradePrice = price;
@@ -853,19 +865,20 @@
 
   function buildSummary() {
     const d = computePortfolio();
-    const lastQuote = Math.max(0, ...Object.values(runtime.quotes).map(q => new Date(q.updated || 0).getTime()).filter(Number.isFinite));
+    const complete = !d.estimated && !d.violations.length;
+    const lastQuote = Math.max(0, ...[...Object.values(runtime.quotes),...Object.values(runtime.manualQuotes)].map(q => new Date(q.updated || 0).getTime()).filter(Number.isFinite));
     const summary = {
       module:'etf', moduleId:'etf', schemaVersion:MODULE.schemaVersion, label:MODULE.name,
       region:MODULE.region, broker:MODULE.broker, currency:'TWD',
-      current_value:d.net, total_contributed:d.contrib, profit_loss:d.gain,
-      netWorth:d.net, marketValue:d.market, cash:d.available, netContributions:d.contrib,
-      totalGain:d.gain, roiPercent:d.roiBase ? d.gain/d.roiBase*100 : 0,
-      realisedGain:d.realised, unrealisedGain:d.unreal, dividends:d.dividends, fees:d.fees,
+      valuationComplete:complete, current_value:complete?d.net:null, total_contributed:d.contrib, profit_loss:complete?d.gain:null,
+      netWorth:complete?d.net:null, marketValue:complete?d.market:null, cash:d.available, netContributions:d.contrib,
+      totalGain:complete?d.gain:null, roiPercent:complete?(d.roiBase ? d.gain/d.roiBase*100 : 0):null,
+      realisedGain:d.realised, unrealisedGain:complete?d.unreal:null, dividends:d.dividends, fees:d.fees,
       holdingsCount:d.holdings.length, legacyImpliedFunding:d.impliedFunding,
       externalPurchaseContributions:d.externalPurchaseContributions, externalSaleDistributions:d.externalSaleDistributions,
       lastMarketUpdate:lastQuote ? new Date(lastQuote).toISOString() : null,
       updatedAt:nowIso(), moduleUrl:ROUTES.etf,
-      detail:`${d.holdings.length} holding(s) · market ${money(d.market)} · cash ${money(d.available)}`
+      detail:`${d.holdings.length} holding(s) · market ${complete?money(d.market):"valuation pending"} · cash ${money(d.available)}`
     };
     runtime.lastRenderSummary = summary;
     return summary;
@@ -975,6 +988,7 @@
       </tr>`).join('');
     $('txempty').style.display = runtime.transactions.length ? 'none' : 'block';
 
+    refreshRecordPicker();
     renderAnalytics(d);
     renderMonthly();
     renderJourney(d);
@@ -1163,6 +1177,7 @@
     $('onlineUnitPrice').textContent = 'Select an ETF to check the latest saved/online price.';
     updateTradePreview();
     $('shade').style.display = 'grid';
+    fundingControls();fillReferences();if(!$('bookingFields').hidden)loadDirectory();
   }
 
   function hideForm() { $('shade').style.display='none'; $('form').reset(); }
@@ -1332,6 +1347,17 @@
     event.preventDefault();
     if (!ensureEditable()) return;
     const record = candidateRecordFromForm();
+    if(!record)return showMessage('Check the transaction fields.',true);
+    if(flowKind(record)){
+      if(busyPosting)return;busyPosting=true;
+      try{
+        const id=$('bookingRef').value,b=await verifiedBooking(id);
+        if(id!==$('bookingRef').value||$('shade').style.display==='none')throw Error('Review the selected transaction.');
+        const current=candidateRecordFromForm();
+        if(!current||['kind','date','qty','price','fees','amount','cashRoute','ticker','note'].some(k=>current[k]!==record[k]))throw Error('Form changed. Review and retry.');
+        Object.assign(record,applyBooking(record,b,Number($('postingRate').value)));validateLinks([...runtime.transactions,record]);
+      }catch(e){return showMessage(e.message,true);}finally{busyPosting=false;}
+    }
     const error = validateNewRecord(record);
     if (error) return showMessage(error,true,7500);
     runtime.transactions.push(record);
@@ -1667,21 +1693,226 @@
   function repairPublishedSummary(state) {
     if (!sameSession() || !runtime.verifiedCloudRead || runtime.conflictLocked) return false;
     const summary=buildSummary();
-    const keys=['module','currency','current_value','total_contributed','profit_loss'];
-    if (keys.every(key=>state.publishedSummary?.[key]===summary[key])) return false;
-    const next={...clone(state),publishedSummary:summary};
+    const keys=['module','currency','current_value','total_contributed','profit_loss','valuationComplete','lastMarketUpdate'];
+    const {feed,c}=publication();
+    if (JSON.stringify(feed)===JSON.stringify(state.budgetReporting)&&keys.every(key=>state.publishedSummary?.[key]===summary[key])) return false;
+    const next={...clone(state),raw:{...state.raw,budgetReportSettings:c},budgetReporting:feed,publishedSummary:summary};
     AurumCloud.module.autoSave(MODULE.cloudId,next,{schemaVersion:Math.max(MODULE.schemaVersion,Number(state.schemaVersion)||0),delayMs:AUTO_SAVE_MS});
     runtime.cloudBaseState=clone(next);
     setCloudStatus('pending','ETF summary queued for Budgeting and Unified Dashboard');
     return true;
   }
 
+  // The bank and broker each own one side of an external movement.
+  const statementCurrencies=['TWD','USD','SZL'];
+  const cent=n=>Math.round((n+Number.EPSILON)*100)/100;
+  let directory=null,readTicket=0,busyPosting=false;
+  function flowKind(r){
+    if(r.kind==='deposit'||r.kind==='withdrawal')return r.kind;
+    if(r.cashRoute==='external'&&r.kind==='buy')return 'deposit';
+    if(r.cashRoute==='external'&&r.kind==='sell')return 'withdrawal';
+    return '';
+  }
+  function brokerAmount(r){
+    if(r.kind==='buy')return cent(r.qty*r.price+r.fees);
+    if(r.kind==='sell')return cent(r.qty*r.price-r.fees);
+    return cent(r.amount);
+  }
+  function validBooking(b){
+    return b?.module==='etf'&&typeof b.id==='string'&&b.id&&typeof b.accountId==='string'&&b.accountId&&
+      ['deposit','withdrawal'].includes(b.kind)&&isValidCalendarDate(b.date)&&statementCurrencies.includes(b.currency)&&
+      statementCurrencies.includes(b.base)&&Number.isFinite(b.amount)&&b.amount>0&&Number.isFinite(b.fee)&&b.fee>=0&&Number.isFinite(b.rate)&&b.rate>0;
+  }
+  function observed(r){
+    const b=r.budgetLink;
+    if(!validBooking(b)||r.budgetOwner!==runtime.user?.id)return {id:'legacy-etf:'+r.id,date:r.date};
+    const fx=b.currency==='TWD'?1:b.base==='TWD'?b.rate:r.budgetTwdRate;
+    const broker=brokerAmount(r);
+    const amount=fx>0&&cent(b.amount*fx)===broker?b.amount:null;
+    return {...b,date:r.date,kind:flowKind(r),amount};
+  }
+  function sameBooking(a,b){return a&&b&&['id','module','accountId','kind','date','base','currency','rate','amount','fee'].every(k=>a[k]===b[k]);}
+  function validateLinks(rows){
+    const refs=new Set(),ids=new Set();
+    for(const r of rows){
+      if(ids.has(r.id))throw Error('Duplicate ETF transaction ID. Review the ledger before merging.');
+      ids.add(r.id);
+      if(!r.budgetLink)continue;
+      if(!validBooking(r.budgetLink)||r.budgetOwner!==runtime.user?.id||refs.has(r.budgetLink.id)||!sameBooking(observed(r),r.budgetLink))throw Error('Invalid, duplicate, or other-user ETF funding reference.');
+      refs.add(r.budgetLink.id);
+    }
+  }
+  function fillReferences(){
+    for(const id of ['bookingRef','attachRef']){
+      const sel=$(id),old=sel.value;
+      sel.replaceChildren(new Option('Select a Budgeting movement',''));
+      for(const b of directory?.funding||[]){
+        const used=runtime.transactions.find(r=>r.budgetLink?.id===b.id);
+        if(used&&(id==='bookingRef'||used.id!==$('attachRecord').value))continue;
+        sel.add(new Option(b.date+' · '+directory.accounts.find(a=>a.id===b.accountId).name+' · '+b.kind+' '+b.amount+' '+b.currency+' · '+b.id,b.id));
+      }
+      sel.value=old;
+    }
+  }
+  function fundingControls(){
+    const kind=$('kind').value,route=$('cashRoute').value;
+    $('bookingFields').hidden=!flowKind({kind,cashRoute:route});
+  }
+  async function loadDirectory(){
+    const ticket=++readTicket,owner=runtime.user?.id;
+    try{
+      const env=await AurumCloud.module.load('budgeting');
+      if(ticket!==readTicket||!sameSession()||owner!==runtime.user.id)return false;
+      const d=env?.state?.budgetFunding;
+      if(env?.source!=='cloud'||env.dirty||env.state.ownerId!==owner||d?.ownerId!==owner||d.version!==1||
+        !statementCurrencies.includes(d.currency)||!Array.isArray(d.accounts)||!Array.isArray(d.funding))throw Error('Load and save Budgeting, then reload its references.');
+      const rows=d.funding.filter(b=>b?.module==='etf');
+      if(rows.some(b=>!validBooking(b)||b.base!==d.currency||!d.accounts.some(a=>a.id===b.accountId)||
+        b.kind==='withdrawal'&&!rows.some(a=>a.kind==='deposit'&&a.accountId===b.accountId&&a.date<=b.date))||
+        new Set(rows.map(b=>b.id)).size!==rows.length)throw Error('Review invalid or duplicate ETF references in Budgeting.');
+      directory={...d,funding:rows};fillReferences();
+      const posted=runtime.transactions.filter(flowKind).map(observed);
+      const issues=[...rows.filter(b=>!posted.some(x=>sameBooking(x,b))),...posted.filter(x=>!rows.some(b=>sameBooking(x,b)))];
+      $('etfBudgetStatus').textContent=issues.length?'Review unmatched postings: '+[...new Set(issues.map(i=>i.id))].join(', '):'All ETF funding references match.';
+      return true;
+    }catch(e){if(ticket===readTicket){directory=null;fillReferences();$('etfBudgetStatus').textContent=e.message;}return false;}
+  }
+  function applyBooking(r,b,rate){
+    const next={...r,budgetLink:clone(b),budgetOwner:runtime.user.id,budgetTwdRate:b.currency==='TWD'?1:b.base==='TWD'?b.rate:rate};
+    if(!(next.budgetTwdRate>0)||!sameBooking(observed(next),b))throw Error('ETF date, direction, TWD amount and conversion must agree with the selected movement.');
+    return next;
+  }
+  async function verifiedBooking(id){
+    const expected=directory?.funding.find(b=>b.id===id);
+    if(!expected||!runtime.verifiedCloudRead||!await loadDirectory()||!ensureEditable()||!canPublishQuoteRefresh()||
+      !sameBooking(expected,directory.funding.find(b=>b.id===id)))throw Error('Reload the ETF ledger and Budgeting references, then review the movement.');
+    return expected;
+  }
+  function refreshRecordPicker(){
+    const s=$('attachRecord'),old=s.value;
+    s.replaceChildren(new Option('Select an existing ETF posting',''));
+    for(const r of runtime.transactions.filter(flowKind))s.add(new Option(r.date+' · '+r.kind+' · '+money(brokerAmount(r))+' · '+r.id,r.id));
+    s.value=old;fillReferences();
+  }
+  async function attachExisting(){
+    if(busyPosting||!ensureEditable())return;
+    busyPosting=true;
+    try{
+      const id=$('attachRecord').value,original=runtime.transactions.find(r=>r.id===id);
+      if(!original)throw Error('Select an existing ETF record.');
+      const b=await verifiedBooking($('attachRef').value);
+      if(runtime.transactions.find(r=>r.id===id)!==original||$('attachRecord').value!==id||$('attachRef').value!==b.id)throw Error('Selection changed. Review and retry.');
+      const fx=b.currency==='TWD'?1:b.base==='TWD'?b.rate:Number($('attachRate').value)||original.budgetTwdRate;
+      let record={...original};
+      if(['deposit','withdrawal'].includes(record.kind)&&record.kind===b.kind&&fx>0){
+        record.date=b.date;record.amount=cent(b.amount*fx);
+      }
+      record=applyBooking(record,b,fx);record.updatedAt=Date.now();
+      const proposed=runtime.transactions.map(r=>r.id===id?normalizeTransaction(record):r);
+      validateLinks(proposed);
+      if(!strictLedgerCheck(proposed).valid)throw Error('This change would leave an invalid chronological ETF ledger.');
+      if(!confirm('Update '+original.kind+' '+money(brokerAmount(original))+' on '+original.date+' to '+money(brokerAmount(record))+' on '+record.date+' and link '+b.id+'?'))return;
+      runtime.transactions=proposed;markLocalMutation('ETF posting matched · cloud sync pending');await loadDirectory();
+    }catch(e){showMessage(e.message,true);}finally{busyPosting=false;}
+  }
+  function settings(){
+    const old=runtime.cloudBaseState?.raw?.budgetReportSettings;
+    const c=old?.ownerId===runtime.user?.id&&runtime.user?.id?clone(old):{ownerId:runtime.user?.id,rates:{},prices:{},equity:{},ranges:[]};
+    if(directory)c.currency=directory.currency;
+    try{
+      const data=JSON.parse(localStorage.getItem('pilotprofit_fx_usd_v1'));
+      if(data?.base_code==='USD'&&data.rates?.TWD>0&&Number.isFinite(data.time_last_update_unix)){
+        const day=new Date(data.time_last_update_unix*1000).toISOString().slice(0,10);
+        for(const cur of statementCurrencies)if(data.rates[cur]>0&&day<=localDate())(c.rates[cur]||={})[day]??=data.rates[cur]/data.rates.TWD;
+      }
+    }catch{/* Dated rates may also be supplied from saved statements. */}
+    return c;
+  }
+  function statementSnapshot(records,day,c,sources,realizations){
+    const d=computePortfolio(records,{asOfDate:day,allowLegacyFunding:false,realizations});
+    if(d.violations.length)throw Error('Resolve the ETF ledger discrepancy on '+d.violations[0].record.date);
+    let market=0;
+    for(const h of d.holdings){
+      const quotes=[runtime.quotes[h.ticker],runtime.manualQuotes[h.ticker],...runtime.priceHistory.filter(s=>s.date<=day).map(s=>s.prices[h.ticker])];
+      const q=quotes.find(q=>q?.price>0&&(isOnlineQuote(q)||/manual/i.test(q.source||''))&&String(q.updated||'').slice(0,10)===day);
+      const price=c.prices[day]?.[h.ticker]??q?.price;
+      if(!(price>0))throw Error('Enter a dated market price for '+h.ticker+' on '+day);
+      market+=h.qty*price;sources.push({date:day,reference:h.ticker+' '+day,description:h.qty+' units × NT$'+price+' · FIFO cost '+money(h.cost)+' · lots '+h.openLots.map(l=>l.id).join(', ')});
+    }
+    return {...d,net:market+d.available,unreal:market-d.openCost};
+  }
+  function makePeriod(c,from,to){
+    const sources=[],prior=new Date(Date.parse(from)-86400000).toISOString().slice(0,10);
+    const converted=(n,day)=>{if(!n)return 0;const rate=c.currency==='TWD'?1:c.rates[c.currency]?.[day];if(!(rate>0))throw Error('Enter '+c.currency+' per TWD for '+day);return n*rate;};
+    const realizedById=new Map(),opening=statementSnapshot(runtime.transactions,prior,c,sources),closing=statementSnapshot(runtime.transactions,to,c,sources,realizedById);
+    const row={from,to,opening:converted(opening.net,prior),closing:converted(closing.net,to),deposits:0,withdrawals:0,fees:0,realized:0,unrealized:converted(closing.unreal-opening.unreal,to),fx:converted(opening.net,to)-converted(opening.net,prior),sources};
+    function flow(key,n,sign,r,booked){
+      const amount=booked??converted(n,r.date);
+      row[key]+=amount;row.fx+=sign*(converted(n,to)-amount);
+    }
+    for(const r of runtime.transactions){
+      if(r.date>to)continue;
+      sources.push({date:r.date,reference:r.id,description:r.kind+' · '+(r.ticker||'ETF reserve')+' · '+money(transactionDisplayAmount(r))+(r.budgetLink?' · '+r.budgetLink.id:'')});
+      if(r.date<from)continue;
+      const direction=flowKind(r),b=r.budgetLink;
+      if(direction)flow(direction==='deposit'?'deposits':'withdrawals',brokerAmount(r),direction==='deposit'?1:-1,r,b?.base===c.currency?cent(b.amount*b.rate):undefined);
+      if(r.kind==='sell')flow('realized',realizedById.get(r.id),1,r);
+      if(r.kind==='dividend')flow('realized',r.amount,1,r);
+      // Trading commissions are already in FIFO purchase cost and net sale proceeds.
+      if(r.kind==='fee')flow('fees',r.amount,-1,r);
+    }
+    for(const key of ['opening','closing','deposits','withdrawals','realized','unrealized','fx','fees'])row[key]=cent(row[key]);
+    const rounding=cent(row.closing-row.opening-row.deposits+row.withdrawals-row.realized-row.unrealized-row.fx+row.fees);
+    if(Math.abs(rounding)<=0.03)row.fx=cent(row.fx+rounding);
+    for(const [key,day] of [['opening',prior],['closing',to]])if(Number.isFinite(c.equity[day])){
+      const reported=cent(converted(c.equity[day],day));
+      row[key+'Difference']=cent(reported-row[key]);
+      row[key]=reported;sources.push({date:day,reference:'Cathay equity '+day,description:money(c.equity[day])+' including ETF reserve cash'});
+    }
+    if(row.openingDifference && row.closingDifference && Math.sign(row.openingDifference)===Math.sign(row.closingDifference)){
+      throw Error('Review broker equity against the ledger. Opening difference '+row.openingDifference+' and closing difference '+row.closingDifference+' '+c.currency+'.');
+    }
+    return row;
+  }
+  function publication(){
+    const c=settings(),day=localDate(),ranges=[{from:day.slice(0,7)+'-01',to:day},{from:day.slice(0,4)+'-01-01',to:day},...c.ranges];
+    const feed=statementCurrencies.includes(c.currency)?{version:1,ownerId:runtime.user.id,currency:c.currency,funding:runtime.transactions.filter(flowKind).map(observed),periods:[]}:null;
+    if(feed)for(const r of new Map(ranges.map(r=>[r.from+'/'+r.to,r])).values()){
+      try{feed.periods.push(makePeriod(c,r.from,r.to));}catch{/* Omit periods awaiting a dated valuation or verified ledger. */}
+    }
+    return {feed,c};
+  }
+  async function preparePeriod(){
+    if(!ensureEditable()||!await loadDirectory()||!ensureEditable()||!canPublishQuoteRefresh())return;
+    try{
+      const from=$('reportStart').value,to=$('reportEnd').value,day=$('valuationDate').value,c=settings();
+      if(!isValidCalendarDate(from)||!isValidCalendarDate(to)||from>to||to>localDate())throw Error('Choose a valid period ending today or earlier.');
+      for(const [id,map,key] of [['statementFx',c.rates,c.currency],['statementEquity',c.equity,day],['statementPrice',c.prices,day]]){
+        if(!$(id).value)continue;
+        const n=Number($(id).value);
+        if(!isValidCalendarDate(day)||day>localDate()||!Number.isFinite(n)||n<0||(id!=='statementEquity'&&n===0))throw Error('Check the observation date and value.');
+        if(id==='statementFx'&&c.currency==='TWD'&&n!==1)throw Error('TWD to TWD equals 1.');
+        let target=map,field=key;
+        if(id!=='statementEquity'){target=map[key]||={};field=id==='statementFx'?day:normalizeTicker($('statementTicker').value);if(!field)throw Error('Enter the ETF ticker for the historical price.');}
+        if(target[field]!=null&&target[field]!==n&&!confirm('Replace the saved observation for '+field+'?'))return;
+        target[field]=n;
+      }
+      if(!c.ranges.some(r=>r.from===from&&r.to===to))c.ranges.push({from,to});
+      runtime.cloudBaseState={...runtime.cloudBaseState,raw:{...runtime.cloudBaseState?.raw,budgetReportSettings:c}};
+      markLocalMutation('ETF statement settings saved · sync pending');
+      for(const id of ['statementFx','statementEquity','statementPrice'])$(id).value='';
+      const r=makePeriod(c,from,to),delta=cent(r.closing-r.opening-r.deposits+r.withdrawals-r.realized-r.unrealized-r.fx+r.fees);
+      $('statementStatus').textContent='Closing '+r.closing+' '+c.currency+' · '+(Number.isFinite(c.equity[to])?'broker equity':'ledger valuation')+' · reconciliation difference '+delta+'.';
+    }catch(e){$('statementStatus').textContent=e.message;}
+  }
+
   function buildCloudState() {
     const current=isObject(runtime.cloudBaseState)?clone(runtime.cloudBaseState):{};
     const currentRaw=isObject(current.raw)?clone(current.raw):{};
     const summary=buildSummary();
+    const {feed,c}=publication();
     const raw={
-      ...currentRaw,
+      ...currentRaw,budgetReportSettings:c,
       ownerUserId:runtime.user?.id||null,
       nativeEtfModule:true,
       transactions:clone(runtime.transactions),
@@ -1695,7 +1926,7 @@
       ...current,
       module:'etf', schemaVersion:MODULE.schemaVersion, bridgeVersion:MODULE.bridgeVersion,
       source:'etf-module', ownerUserId:runtime.user?.id||null, legacyScope:runtime.compatibilityScope,
-      raw, publishedSummary:clone(summary), updatedAt:nowIso()
+      raw,budgetReporting:feed, publishedSummary:clone(summary), updatedAt:nowIso()
     };
   }
 
@@ -1718,6 +1949,7 @@
     if (!Array.isArray(raw.transactions) && !Array.isArray(raw.tx)) throw new Error('ETF cloud ledger is incomplete. Current records were retained.');
     const normalized=transactions.map(normalizeTransaction);
     if(normalized.some(record=>!record)) throw new Error('ETF cloud ledger contains unreadable transactions.');
+    validateLinks(normalized);
     const splitQuotes=splitLegacyQuotes(raw.quotes,raw.manualQuotes||raw.manual_quotes);
     return {
       transactions:normalized.sort(compareRecords),
@@ -1867,18 +2099,35 @@
     const clean=extracted.transactions.map(normalizeTransaction).filter(Boolean);
     if(clean.length!==extracted.transactions.length) throw new Error('One or more ETF transactions in the backup are invalid.');
     if(clean.some(record=>record.date>localDate())) throw new Error('Import blocked: the backup contains one or more future-dated ETF transactions.');
-    const merged=mergeTransactions(runtime.transactions,clean);
+    const merged=mergeTransactions(runtime.transactions,clean);validateLinks(clean);validateLinks(merged);
     const beforeHealth=strictLedgerCheck(runtime.transactions), afterHealth=strictLedgerCheck(merged);
     if(!afterHealth.valid && beforeHealth.valid) throw new Error('Import blocked: the merged ledger would create negative ETF cash, an oversold holding, or invalid sale proceeds.');
     if(!afterHealth.valid && (!beforeHealth.valid || afterHealth.oversells.length>beforeHealth.oversells.length || afterHealth.negativeCash.length>beforeHealth.negativeCash.length || afterHealth.invalidSales.length>beforeHealth.invalidSales.length || afterHealth.futureDates.length>beforeHealth.futureDates.length)) throw new Error('Import blocked: the file would worsen an existing ETF ledger integrity problem.');
     if(!window.confirm(`Safely merge ${clean.length} ETF transaction(s) into the current signed-in profile? Existing newer records with the same ID will be preserved.`)) return;
+    if(!ensureEditable())return;
     runtime.transactions=merged;
     const importedQuotes=splitLegacyQuotes(extracted.quotes,extracted.manualQuotes);
     runtime.quotes=mergeQuoteMaps(importedQuotes.online,runtime.quotes);
     runtime.manualQuotes=mergeQuoteMaps(importedQuotes.manual,runtime.manualQuotes);
     runtime.journey=deepMerge(normalizeJourney(extracted.journey),runtime.journey);
     runtime.priceHistory=mergePriceHistories(normalizePriceHistory(extracted.priceHistory),runtime.priceHistory);
-    if(extracted.moduleState) runtime.cloudBaseState=deepMerge(runtime.cloudBaseState,extracted.moduleState);
+    if(extracted.moduleState){
+      const saved=settings(), imported=extracted.moduleState.raw?.budgetReportSettings;
+      if(imported?.ownerId===runtime.user.id){
+        for(const cur of statementCurrencies)for(const [day,n] of Object.entries(imported.rates?.[cur]||{})){
+          if(isValidCalendarDate(day)&&Number.isFinite(n)&&n>0)(saved.rates[cur]||={})[day]??=n;
+        }
+        for(const [day,values] of Object.entries(imported.prices||{})){
+          if(!isValidCalendarDate(day))continue;
+          for(const [ticker,n] of Object.entries(values||{}))if(/^[A-Z0-9.-]+$/.test(ticker)&&Number.isFinite(n)&&n>0)(saved.prices[day]||={})[ticker]??=n;
+        }
+        for(const [day,n] of Object.entries(imported.equity||{}))if(isValidCalendarDate(day)&&Number.isFinite(n)&&n>=0)saved.equity[day]??=n;
+        for(const r of Array.isArray(imported.ranges)?imported.ranges:[])if(isValidCalendarDate(r?.from)&&isValidCalendarDate(r?.to)&&r.from<=r.to&&!saved.ranges.some(x=>x.from===r.from&&x.to===r.to))saved.ranges.push({from:r.from,to:r.to});
+        if(!saved.currency&&statementCurrencies.includes(imported.currency))saved.currency=imported.currency;
+      }
+      runtime.cloudBaseState=deepMerge(runtime.cloudBaseState,extracted.moduleState);
+      runtime.cloudBaseState.raw={...runtime.cloudBaseState.raw,budgetReportSettings:saved};
+    }
     markLocalMutation('ETF import merged · cloud sync in 10 seconds');
     showMessage('ETF JSON merged safely. Cloud synchronization is scheduled.');
   }
@@ -1888,7 +2137,7 @@
       application:'Aurum Imperium Investment Tracker', backupVersion:9, module:'etf', schemaVersion:MODULE.schemaVersion,
       exportedAt:nowIso(), region:MODULE.region, broker:MODULE.broker, currency:'TWD',
       profile:{username:runtime.username||null},
-      raw:{transactions:clone(runtime.transactions),quotes:clone(runtime.quotes),manualQuotes:clone(runtime.manualQuotes),journey:clone(runtime.journey),priceHistory:clone(runtime.priceHistory),summary:buildSummary()},
+      raw:{budgetReportSettings:settings(),transactions:clone(runtime.transactions),quotes:clone(runtime.quotes),manualQuotes:clone(runtime.manualQuotes),journey:clone(runtime.journey),priceHistory:clone(runtime.priceHistory),summary:buildSummary()},
       publishedSummary:buildSummary(),
       security:{credentialsIncluded:false,authenticationTokensIncluded:false}
     };
@@ -1898,6 +2147,20 @@
   }
 
   function bindUi() {
+    $('loadBudgetRefs').onclick=loadDirectory;$('formLoadRefs').onclick=loadDirectory;
+    $('attachRecord').onchange=fillReferences;$('attachBtn').onclick=attachExisting;
+    $('cashRoute').addEventListener('change',fundingControls);$('reportBtn').onclick=preparePeriod;
+    $('bookingRef').onchange=()=>{
+      const b=directory?.funding.find(x=>x.id===$('bookingRef').value);if(!b)return;
+      $('date').value=b.date;const rate=b.currency==='TWD'?1:b.base==='TWD'?b.rate:Number($('postingRate').value);
+      if(['deposit','withdrawal'].includes($('kind').value)&&rate>0)$('amount').value=cent(b.amount*rate);
+      updateTradePreview();
+    };
+    $('traceBtn').onclick=()=>{const id=$('traceRef').value.trim(),r=runtime.transactions.find(r=>r.id===id||r.budgetLink?.id===id);
+      const sources=publication().feed?.periods.flatMap(p=>p.sources)||[];
+      const detail=sources.find(s=>s.reference===id);
+      $('traceStatus').textContent=r?[r.date,r.kind,r.ticker,r.qty?'Units '+r.qty:'',r.price?'Execution '+money(r.price):'',money(transactionDisplayAmount(r)),r.note,r.id].filter(Boolean).join(' · '):detail?detail.date+' · '+detail.description:'No matching ETF posting or statement reference.';};
+    $('reportStart').value=localDate().slice(0,7)+'-01';$('reportEnd').value=localDate();$('valuationDate').value=localDate();
     document.querySelectorAll('[data-tab]').forEach(btn=>btn.addEventListener('click',()=>showTab(btn.dataset.tab,btn)));
     $('addTransactionButton').addEventListener('click',event=>{event.stopPropagation();$('addMenu').classList.toggle('open');});
     document.addEventListener('click',()=>$('addMenu')?.classList.remove('open'));
@@ -2144,7 +2407,10 @@
       else if(result?.source==='cloud' && repairPublishedSummary(extractEnvelopeState(result))) showMessage('ETF reporting summary queued for synchronization.');
       else if(runtime.verifiedCloudRead)setCloudStatus('online',result?'Cloud connected · ETF synced':'Cloud connected · ETF ready');
       else setCloudStatus('pending','Using device ETF ledger · cloud load unverified');
-      if(runtime.verifiedCloudRead) maybeRefreshStalePrices();
+      if(runtime.verifiedCloudRead){
+        loadDirectory().then(ok=>{if(ok&&runtime.cloudBaseState?.module&&canPublishQuoteRefresh())repairPublishedSummary(runtime.cloudBaseState);});
+        maybeRefreshStalePrices();
+      }
     }catch(error){
       console.error('ETF initialization failed:',error);
       $('sessionGate').hidden=false;
@@ -2170,4 +2436,4 @@
 </script>
 </body>
 
-</html>```
+</html>
