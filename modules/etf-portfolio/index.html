@@ -1846,8 +1846,14 @@
     const converted=(n,day)=>{if(!n)return 0;const rate=c.currency==='TWD'?1:c.rates[c.currency]?.[day];if(!(rate>0))throw Error('Enter '+c.currency+' per TWD for '+day);return n*rate;};
     const realizedById=new Map(),opening=statementSnapshot(runtime.transactions,prior,c,sources),closing=statementSnapshot(runtime.transactions,to,c,sources,realizedById);
     const row={from,to,opening:converted(opening.net,prior),closing:converted(closing.net,to),deposits:0,withdrawals:0,fees:0,realized:0,unrealized:converted(closing.unreal-opening.unreal,to),fx:converted(opening.net,to)-converted(opening.net,prior),sources};
+    let dividends=0,saleGains=0,saleLosses=0;
     function flow(key,n,sign,r,booked){
       const amount=booked??converted(n,r.date);
+      if(key==='realized'){
+        if(r.kind==='dividend')dividends+=amount;
+        else if(amount>=0)saleGains+=amount;
+        else saleLosses-=amount;
+      }
       row[key]+=amount;row.fx+=sign*(converted(n,to)-amount);
     }
     for(const r of runtime.transactions){
@@ -1872,6 +1878,9 @@
     if(row.openingDifference && row.closingDifference && Math.sign(row.openingDifference)===Math.sign(row.closingDifference)){
       throw Error('Review broker equity against the ledger. Opening difference '+row.openingDifference+' and closing difference '+row.closingDifference+' '+c.currency+'.');
     }
+    row.dividends=cent(dividends);row.saleGains=cent(saleGains);row.saleLosses=cent(saleLosses);
+    row.reserveCash=cent(converted(closing.available,to));
+    row.holdingsValue=cent(converted(closing.net-closing.available,to));
     return row;
   }
   function publication(){

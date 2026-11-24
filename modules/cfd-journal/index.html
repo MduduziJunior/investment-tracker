@@ -1621,11 +1621,13 @@ function periodReport(c,from,to){
   const openingMark=positionMark(prior),closingMark=positionMark(to);
   const opening=valued(openingCash+openingMark,prior);
   let closingCash=openingCash,fx=openingCash?valued(openingCash,to)-valued(openingCash,prior):0;
+  let tradeGains=0,tradeLosses=0;
   const totals={deposits:0,withdrawals:0,realized:0,fees:0};
   for(const e of events){
     sources.push({date:e.day,reference:e.reference,description:e.label+' · '+e.usd+' USD'});
     if(e.day<from)continue;
     const base=finite(e.booked)?e.booked:valued(e.usd,e.day);
+    if(e.kind==='realized'){if(base>=0)tradeGains+=base;else tradeLosses-=base;}
     closingCash+=e.usd;fx+=valued(e.usd,to)-base;
     totals[e.kind]+=e.kind==='withdrawals'||e.kind==='fees'?-base:base;
   }
@@ -1634,7 +1636,7 @@ function periodReport(c,from,to){
   fx+=valued(openingMark,to)-valued(openingMark,prior);
   const unrealized=valued(closingMark-openingMark,to),closing=valued(closingCash+closingMark,to);
   if(totals.fees<0){totals.realized-=totals.fees;totals.fees=0;}
-  const row={from,to,opening:statementMoney(opening),closing:statementMoney(closing),unrealized:statementMoney(unrealized),fx:statementMoney(fx),sources};
+  const row={from,to,tradeGains:statementMoney(tradeGains),tradeLosses:statementMoney(tradeLosses),opening:statementMoney(opening),closing:statementMoney(closing),unrealized:statementMoney(unrealized),fx:statementMoney(fx),sources};
   for(const [k,v] of Object.entries(totals))row[k]=statementMoney(v);
   const residual=statementMoney(row.closing-row.opening-row.deposits+row.withdrawals-row.realized-row.unrealized-row.fx+row.fees);
   if(Math.abs(residual)<=0.03)row.fx=statementMoney(row.fx+residual);
