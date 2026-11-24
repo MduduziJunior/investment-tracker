@@ -120,7 +120,7 @@
       <div class="full"><button type="submit">Save Account</button> <button type="button" class="secondary-btn" onclick="clearAccountForm()">Clear</button></div>
     </form>
     <div id="accountsSummary" class="grid"></div>
-    <div class="table-wrap"><table><thead><tr><th>Account</th><th>Balance in account currency</th><th>Type</th><th>Opening in account currency</th><th>Transactions¹</th><th>Transfers¹</th><th>Loan principal¹</th><th>Booked balance¹</th><th>Status</th><th>Note</th><th>Action</th></tr></thead><tbody id="accountsTable"></tbody></table></div><p class="small" id="accountBasis"></p><div id="bankReconciliation"></div>
+    <div class="table-wrap"><table><thead><tr><th>Account</th><th>Balance in account currency</th><th>Type</th><th>Opening in account currency</th><th>Transactions</th><th>Transfers</th><th>Loan principal</th><th>Booked balance¹</th><th>Status</th><th>Note</th><th>Action</th></tr></thead><tbody id="accountsTable"></tbody></table></div><p class="small" id="accountBasis"></p><div id="bankReconciliation"></div>
   </div>
 </section>
 
@@ -522,6 +522,89 @@ function eachBankLeg(p, visit) {
     for (const row of p[key] || []) for (const leg of accountLegs(key,row)) visit(row,key,leg);
   }
 }
+// Daily public reference rates. Financial records and account identities stay on the device.
+const bankRateCache=new Map(), retryAfter=new Map();
+let reconciliationQueued=false, reconciliationRunning=false;
+function validBankRates(r){
+  return r && r.USD===1 && ['TWD','SZL'].every(k=>Number.isFinite(r[k])&&r[k]>0);
+}
+function cachedBankRates(date){
+  if(!validDate(date))return null;
+  if(bankRateCache.has(date))return bankRateCache.get(date);
+  try{
+    const r=JSON.parse(localStorage.getItem('aurum:daily-usd:v1:'+date));
+    if(validBankRates(r)){bankRateCache.set(date,r);return r;}
+  }catch{}
+  return null;
+}
+async function fetchBankRates(date){
+  if(!validDate(date)||date>today())return null;
+  const cached=cachedBankRates(date);if(cached)return cached;
+  const path='/v1/currencies/usd.min.json';
+  for(const base of ['https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@'+date,'https://'+date+'.currency-api.pages.dev']){
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),6500);
+    try{
+      const response=await fetch(base+path,{credentials:'omit',referrerPolicy:'no-referrer',signal:controller.signal});
+      if(!response.ok)continue;
+      const data=await response.json(),r={USD:data.usd?.usd,TWD:data.usd?.twd,SZL:data.usd?.szl};
+      if(data.date!==date||!validBankRates(r))continue;
+      bankRateCache.set(date,r);
+      try{localStorage.setItem('aurum:daily-usd:v1:'+date,JSON.stringify(r));}catch{}
+      return r;
+    }catch{}finally{clearTimeout(timer);}
+  }
+  retryAfter.set(date,Date.now()+300000);
+  return null;
+}
+function historicBankFx(date,a,leg){
+  const rates=cachedBankRates(date);
+  if(!rates||!rates[a.currency]||!rates[leg.currency])return null;
+  return {accountId:a.id,from:leg.currency,to:a.currency,unitsPerSource:rates[a.currency]/rates[leg.currency],
+    date,source:'Daily reference · currency-api'};
+}
+function budgetWritable(p,owner){
+  return !!p&&currentProfile()===p&&owner&&budgetUser?.id===owner&&window.AurumCloud?.auth.getUser()?.id===owner&&
+    !leaving&&!busyLoading&&!conflict&&!$('app').inert&&!$('app').querySelector('main').inert;
+}
+function queueBankReconciliation(){
+  if(reconciliationQueued||reconciliationRunning)return;
+  reconciliationQueued=true;
+  setTimeout(()=>{reconciliationQueued=false;reconcileBankHistory().catch(error=>note('Bank reconciliation · '+error.message));},0);
+}
+async function reconcileBankHistory(){
+  const p=currentProfile(),owner=budgetUser?.id;
+  if(reconciliationRunning||!budgetWritable(p,owner))return;
+  reconciliationRunning=true;
+  try{
+    const accounts=new Map(p.accounts.map(a=>[a.id,a])),dates=new Set();
+    const missing=(row,leg)=>{const a=accounts.get(leg.accountId);return a&&bankAmount(p,a,leg,row.accountFx?.[leg.role])===null;};
+    eachBankLeg(p,(row,key,leg)=>{
+      if(missing(row,leg)&&validDate(row.date)&&row.date<=today()&&!(retryAfter.get(row.date)>Date.now()))dates.add(row.date);
+    });
+    if(!dates.size)return;
+    // Recheck live rows after each network batch so edits, deletions and manual confirmations win.
+    const days=[...dates];
+    for(let i=0;i<days.length;i+=4){
+      if(!budgetWritable(p,owner))return;
+      await Promise.all(days.slice(i,i+4).map(fetchBankRates));
+      if(!budgetWritable(p,owner))return;
+      const draft=readDraft();
+      if(draft&&draft.updatedAt!==store.updatedAt)return;
+      const liveAccounts=new Map(p.accounts.map(a=>[a.id,a]));
+      let changed=false;
+      eachBankLeg(p,(r,key,leg)=>{
+        const a=liveAccounts.get(leg.accountId);
+        if(!a||bankAmount(p,a,leg,r.accountFx?.[leg.role])!==null)return;
+        const fx=historicBankFx(r.date,a,leg);
+        if(fx){r.accountFx={...r.accountFx,[leg.role]:fx};r.updatedAt=nowIso();changed=true;}
+      });
+      if(changed)markLocalSave();
+    }
+  }finally{reconciliationRunning=false;}
+}
+window.addEventListener('online',()=>{retryAfter.clear();queueBankReconciliation();});
+window.setInterval(queueBankReconciliation,60000);
+
 function bankAmount(profile, account, leg, fx) {
   if (account.currency === leg.currency) return cents(leg.amount);
   if (account.currency === profile.mainCurrency) return cents(leg.main);
@@ -537,18 +620,15 @@ function bookAccountRates(collection, row, previous) {
     const a = p.accounts.find(account=>account.id===leg.accountId);
     const oldLeg = oldLegs.find(old=>old.role===leg.role && old.accountId===leg.accountId && old.currency===leg.currency);
     if (!a || (a.status==='inactive' && !oldLeg)) return 'Choose an active registered account.';
-    const fx = (oldLeg && previous.accountFx?.[leg.role]) || row.accountFx?.[leg.role];
+    const fx = ((!previous || previous.date===row.date) && ((oldLeg && previous?.accountFx?.[leg.role]) || row.accountFx?.[leg.role])) || null;
     if (bankAmount(p,a,leg,fx) !== null) {
       if (fx && a.currency !== leg.currency && a.currency !== p.mainCurrency) snapshots[leg.role]=fx;
       continue;
     }
-    if (oldLeg) {
-      if (oldLeg.amount===leg.amount && oldLeg.main===leg.main) continue;
-      return 'Confirm the original bank amount in Accounts before changing this historical movement.';
-    }
-    const rate = row.loanPayment?.currency===a.currency?row.loanPayment.unitsPerSource:window.BudgetFX.quote(leg.currency,a.currency);
-    if (!(Number.isFinite(rate) && rate>0)) return 'A rate into '+a.currency+' is unavailable. Reconnect before saving.';
-    snapshots[leg.role]={accountId:a.id,from:leg.currency,to:a.currency,unitsPerSource:rate};
+    if(!validDate(row.date))return 'Select a transaction date for the account conversion.';
+    const historic=historicBankFx(row.date,a,leg);
+    if(historic)snapshots[leg.role]=historic;
+    // If the exact day's publication is unavailable, retain the original entry and reconcile on load or reconnect.
   }
   row.accountFx=snapshots;
   return '';
@@ -557,7 +637,7 @@ function accountBalances() {
   const p=currentProfile();
   if (!p) return [];
   const rows=p.accounts.map(a=>({...a, balance:parseNum(a.openingMain), nativeBalance:parseNum(a.opening ?? (a.rateToMain>0 ? a.openingMain/a.rateToMain : 0)),
-    txEffect:0, transferEffect:0, loanEffect:0, missing:[], confirmed:[]}));
+    txEffect:0, transferEffect:0, loanEffect:0, nativeEffects:{tx:0,transfer:0,loan:0}, missing:[], confirmed:[]}));
   const byId = new Map(rows.map(a=>[a.id,a]));
   eachBankLeg(p,(r,key,leg)=>{
     const a=byId.get(leg.accountId);
@@ -565,17 +645,17 @@ function accountBalances() {
     a.balance+=leg.main;
     a[leg.kind+'Effect']+=leg.main;
     const native=bankAmount(p,a,leg,r.accountFx?.[leg.role]);
-    if (native===null) a.missing.push({key,id:r.id,role:leg.role,date:r.date,description:r.description||r.reference||r.name});
+    if (native===null) a.missing.push({kind:leg.kind,key,id:r.id,role:leg.role,date:r.date,description:r.description||r.reference||r.name});
     else {
-      a.nativeBalance+=native;
-      if (r.accountFx?.[leg.role]?.source==='bank record') a.confirmed.push({key,id:r.id,role:leg.role,date:r.date,description:r.description||r.reference||r.name});
+      a.nativeBalance+=native;a.nativeEffects[leg.kind]+=native;
+      if (r.accountFx?.[leg.role]?.source) a.confirmed.push({source:r.accountFx[leg.role].source,rate:r.accountFx[leg.role].unitsPerSource,from:leg.currency,key,id:r.id,role:leg.role,date:r.date,description:r.description||r.reference||r.name});
     }
   });
   for (const a of rows) a.nativeBalance=a.missing.length?null:cents(a.nativeBalance);
   return rows;
 }
 function nativeBalanceLabel(a) {
-  return a.nativeBalance===null?'Bank amount needed ('+a.currency+')':money(a.nativeBalance,a.currency)+' '+a.currency;
+  return a.nativeBalance===null?'Awaiting dated rate ('+a.currency+')':money(a.nativeBalance,a.currency)+' '+a.currency;
 }
 function accountInUse(p,id) {
   return p.transactions.some(x=>x.accountId===id) || p.transfers.some(x=>[x.fromAccountId,x.toAccountId].includes(id)) ||
@@ -753,12 +833,14 @@ function renderGoalDebtOptions(){const p=currentProfile();const goalOpts='<optio
 function saveAccount(e){e.preventDefault();const rate=parseNum($("accountRate").value)||1;const opening=convert($("accountOpening").value,rate);const item={id:$("accountId").value||makeId(),name:$("accountName").value.trim(),type:$("accountType").value,opening:parseNum($("accountOpening").value),currency:$("accountCurrency").value,rateToMain:rate,openingMain:opening,openingDate:$("accountOpeningDate").value,status:$("accountStatus").value,note:$("accountNote").value.trim(),updatedAt:nowIso()};if(recordSave("accounts",item,"accountId")!==false)clearAccountForm()}
 function clearAccountForm(){["accountId","accountName","accountOpening","accountOpeningDate","accountNote"].forEach(id=>$(id)&&($(id).value=""));if($("accountRate"))$("accountRate").value=1;if($("accountStatus"))$("accountStatus").value="active";renderAccountOptions()}
 function editAccount(id){const x=(currentProfile().accounts||[]).find(a=>a.id===id);if(!x)return;Object.entries({accountId:x.id,accountName:x.name,accountType:x.type,accountOpening:x.opening,accountOpeningDate:x.openingDate,accountCurrency:x.currency,accountRate:x.rateToMain,accountStatus:x.status,accountNote:x.note}).forEach(([k,v])=>$(k).value=v??"");showTab("accounts")}
-function renderAccounts(){if(!$("accountsTable"))return;const rows=accountBalances();const total=rows.filter(x=>x.status!=="inactive").reduce((a,b)=>a+parseNum(b.balance),0);if($("accountsSummary"))$("accountsSummary").innerHTML=[["Active accounts · "+currentProfile().mainCurrency,money(total)],["Active Accounts",rows.filter(x=>x.status!=="inactive").length],["Accounts Registered",rows.length]].map(c=>`<div class="metric-card"><p>${c[0]}</p><h3>${c[1]}</h3></div>`).join("");$("accountsTable").innerHTML=rows.map(x=>`<tr><td>${escapeHtml(x.name)}</td><td><strong>${escapeHtml(nativeBalanceLabel(x))}</strong></td><td>${escapeHtml(x.type)}</td><td>${money(x.opening,x.currency)}</td><td>${money(x.txEffect)}</td><td>${money(x.transferEffect)}</td><td>${money(x.loanEffect)}</td><td>${money(x.balance)}</td><td><span class="pill ${x.status==='active'?'good':'zero'}">${escapeHtml(x.status)}</span></td><td>${escapeHtml(x.note)}</td><td><button onclick="editAccount('${x.id}')">Edit</button> <button class="danger-btn" onclick="removeRecord('accounts','${x.id}')">Delete</button></td></tr>`).join("")||'<tr><td colspan="11">No accounts registered yet.</td></tr>';
+function nativeMovement(a,kind){return a.missing.some(m=>m.kind===kind)?"Awaiting rate":money(cents(a.nativeEffects[kind]),a.currency);}
+function renderAccounts(){if(!$("accountsTable"))return;const rows=accountBalances();const total=rows.filter(x=>x.status!=="inactive").reduce((a,b)=>a+parseNum(b.balance),0);if($("accountsSummary"))$("accountsSummary").innerHTML=[["Active accounts · "+currentProfile().mainCurrency,money(total)],["Active Accounts",rows.filter(x=>x.status!=="inactive").length],["Accounts Registered",rows.length]].map(c=>`<div class="metric-card"><p>${c[0]}</p><h3>${c[1]}</h3></div>`).join("");$("accountsTable").innerHTML=rows.map(x=>`<tr><td>${escapeHtml(x.name)}</td><td><strong>${escapeHtml(nativeBalanceLabel(x))}</strong></td><td>${escapeHtml(x.type)}</td><td>${money(x.opening,x.currency)}</td><td>${nativeMovement(x,'tx')}</td><td>${nativeMovement(x,'transfer')}</td><td>${nativeMovement(x,'loan')}</td><td>${money(x.balance)}</td><td><span class="pill ${x.status==='active'?'good':'zero'}">${escapeHtml(x.status)}</span></td><td>${escapeHtml(x.note)}</td><td><button onclick="editAccount('${x.id}')">Edit</button> <button class="danger-btn" onclick="removeRecord('accounts','${x.id}')">Delete</button></td></tr>`).join("")||'<tr><td colspan="11">No accounts registered yet.</td></tr>';
   $('accountBasis').textContent='¹ Booked in the budget reporting currency, '+currentProfile().mainCurrency+'.';
   const box=$('bankReconciliation');box.replaceChildren();
+  if(rows.some(a=>a.missing.length)){queueBankReconciliation();box.append(button('Retry dated exchange rates',()=>{retryAfter.clear();queueBankReconciliation();}));}
   for(const a of rows)for(const miss of [...a.missing,...a.confirmed]){
     const line=document.createElement('p');
-    line.textContent=[a.name,miss.date,miss.description||miss.key,miss.id].filter(Boolean).join(' · ')+' ';
+    line.textContent=[a.name,miss.date,miss.description||miss.key,miss.source||(retryAfter.get(miss.date)>Date.now()?'Dated rate unavailable':'Awaiting dated rate'),miss.rate?'1 '+miss.from+' = '+Number(miss.rate.toPrecision(7))+' '+a.currency:''].filter(Boolean).join(' · ')+' ';
     line.append(button((a.confirmed.includes(miss)?'Edit ':'Enter ')+a.currency+' bank amount',()=>confirmBankAmount(a.id,miss)));box.append(line);
   }
 }
@@ -916,7 +998,7 @@ async function reloadBudget(initial=false){
     const local=readDraft();checkOwner();
     if(local){showBudget(local);$('app').querySelector('main').inert=true;note('Device copy · read only until Load from Cloud succeeds · '+error.message);}
     else throw error;
-  }finally{busyLoading=false;$('app').inert=false;}
+  }finally{busyLoading=false;$('app').inert=false;queueBankReconciliation();}
   window.refreshInvestmentTracker(false);
 }
 async function startBudget(){
