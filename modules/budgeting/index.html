@@ -63,7 +63,7 @@
     }
     @media print{.tracker-links{display:none}}
   </style>
-<style>.reportSheet td:not(:first-child),.reportSheet th:not(:first-child){text-align:right;font-variant-numeric:tabular-nums}.reportSheet tfoot{border-top:3px double currentColor;font-weight:bold}.reportSheet summary{cursor:pointer}.reportSheet td{vertical-align:top}.reportSheet details p{font-size:.85em}.reportSheet{overflow:auto} #assetMatches label{display:block;margin:.5em 0}@media print{#fundForm,#assetMatches,#refreshInvestmentTracker{display:none}}.reportSheet>h2,.reportSheet>p{text-align:center;margin:.3rem}.reportSheet table{width:100%;min-width:0;margin-top:1rem}.reportSheet .section td{font-style:italic;font-weight:bold;padding-top:1.1em}.reportSheet .detail td:first-child{padding-left:1.5em}.reportSheet .subtotal td:last-child{border-top:1px solid currentColor}.reportSheet .subtotal td{font-weight:bold}.reportSheet tfoot td:not(:first-child){border-bottom:3px double currentColor}.reportSheet summary{white-space:normal}.reportSheet details p{white-space:normal}@media print{#assetMatches,#stockList{display:none}.reportSheet tr{break-inside:avoid}.reportSheet{overflow:visible}}</style></head>
+<style>.reportSheet td:not(:first-child),.reportSheet th:not(:first-child){text-align:right;font-variant-numeric:tabular-nums}.reportSheet tfoot{border-top:3px double currentColor;font-weight:bold}.reportSheet summary{cursor:pointer}.reportSheet td{vertical-align:top}.reportSheet details p{font-size:.85em}.reportSheet{overflow:auto} #assetMatches label{display:block;margin:.5em 0}@media print{#fundForm,#assetMatches,#refreshInvestmentTracker{display:none}}.reportSheet>h2,.reportSheet>p{text-align:center;margin:.3rem}.reportSheet table{width:100%;min-width:0;margin-top:1rem}.reportSheet .statement-heading th{background:#f0eadb;color:#193c32;font:italic bold 1.1rem Georgia,serif;text-align:left;border-top:1px solid #baae90;padding:.65rem .8rem}.reportSheet .statement-note td{color:#48534d;font-size:.9em}.reportSheet .statement-note td:first-child{padding-left:1.5em}.reportSheet .detail td:first-child{padding-left:1.5em}.reportSheet .subtotal td:last-child{border-top:1px solid currentColor}.reportSheet .subtotal td{font-weight:bold}.reportSheet tfoot td:not(:first-child){border-bottom:3px double currentColor}.reportSheet summary{white-space:normal}.reportSheet details p{white-space:normal}@media print{#assetMatches,#stockList{display:none}.reportSheet tr{break-inside:avoid}.reportSheet{overflow:visible}}</style></head>
 <body>
 <div id="budgetGate" class="card" role="status"><span id="budgetGateMessage">Opening your budgeting workspace…</span> <a href="../../index.html">Return to Unifier</a></div>
 <div id="app" class="hidden">
@@ -1401,7 +1401,7 @@ async function refreshInvestmentTracker(){
       if(env?.source!=='cloud'||!env.state||env.dirty)throw Error('Current cloud data unavailable');
       const state=env.state,feed=state.budgetReporting;
       if([state.ownerUserId,state.raw?.ownerUserId,feed?.ownerId].some(id=>id&&id!==owner))throw Error('User mismatch');
-      item={summary:state.publishedSummary||state.raw?.summary,updated:state.updatedAt,feed:feed?.version===1&&feed.ownerId===owner?feed:null};
+      item={summary:state.publishedSummary||state.raw?.summary,updated:state.updatedAt??env.updatedAt,feed:feed?.version===1&&feed.ownerId===owner?feed:null};
     }catch(e){item={error:e.message};}
     if(seq===readSequence&&budgetUser?.id===owner&&window.AurumCloud.auth.getUser()?.id===owner){moduleReads[key]=item;renderFinanceFixtures();}
   }));
@@ -1418,10 +1418,19 @@ function inspectModule(key,p,from,to){
   }
   const s=read?.summary, currency=s?.currency==='NTD'?'TWD':s?.currency;
   const rate=currency===p.mainCurrency?1:window.BudgetFX?.quote(currency,p.mainCurrency);
-  const stamp=new Date(read?.updated);
-  const recent=Number.isFinite(stamp.getTime())&&stamp.toDateString()===new Date().toDateString();
-  return {value:to===today()&&recent&&numeric(s?.current_value)&&rate>0?cents(s.current_value*rate):null,
-    reason:read?.error||(!read?'Module data not loaded':'Dated performance unavailable'),source:key};
+  // A closing position belongs to the end date, even when a different start date was published.
+  const closes=new Set((feed?.currency===p.mainCurrency&&Array.isArray(feed.periods)?feed.periods:[])
+    .filter(r=>r?.to===to&&numeric(r.closing)).map(r=>cents(r.closing)));
+  if(closes.size===1)return {value:[...closes][0],source:key,balanceSource:'Dated closing balance',reason:'Performance unavailable for selected period'};
+  if(closes.size>1)return {value:null,source:key,reason:'Conflicting published closing balances'};
+  const stamp=new Date(s?.updatedAt??read?.updated);
+  const stampValid=Number.isFinite(stamp.getTime());
+  const summaryDay=stampValid?[stamp.getFullYear(),String(stamp.getMonth()+1).padStart(2,'0'),String(stamp.getDate()).padStart(2,'0')].join('-'):'';
+  const recent=summaryDay===today();
+  const lastQuote=summaryDay&&summaryDay<to&&numeric(s?.current_value)&&s?.valuationComplete!==false&&['TWD','USD','SZL'].includes(currency)?
+    {date:summaryDay,amount:s.current_value,currency}:null;
+  return {value:to===today()&&recent&&s?.valuationComplete!==false&&numeric(s?.current_value)&&rate>0?cents(s.current_value*rate):null,
+    lastQuote,balanceSource:'Current module summary',reason:read?.error||(!read?'Module data not loaded':'Dated performance unavailable'),source:key};
 }
 function matching(key,p,asOf){
   const local=funds(p).filter(r=>r.module===key&&r.date<=asOf),remote=moduleReads[key]?.feed?.funding;
@@ -1524,7 +1533,19 @@ function makeStatements(p,from,to){
     }
     const included=incl(p,key);
     if(!included){warnings.add(label+' excluded in Portfolio asset matching');continue;}
-    if(!m.period)continue;
+    if(!m.period){
+      // Replace matched cash in transit only when we know how this module was funded.
+      // A closing snapshot alone says nothing about earnings or opening equity.
+      const localFlows=funds(p).filter(x=>x.module===key&&x.date<=to);
+      if(numeric(m.value)&&(!localFlows.length||!m.issues.length)){
+        const ref={module:key,date:to,description:m.balanceSource};
+        post('asset',label,m.value,ref,key==='etf'?'unclassified':'currentAsset');
+        const principal=cents(localFlows.reduce((n,x)=>n+signedPrincipal(x),0));
+        if(principal)post('asset','Funding awaiting module reconciliation',-principal,ref);
+        for(const [id,linked] of Object.entries(p.assetModuleMatches||{}))if(linked===key)matched.add(id);
+      }
+      continue;
+    }
     for(const [id,linked] of Object.entries(p.assetModuleMatches||{}))if(linked===key)matched.add(id);
     const ref={module:key,description:label+' valuation',date:to,details:m.period?.sources};
     const r=m.period;
@@ -1602,19 +1623,19 @@ function makeStatements(p,from,to){
     eachBankLeg(p,(r,key,leg)=>{if(leg.accountId!==a.id||!validDate(r.date)||r.date>to)return;
       const n=bankAmount(p,a,leg,r.accountFx?.[leg.role]);if(n===null)known=false;else units+=n;
     });
-    row.displayName='Cash / Bank — '+a.name+' ('+(known?money(cents(units),a.currency)+' '+a.currency:'native balance unavailable')+')';
+    row.displayName=(incl(p,'cash_savings')&&a.id===p.savingsMirrorAccount?'Cash Savings / Bank — ':'Cash / Bank — ')+a.name+' ('+(known?money(cents(units),a.currency)+' '+a.currency:'native balance unavailable')+')';
   }
   if(p.goals.some(g=>g.savedMain))warnings.add('Review saved goal balances against savings postings');
   return {ledger:[...ledger.values()],warnings:[...warnings],modules};
 }
-function presentStatements(box,p,from,to,ledger,warnings){
+function presentStatements(box,p,from,to,ledger,warnings,modules={}){
   const total=rows=>cents(rows.reduce((n,r)=>n+r.net,0));
   const fmt=n=>new Intl.NumberFormat(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}).format(Math.abs(n));
   const show=n=>n<0?'('+fmt(n)+')':fmt(n);
   const subtitle=(from.endsWith('-01-01')&&to===from.slice(0,4)+'-12-31'?'For the year ended '+to:'For the period '+from+' to '+to);
   const cut=new Date(to+'T00:00:00Z');cut.setUTCFullYear(cut.getUTCFullYear()+1);
   const nextYear=cut.toISOString().slice(0,10);
-  function section(name){return {name,style:'section',values:['','']};}
+  function section(name){return {name,style:'statement-heading',values:['','']};}
   function subtotal(name,value){return {name,style:'subtotal',values:['',show(value)]};}
   function detail(r,sign){return {...r,name:r.displayName||r.name,values:[show(cents(r.net*sign)),'']};}
   function block(list,name,records,sign,force=false){
@@ -1643,12 +1664,29 @@ function presentStatements(box,p,from,to,ledger,warnings){
     }
     income.push(subtotal('Gross profit',op([...sales,...cost])));
   }
-  block(income,'Personal income',group('personal'),-1);
-  block(income,'Other income',group('other'),-1);
-  block(income,'Expenses',group('expense'),-1);
-  block(income,'Investment losses and fees',group('loss'),-1);
-  if(marks.length)income.push(subtotal('Result before valuation changes',cents(op(earnings)-op(marks))));
-  block(income,'Valuation and currency changes',marks,-1);
+  const note=(name,text)=>({name,style:'statement-note',values:[text,'']});
+  const gains=marks.filter(r=>r.net<0),declines=marks.filter(r=>r.net>0);
+  const other=[...group('other'),...gains],expenses=[...group('expense'),...group('loss'),...declines];
+  block(income,'Personal income',group('personal'),-1,true);
+  income.push(section('Other income'),...group('other').map(r=>detail(r,-1)));
+  if(gains.length)income.push(section('Valuation and currency gains'),...gains.map(r=>detail(r,-1)));
+  const unavailable=[];
+  for(const [key,m] of Object.entries(modules)){
+    if(!incl(p,key))unavailable.push(note(moduleNames[key],'Excluded in Portfolio asset matching'));
+    else if(!m.period)unavailable.push(note(moduleNames[key],m.reason));
+    else if(key==='cash_savings'&&p.savingsMirrorAccount)income.push(note(moduleNames[key],'Interest is reported through the matched bank account'));
+  }
+  income.push(...unavailable,subtotal('Total other income'+(unavailable.length?' (partial)':''),op(other)));
+  income.push(section('Expenses'),...group('expense').map(r=>detail(r,-1)),section('Investment losses and fees'));
+  income.push(...group('loss').map(r=>detail(r,-1)));
+  for(const [key,m] of Object.entries(modules)){
+    if(!incl(p,key)||!m.period||group('loss').some(r=>r.refs.some(e=>e.ref.module===key)))continue;
+    if(key==='cash_savings'&&p.savingsMirrorAccount)continue;
+    const known=key==='cash_savings'?numeric(m.period.interest):key==='cfd'?numeric(m.period.tradeLosses):numeric(m.period.saleLosses);
+    income.push(note(moduleNames[key],known?'0.00':'Gross loss breakdown unavailable'));
+  }
+  if(declines.length)income.push(section('Valuation and currency losses'),...declines.map(r=>detail(r,-1)));
+  income.push(...unavailable,subtotal('Total expenses'+(unavailable.length?' (partial)':''),op(expenses)));
   const position=[];
   function maturity(r){
     if(r.statementClass)return r.statementClass;
@@ -1663,13 +1701,26 @@ function presentStatements(box,p,from,to,ledger,warnings){
   }
   const classified=positions.map(r=>[maturity(r),r]);
   const pos=k=>classified.filter(([kind])=>kind===k).map(([,r])=>r);
-  block(position,'Non-current assets',pos('noncurrentAsset'),1);
-  block(position,'Current assets',pos('currentAsset'),1);
+  block(position,'Non-current assets',pos('noncurrentAsset'),1,true);
+  block(position,'Current assets',pos('currentAsset'),1,true);
   block(position,'Assets awaiting classification',pos('unclassified'),1);
+  if(Object.keys(modules).length){
+    position.push(section('Module net balances · breakdown of assets'));
+    for(const [key,m] of Object.entries(modules)){
+      let basis;
+      if(!incl(p,key))basis='excluded from totals';
+      else if(key==='cash_savings'&&p.savingsMirrorAccount)basis='represented by the matched bank account';
+      else if(!numeric(m.value))basis=m.reason+(m.lastQuote?' · last reported '+money(m.lastQuote.amount,m.lastQuote.currency)+' '+m.lastQuote.currency+' on '+m.lastQuote.date:'');
+      else if(positions.some(r=>r.refs.some(e=>e.ref.module===key)&&r.name!=='Funding awaiting module reconciliation'))
+        basis=m.period?'included above':m.balanceSource+' included above';
+      else basis='reference only · funding needs reconciliation';
+      position.push(note(moduleNames[key]+' — net balance · '+basis,numeric(m.value)?show(m.value):'Unavailable'));
+    }
+  }
   position.push(subtotal('Total assets',total(positions.filter(r=>r.group==='asset'))));
-  block(position,'Current liabilities',pos('currentLiability'),-1);
-  block(position,'Non-current liabilities',pos('noncurrentLiability'),-1);
-  position.push(subtotal('Less total liabilities',total(positions.filter(r=>r.group==='liability'))),subtotal('Net assets',total(positions)),section('Capital'));
+  block(position,'Current liabilities',pos('currentLiability'),-1,true);
+  block(position,'Non-current liabilities',pos('noncurrentLiability'),-1,true);
+  position.push(subtotal('Less total liabilities',total(positions.filter(r=>r.group==='liability'))),subtotal('Net assets',total(positions)),section('Financed by · Capital'));
   const periodEquity=equity.filter(r=>r.name!=='Opening capital'&&r.name!=='Accumulated result before period'&&!r.name.endsWith('opening carrying value'));
   const opening=equity.filter(r=>!periodEquity.includes(r));
   position.push({name:'Opening capital',refs:opening.flatMap(r=>r.refs),values:[show(op(opening)),'']},
@@ -1691,7 +1742,11 @@ function reportTable(box,title,heads,rows,totals,period){
   for(const h of heads)header.append(el('th',h));
   const body=table.createTBody();
   for(const r of rows){
-    const tr=body.insertRow(),cell=tr.insertCell();tr.className=r.style||"detail";
+    const tr=body.insertRow();tr.className=r.style||"detail";
+    if(r.style==='statement-heading'){
+      const heading=el('th',r.name);heading.colSpan=heads.length;tr.append(heading);continue;
+    }
+    const cell=tr.insertCell();
     if(r.refs?.length){
       const detail=el('details');detail.append(el('summary',r.name));cell.append(detail);
       for(const {ref,amount} of r.refs){
@@ -1752,18 +1807,22 @@ function renderStatementsFixture(){
   if(!validDate(from.value)||!validDate(to.value)||from.value<'0100-01-01'||from.value>to.value||to.value>today()){$('reportStatus').textContent='Choose a valid period ending today or earlier.';return;}
   const {ledger,warnings,modules}=makeStatements(p,from.value,to.value);
   if((p.portfolioOverlap||[]).length&&!p.assetModuleMatches)warnings.push('Review legacy ETF/CFD matches and assign a specific module.');
-  presentStatements(box,p,from.value,to.value,ledger,warnings);
+  presentStatements(box,p,from.value,to.value,ledger,warnings,modules);
   $('reportStatus').textContent=warnings.length?'Incomplete · '+warnings.join(' | '):'Module periods loaded and reconciled.';
   const display=n=>money(n);
   const card=el('div');card.className='card';card.append(el('h2','Module reconciliation'));
   for(const [key,m] of Object.entries(modules)){
     const line=el('p',moduleNames[key]+' · '+(m.period?'Opening '+display(m.period.opening)+' + deposits '+display(m.period.deposits)+' − withdrawals '+display(m.period.withdrawals)+' + realized '+display(m.period.realized)+' + unrealized '+display(m.period.unrealized)+' + currency movement '+display(m.period.fx)+' − module fees '+display(m.period.fees)+' → reported closing '+display(m.value)+' · difference '+display(m.delta):m.reason+(numeric(m.value)?' · current summary '+display(m.value):''))+' · '+(m.issues.join(', ')||'Funding references matched'));
+    if(!m.period&&incl(p,key)){
+      const link=el('a','Open '+moduleNames[key]);link.href='../'+modulePages[key]+'/index.html';
+      line.append(' ',link,' to prepare '+from.value+' through '+to.value+'. After cloud sync, choose Load module figures.');
+    }
     card.append(line);
   }
   box.append(card);
 }
 function incl(p,key){
-  return p.reportIncludes?.[key] ?? (key!=='cash_savings' && (p.linkedPortfolioReviewed ? p.includeInvestmentPortfolioInNetWorth===true : !(p.assets?.length||p.netWorthItems?.some(r=>r.type==='asset'))));
+  return p.reportIncludes?.[key] ?? (key!=='cash_savings'&&p.linkedPortfolioReviewed ? p.includeInvestmentPortfolioInNetWorth===true : !(p.assets?.length||p.netWorthItems?.some(r=>r.type==='asset')));
 }
 function applyReportBalance(f,p){
   const matched=new Set(),available=new Set();let addition=0;
