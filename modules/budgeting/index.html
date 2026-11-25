@@ -74,6 +74,7 @@
   <a href="../cfd-journal/index.html">CFD Journal</a>
   <a href="../cash-savings/index.html">Cash Savings</a>
   <a href="./index.html" aria-current="page">Budgeting</a>
+  <a href="../projects/index.html">Projects</a>
 </nav>
 <nav id="tabs" aria-label="Budgeting sections"></nav>
 <main>
@@ -1740,18 +1741,138 @@ function reportObservation(p, request) {
   markLocalSave();
 }
 
+function readProjectResults(envelope,owner){
+  if(!AurumCloud.getStatus().online)throw Error('Reconnect to load project results.');
+  const draft=JSON.parse(localStorage.getItem('aurum:projects:'+owner+':draft')||'null');
+  if(envelope?.dirty || (draft && (draft.ownerId!==owner || !draft.revision || draft.revision!==envelope?.state?.revision)))
+    throw Error('Open Projects to sync pending changes, then load module figures.');
+  if(!envelope)return {projects:[]};
+  const s=envelope.state,f=s?.projectResults;
+  if(envelope.source!=='cloud'||s?.module!=='projects'||s.ownerId!==owner)
+    throw Error('The signed-in user’s cloud project register is unavailable.');
+  const ids=Object.keys(s.register?.users||{});
+  if(!f){
+    if(s.register?.users&&!ids.length)return {projects:[]};
+    throw Error('Open the updated Projects module once to publish its results, then reload module figures.');
+  }
+  if(f.version!==1||f.ownerId!==owner||!s.revision||f.revision!==s.revision||!Array.isArray(f.projects))
+    throw Error('Project results do not match the saved register revision.');
+  const seen=new Set();
+  for(const project of f.projects){
+    if(!project||!Object.hasOwn(s.register?.users||{},project.projectId)||seen.has(project.projectId)||
+       typeof project.name!=='string'||!Array.isArray(project.currencies))throw Error('Incomplete or duplicate project in the saved results.');
+    seen.add(project.projectId);
+  }
+  if(ids.length!==seen.size)throw Error('Some registered projects have no published results.');
+  return {projects:f.projects};
+}
+
+function projectPeriod(p,from,to){
+  const rows=[],warnings=[],needs=new Map(),known=new Set();
+  const read=budgetUser?.id && readsOwner===budgetUser.id && AurumCloud.auth.getUser()?.id===readsOwner ? moduleReads.projects:null;
+  if(!read||read.error)return {rows,known,needs,warnings:['Commercial projects · '+(read?.error||'Awaiting module figures.')],total:0};
+  let total=0;
+  const canonical=c=>c==='NTD'?'TWD':c==='E'?'SZL':c;
+  const base=canonical(p.mainCurrency);
+  for(const project of read.projects){
+    const refs=[],currencies=new Set();let sum=0;
+    const issues=new Set();
+    if(project.error||!project.currencies.length)issues.add(project.error||'Missing project currency');
+    for(const part of project.currencies){
+      if(!part||typeof part.currency!=='string'||!part.currency||currencies.has(part.currency)||
+         part.status!=='ready'||!Array.isArray(part.days)){
+        issues.add('Review the published '+(part?.currency||'project')+' statement in Projects');continue;
+      }
+      currencies.add(part.currency);const native=canonical(part.currency),seen=new Set();
+      for(const day of part.days){
+        if(!day||!validDate(day.date)||seen.has(day.date)||!Number.isSafeInteger(day.netCents)){
+          issues.add('Invalid or duplicate dated result');continue;
+        }
+        const date=day.date;seen.add(date);
+        if(date<from||date>to||!day.netCents)continue;
+        let rate=1;
+        if(native!==base){
+          const pair=native+'/'+base,id=JSON.stringify(['projects','rate',date,pair]);
+          const saved=p.statementObservations?.[id],daily=cachedBankRates(date);
+          rate=numeric(saved)&&saved>0?saved:daily?.[base]/daily?.[native];
+          if(!(Number.isFinite(rate)&&rate>0)){
+            if(['TWD','USD','SZL'].includes(native)&&!daily)queueStatementRate(date);
+            needs.set(id,{id,date,kind:'rate',field:pair,label:base+' per '+native+' on '+date});
+            issues.add('Missing '+pair+' rate on '+date);continue;
+          }
+        }
+        const converted=Math.sign(day.netCents)*Math.round(Math.abs(day.netCents)*rate);
+        if(!Number.isSafeInteger(converted)||!Number.isSafeInteger(sum+converted)){issues.add('Amount outside the supported range');continue;}
+        sum+=converted;
+        refs.push({amount:converted/100,ref:{date,module:'projects',reference:project.projectId,
+          description:(day.netCents/100).toFixed(2)+' '+native+(native===base?'':' × '+rate+' '+base+'/'+native)}});
+      }
+    }
+    if(issues.size){
+      warnings.push(project.name+' · '+[...issues].join(' · '));
+      rows.push({name:project.name,unavailable:true});continue;
+    }
+    known.add(project.projectId);total=cents(total+sum/100);
+    rows.push({name:project.name,amount:sum/100,refs});
+  }
+  return {rows,total,warnings,needs,known};
+}
+
+// An explicit match removes a personal posting from the combined result only.
+// Keep its original cash movement and the Budgeting-only statements intact.
+function projectOverlap(p,earnings,projects){
+  const personal=new Set(p.transactions);
+  const candidates=new Map();
+  for(const row of earnings)for(const {amount,ref} of row.refs){
+    if(!personal.has(ref)||!ref.id||!amount)continue;
+    const item=candidates.get(ref.id)||{tx:ref,impact:0};
+    item.impact=cents(item.impact-amount);candidates.set(ref.id,item);
+  }
+  const matched=[];
+  for(const item of candidates.values()){
+    const id=p.projectResultMatches?.[item.tx.id];
+    if(id&&projects.known.has(id))matched.push(item);
+  }
+  return {candidates,matched,adjustment:cents(-matched.reduce((n,item)=>n+item.impact,0))};
+}
+
+function projectReportControls(box,p,view,overlap){
+  const section=el('details');section.className='card';section.append(el('summary','Commercial project reconciliation'));
+  const link=el('a','Open Projects');link.href='../projects/index.html';section.append(link);
+  for(const request of view.needs.values())section.append(button('Enter '+request.label,()=>reportObservation(p,request)));
+  const projects=readsOwner===budgetUser?.id && AurumCloud.auth.getUser()?.id===readsOwner ? moduleReads.projects?.projects||[] : [];
+  if(projects.length&&overlap.candidates.size){
+    section.append(el('p','Match a Budgeting entry only if it repeats a cost or income already recorded in Projects, or is a payout of recorded project earnings. The combined result counts it once.'));
+    const tx=el('select'),proj=el('select');tx.setAttribute('aria-label','Budgeting entry');proj.setAttribute('aria-label','Matching commercial project');
+    for(const {tx:r,impact} of overlap.candidates.values())tx.add(new Option(r.date+' · '+(r.description||r.category)+' · '+money(impact,p.mainCurrency),r.id));
+    proj.add(new Option('Separate Budgeting entry',''));
+    for(const r of projects)proj.add(new Option(r.name,r.projectId));
+    const select=()=>{proj.value=p.projectResultMatches?.[tx.value]||'';};tx.onchange=select;select();
+    section.append(tx,proj,button('Save match',()=>{
+      checkOwner();if(!budgetWritable(p,budgetUser.id))return;
+      const matches={...p.projectResultMatches};
+      if(proj.value)matches[tx.value]=proj.value;else delete matches[tx.value];
+      p.projectResultMatches=matches;markLocalSave();
+    }));
+  }
+  box.append(section);
+}
+
 async function refreshInvestmentTracker(){
   if(!budgetUser||!currentProfile())return;
   const seq=++readSequence,owner=budgetUser.id;
   if(readsOwner!==owner){moduleReads={};readsOwner=owner;renderStatementsFixture();}
-  await Promise.all(Object.keys(moduleNames).map(async key=>{
+  await Promise.all([...Object.keys(moduleNames),'projects'].map(async key=>{
     let item;
     try{
       const env=await AurumCloud.module.load(key);checkOwner();
+      if(key==='projects')item=readProjectResults(env,owner);
+      else {
       if(env?.source!=='cloud'||!env.state||env.dirty)throw Error('Current cloud data unavailable');
       const state=env.state,feed=state.budgetReporting;
       if([state.ownerId,state.ownerUserId,state.raw?.ownerUserId,feed?.ownerId,state.raw?.statementSettings?.ownerId,state.raw?.cashReport?.ownerId,state.raw?.budgetReportSettings?.ownerId].some(id=>id&&id!==owner))throw Error('User mismatch');
       item={raw:state.raw,summary:state.publishedSummary||state.raw?.summary,updated:state.updatedAt??env.updatedAt,feed:feed?.version===1&&feed.ownerId===owner?feed:null};
+      }
     }catch(e){item={error:e.message};}
     if(seq===readSequence&&budgetUser?.id===owner&&window.AurumCloud.auth.getUser()?.id===owner){moduleReads[key]=item;renderFinanceFixtures();}
   }));
@@ -2107,6 +2228,17 @@ function presentStatements(box,p,from,to,ledger,warnings,modules={}){
   }
   if(declines.length)income.push(section('Valuation and currency losses'),...declines.map(r=>detail(r,-1)));
   income.push(...unavailable,subtotal('Total expenses'+(unavailable.length?' (partial)':''),op(expenses)));
+  const projectView=projectPeriod(p,from,to),overlap=projectOverlap(p,earnings,projectView);
+  income.push(subtotal('Budgeting result before commercial projects',op(earnings)),section('Commercial project profit / (loss)'));
+  for(const r of projectView.rows){
+    income.push(r.unavailable?note(r.name,'Unavailable'): {name:r.name,refs:r.refs,values:[show(r.amount),'']});
+  }
+  if(!projectView.rows.length)income.push(note('Commercial projects',projectView.warnings.length?'Results unavailable':'No registered projects'));
+  income.push(projectView.warnings.length&&!projectView.known.size?note('Net project profit / (loss)','Unavailable'):
+    subtotal('Net project profit / (loss)'+(projectView.warnings.length?' (partial)':''),projectView.total));
+  if(overlap.matched.length)income.push({name:'Adjustment for matched Budgeting entries',values:['',show(overlap.adjustment)],
+    refs:overlap.matched.map(item=>({ref:item.tx,amount:-item.impact}))});
+  const combined=cents(op(earnings)+projectView.total+overlap.adjustment);
   const position=[];
   function maturity(r){
     if(r.statementClass)return r.statementClass;
@@ -2148,16 +2280,17 @@ function presentStatements(box,p,from,to,ledger,warnings,modules={}){
   const periodEquity=equity.filter(r=>r.name!=='Opening capital'&&r.name!=='Accumulated result before period'&&!r.name.endsWith('opening carrying value'));
   const opening=equity.filter(r=>!periodEquity.includes(r));
   position.push({name:'Opening capital',refs:opening.flatMap(r=>r.refs),values:[show(op(opening)),'']},
-    ...periodEquity.map(r=>detail(r,-1)),{name:'Add net profit / (loss) for the period',values:[show(op(earnings)),'']});
+    ...periodEquity.map(r=>detail(r,-1)),{name:'Add Budgeting result before commercial projects',values:[show(op(earnings)),'']});
   const capital=cents(op(equity)+op(earnings)),difference=cents(total(positions)-capital);
   if(difference)warnings.push('Net assets and closing capital differ by '+show(difference));
   const dr=cents(ledger.reduce((n,r)=>n+Math.max(r.net,0),0)),cr=cents(ledger.reduce((n,r)=>n+Math.max(-r.net,0),0));
   if(cents(dr-cr))warnings.push('Trial balance difference '+show(cents(dr-cr)));
   const suffix=warnings.length?' (partial)':'',heads=['Account','Detail · '+p.mainCurrency,'Total · '+p.mainCurrency];
-  reportTable(box,'Income Statement',heads,income,['Net profit / (loss)'+(warnings.some(w=>!w.includes('Missing Budgeting side')&&!w.includes('Missing module side')&&!w.includes('Funding ledger unavailable')&&!w.startsWith('Confirm loan maturity')&&!w.startsWith('Trial balance difference')&&!w.startsWith('Net assets and closing capital differ'))?' (partial)':''),'',show(op(earnings))],subtitle);
+  reportTable(box,'Income Statement',heads,income,['Net profit / (loss) including commercial projects'+(projectView.warnings.length||warnings.some(w=>!w.includes('Missing Budgeting side')&&!w.includes('Missing module side')&&!w.includes('Funding ledger unavailable')&&!w.startsWith('Confirm loan maturity')&&!w.startsWith('Trial balance difference')&&!w.startsWith('Net assets and closing capital differ'))?' (partial)':''),'',show(combined)],subtitle);
   reportTable(box,'Balance Sheet',heads,position,['Closing capital'+suffix,'',show(capital)],'As at '+to);
   reportTable(box,'Trial Balance',['Account','Debit · '+p.mainCurrency,'Credit · '+p.mainCurrency],
     ledger.map(r=>({...r,name:r.displayName||r.name,values:[r.net>0?show(r.net):'',r.net<0?show(-r.net):'']})),['Totals'+suffix,show(dr),show(cr)],'As at '+to);
+  return {view:projectView,overlap};
 }
 
 function reportTable(box,title,heads,rows,totals,period){
@@ -2175,7 +2308,8 @@ function reportTable(box,title,heads,rows,totals,period){
       const detail=el('details');detail.append(el('summary',r.name));cell.append(detail);
       for(const {ref,amount} of r.refs){
         const line=el('p',[ref.date,ref.name||ref.description||ref.category,ref.reference||ref.id,money(cents(amount*(r.detailSign??1)))].filter(Boolean).join(' · '));
-        if(ref.module&&Object.hasOwn(modulePages,ref.module)){
+        if(ref.module==='projects'){const a=el('a','Projects');a.href='../projects/index.html';line.append(' ',a);}
+        else if(ref.module&&Object.hasOwn(modulePages,ref.module)){
           const a=el('a',moduleNames[ref.module]);a.href='../'+modulePages[ref.module]+'/index.html';line.append(' ',a);
           for(const s of Array.isArray(ref.details)?ref.details:[])line.append(el('span',' · '+[s.date,s.reference,s.description].filter(Boolean).join(' ')));
         }detail.append(line);
@@ -2231,7 +2365,9 @@ function renderStatementsFixture(){
   if(!validDate(from.value)||!validDate(to.value)||from.value<'0100-01-01'||from.value>to.value||to.value>today()){$('reportStatus').textContent='Choose a valid period ending today or earlier.';return;}
   const {ledger,warnings,modules}=makeStatements(p,from.value,to.value);
   if((p.portfolioOverlap||[]).length&&!p.assetModuleMatches)warnings.push('Review legacy ETF/CFD matches and assign a specific module.');
-  presentStatements(box,p,from.value,to.value,ledger,warnings,modules);
+  const projectReport=presentStatements(box,p,from.value,to.value,ledger,warnings,modules);
+  warnings.push(...projectReport.view.warnings);
+  projectReportControls(box,p,projectReport.view,projectReport.overlap);
   $('reportStatus').textContent=warnings.length?'Incomplete · '+warnings.join(' | '):'Module periods loaded and reconciled.';
   const display=n=>money(n);
   const card=el('div');card.className='card';card.append(el('h2','Module reconciliation'));
@@ -2255,8 +2391,8 @@ function renderStatementsFixture(){
       let fields;try{fields=JSON.parse(id);}catch{continue;}
       if(!Array.isArray(fields)||fields.length!==4)continue;
       const [key,kind,date,field]=fields;
-      if(!Object.hasOwn(moduleNames,key)||!['rate','date','mark','price'].includes(kind))continue;
-      const label=moduleNames[key]+' · '+kind+' · '+field+' · '+date;
+      if((key!=='projects'&&!Object.hasOwn(moduleNames,key))||!['rate','date','mark','price'].includes(kind))continue;
+      const label=(key==='projects'?'Projects':moduleNames[key])+' · '+kind+' · '+field+' · '+date;
       const row=el('p',label+' · '+value+' ');row.append(button('Edit',()=>reportObservation(p,{id,kind,date,field,label})));
       details.append(row);
     }

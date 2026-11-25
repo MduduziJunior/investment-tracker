@@ -35,6 +35,15 @@
 @media(max-width:600px){.dashboard-analytics{grid-template-columns:1fr}.pricehelper{grid-template-columns:1fr}.actions{align-items:stretch}.actions .btn,.actions select{flex:1 1 auto}.modulebar nav a{font-size:8px;padding:0 7px}}
 </style>
 
+<style>
+body{isolation:isolate}
+body::before{
+  content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:linear-gradient(rgba(247,246,249,.76),rgba(247,246,249,.86)),
+             url("./background.png") center center/cover no-repeat;
+}
+@media print{body::before{display:none}}
+</style>
 </head>
 
 <body>
@@ -47,7 +56,7 @@
 <div class="app">
 <section class="work">
   <div class="modulebar">
-    <nav aria-label="Investment tracker modules"><a href="../../index.html">← Unified Dashboard</a><a class="active" href="./index.html" aria-current="page">ETF</a><a href="../cfd-journal/index.html">CFD</a><a href="../cash-savings/index.html">Cash Savings</a><a href="../budgeting/index.html">Budgeting</a></nav>
+    <nav aria-label="Investment tracker modules"><a href="../../index.html">← Unified Dashboard</a><a class="active" href="./index.html" aria-current="page">ETF</a><a href="../cfd-journal/index.html">CFD</a><a href="../cash-savings/index.html">Cash Savings</a><a href="../budgeting/index.html">Budgeting</a><a href="../projects/index.html">Projects</a></nav>
     <span class="modulebar-status"><i></i>Supabase ETF module · Taiwan · Cathay Securities</span>
   </div>
   <div class="modulebrand"><div class="logo">ETF</div><b>Taiwan ETF Portfolio<small>Authenticated Cathay Securities investment tracker · FIFO cost basis</small></b></div>
@@ -142,7 +151,8 @@
     etf: './index.html',
     cfd: '../cfd-journal/index.html',
     cash: '../cash-savings/index.html',
-    budgeting: '../budgeting/index.html'
+    budgeting: '../budgeting/index.html',
+    projects: '../projects/index.html'
   });
 
   const ACTIVE_USER_KEY = 'aurum_imperium_active_user_v1';
