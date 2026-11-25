@@ -1413,6 +1413,34 @@ function queueStatementRate(date) {
   },0);
 }
 
+// CFD keeps its ledger in USD. Return a dated rate with its provenance so the
+// value shown in the statement can be traced back to the broker amount.
+function cfdQuoteOn(p,settings,date){
+  const base=p.mainCurrency;
+  const make=(rate,source)=>numeric(rate)&&rate>0?{rate,source,date,base}:null;
+  if(base==='USD')return make(1,'USD reporting');
+  const id=JSON.stringify(['cfd','rate',date,'USD/'+base]);
+  const recorded=settings?.rates?.[base]?.[date];
+  // A unit multiplier in an old cross-currency record is ambiguous. Require
+  // an independent dated reference or a confirmed statement observation.
+  const saved=(base==='TWD'&&recorded===1?null:make(recorded,'saved CFD rate'))||
+    make(p.statementObservations?.[id],'saved statement observation');
+  if(saved)return saved;
+  const archive=cachedBankRates(date);
+  if(archive)return make(archive[base],'dated reference');
+  try{
+    const ref=JSON.parse(localStorage.getItem('pilotprofit_fx_usd_v1'));
+    if(ref?.result==='success'&&ref.base_code==='USD'&&validBankRates(ref.rates)&&numeric(ref.time_last_update_unix)&&
+       new Date(ref.time_last_update_unix*1000).toISOString().slice(0,10)===date)return make(ref.rates[base],'dated reference');
+  }catch{}
+  return null;
+}
+function cfdConversionText(usd,q,total){
+  const native=usd.toLocaleString(undefined,{maximumFractionDigits:8});
+  const rate=q.rate.toLocaleString(undefined,{maximumFractionDigits:10});
+  return 'US$ '+native+' × '+rate+' '+q.base+'/USD = '+money(cents(total),q.base)+' · '+q.date+' · '+q.source;
+}
+
 function automaticPeriod(key, raw, p, from, to) {
   const present = Array.isArray;
   if (!raw || (key==='etf' && !present(raw.transactions)) ||
@@ -1436,6 +1464,11 @@ function automaticPeriod(key, raw, p, from, to) {
   }
   function rate(currency,date) {
     if(currency===base)return 1;
+    if(key==='cfd'&&currency==='USD'){
+      const quote=cfdQuoteOn(p,settings,date);
+      if(quote)return quote.rate;
+      need('rate',date,'USD/'+base,base+' per USD on '+date);queueStatementRate(date);return null;
+    }
     const pair=settings.quotes?.[date];
     const stored=key==='cash_savings'&&positive(pair?.[base])&&positive(pair?.[currency])?pair[base]/pair[currency]:
       settings.rates?.[base]?.[date];
@@ -1471,9 +1504,9 @@ function automaticPeriod(key, raw, p, from, to) {
     const source={date,reference:String(r.id||''),description};
     sources.push(source);return source;
   }
-  function earn(r,date,name,amount,kind) {
+  function earn(r,date,name,amount,kind,description=name) {
     if(date<from||date>to||!numeric(amount)||amount===0)return;
-    entries.push({name,kind,amount:cents(amount),source:explain(r,date,name)});
+    entries.push({name,kind,amount:cents(amount),source:explain(r,date,description)});
   }
   function move(r,date,currency,n,booked,flow) {
     if(!validDate(date)||!Object.hasOwn(end,currency)||!numeric(n))throw Error('Check movement date, currency and amount · '+r.id);
@@ -1504,21 +1537,29 @@ function automaticPeriod(key, raw, p, from, to) {
     const value=settings.equity?.[date];
     return numeric(value)?convert(value,currency,date):null;
   }
-  let reserve=null, holdings=null;
+  let reserve=null, holdings=null, closingUsd=null;
   if(key==='cfd'){
     const trades=cleanRows(raw.trades);
     const active=[];
     for(const r of cleanRows(raw.funding)){
       if(!['deposit','withdrawal'].includes(String(r.type).toLowerCase())||!positive(number(r.amount))||(r.currency&&r.currency!=='USD'))throw Error('Check broker funding · '+r.id);
       const deposit=String(r.type).toLowerCase()==='deposit', sign=deposit?1:-1;
-      const basis=amountOf(r)??(base==='TWD'&&positive(r.twdAtTransaction)?r.twdAtTransaction:null);
+      const bookedAmount=number(r.twdAtTransaction),bookedRate=number(r.fxRateTwdAtTransaction);
+      const bookedTwd=positive(bookedAmount)?bookedAmount:positive(bookedRate)?Number(r.amount)*bookedRate:null;
+      const basis=(base==='TWD'?bookedTwd:null)??amountOf(r);
       move(r,r.date,'USD',sign*Number(r.amount),basis===null?null:sign*basis,deposit?'deposits':'withdrawals');
     }
     function event(r,day,name,usd,fee=false){
       if(!numeric(usd))throw Error('Check '+name+' amount · '+r.id);
       if(!usd||day>to)return;
       move(r,day,'USD',usd,null);
-      if(day>=from)earn(r,day,name,convert(usd,'USD',day),fee?'fee':'realized');
+      if(day>=from){
+        const q=cfdQuoteOn(p,settings,day);
+        if(q){
+          const amount=usd*q.rate;
+          earn(r,day,name,amount,fee?'fee':'realized',name+' · '+cfdConversionText(usd,q,amount));
+        }
+      }
     }
     for(const t of trades){
       if(t.status==='DRAFT')continue;
@@ -1555,14 +1596,19 @@ function automaticPeriod(key, raw, p, from, to) {
     }
     function mark(day) {
       const open=active.filter(t=>t.entry.date<=day&&(t.status!=='CLOSED'||!validDate(t.result?.exitDate)||t.result.exitDate>day));
-      if(!open.length)return 0;
+      if(!open.length){
+        if(day===to&&closingCashKnown)closingUsd=end.USD;
+        return 0;
+      }
       let usd=number(settings.marks?.[day]);
       if(usd===null&&numeric(settings.equity?.[day])&&(day===prior?openingCashKnown:closingCashKnown))
         usd=settings.equity[day]-(day===prior?begin:end).USD;
       if(usd===null)usd=need('mark',day,'USD','Combined open CFD P/L in USD on '+day);
+      if(day===to&&closingCashKnown&&numeric(usd))closingUsd=end.USD+usd;
       return convert(usd,'USD',day);
     }
     openingPosition=openingMark=mark(prior);closingPosition=closingMark=mark(to);
+    if(numeric(settings.equity?.[to]))closingUsd=settings.equity[to];
   }else if(key==='etf'){
     const lots=new Map();
     const sorted=[...cleanRows(raw.transactions)].sort((a,b)=>String(a.date).localeCompare(String(b.date))||Number(a.createdAt||0)-Number(b.createdAt||0)||String(a.id).localeCompare(String(b.id)));
@@ -1671,7 +1717,9 @@ function automaticPeriod(key, raw, p, from, to) {
   if(key==='etf'){period.reserveCash=round(reserve);period.holdingsValue=round(holdings);}
   if(key==='cash_savings')period.interest=period.realized;
   const complete=!needs.size&&!messages.size&&flowsKnown&&[opening,closing,fx,unrealized].every(numeric);
-  return {period:complete?period:null,value:period.closing,opening:period.opening,entries,fx:period.fx,unrealized:period.unrealized,
+  const closingQuote=key==='cfd'&&numeric(closingUsd)?cfdQuoteOn(p,settings,to):null;
+  const conversion=closingQuote&&numeric(period.closing)?cfdConversionText(closingUsd,closingQuote,period.closing):null;
+  return {conversion,period:complete?period:null,value:period.closing,opening:period.opening,entries,fx:period.fx,unrealized:period.unrealized,
     needs:[...needs.values()],messages:[...messages],delta:complete?cents(closing-opening-flows.deposits+flows.withdrawals-realized+fees-unrealized-fx):null};
 }
 
@@ -1706,17 +1754,19 @@ async function refreshInvestmentTracker(){
 }
 function inspectModule(key,p,from,to){
   const read=moduleReads[key],published=publishedPeriod(key,p,from,to);
-  if(!read?.raw || (published.period && (key!=='etf'||p.mainCurrency==='TWD') &&
+  const usdLedger=key==='cfd'&&Array.isArray(read?.raw?.funding)&&Array.isArray(read?.raw?.trades);
+  if(!read?.raw || (!usdLedger&&published.period && (key!=='etf'||p.mainCurrency==='TWD') &&
     (key==='cfd'?numeric(published.period.tradeLosses):key==='etf'?numeric(published.period.saleLosses):numeric(published.period.interest))))return published;
   let calculated;
   try{calculated=automaticPeriod(key,read.raw,p,from,to);}
-  catch(error){return {...published,reason:error.message};}
+  catch(error){return usdLedger?{source:key,value:null,reason:error.message}:{...published,reason:error.message};}
   if(!calculated)return published;
-  if(published.period&&!calculated.period&&key!=='etf')return published;
+  if(!usdLedger&&published.period&&!calculated.period&&key!=='etf')return published;
   const reason=[...calculated.messages,...calculated.needs.map(r=>r.label)].join(' · ');
   const useClosing=numeric(calculated.value);
   return {...published,period:calculated.period,automatic:calculated,delta:calculated.delta,
-    value:useClosing?calculated.value:published.value,balanceSource:useClosing?'Dated ledger balance':key==='cfd'&&published.balanceSource==='Current module summary'?'Broker cash summary (open P/L unavailable)':published.balanceSource,
+    conversion:useClosing?calculated.conversion:published.conversion,
+    value:useClosing?calculated.value:usdLedger&&!published.conversion?null:published.value,balanceSource:useClosing?'Dated ledger balance':key==='cfd'&&published.balanceSource==='Current module summary'?'Broker cash summary (open P/L unavailable)':published.balanceSource,
     reason:reason||'Incomplete dated valuation',source:key};
 }
 function publishedPeriod(key,p,from,to){
@@ -1725,24 +1775,30 @@ function publishedPeriod(key,p,from,to){
   const period=periods.length===1?periods[0]:null;
   const fields=['opening','closing','deposits','withdrawals','realized','unrealized','fx','fees'];
   const complete=period&&fields.every(k=>numeric(period[k]))&&['deposits','withdrawals','fees'].every(k=>period[k]>=0);
-  if(complete){
+  const rawCfd=key==='cfd'&&Array.isArray(read?.raw?.funding)&&Array.isArray(read?.raw?.trades);
+  if(complete&&!rawCfd){
     const delta=cents(period.closing-period.opening-period.deposits+period.withdrawals-period.realized-period.unrealized-period.fx+period.fees);
     return {period,delta,value:period.closing,source:key};
   }
   const s=read?.summary, currency=s?.currency==='NTD'?'TWD':s?.currency;
-  const rate=currency===p.mainCurrency?1:window.BudgetFX?.quote(currency,p.mainCurrency);
+  const datedCfd=key==='cfd'&&currency==='USD'?cfdQuoteOn(p,read?.raw?.statementSettings,to):null;
+  const rate=key==='cfd'&&currency==='USD'?datedCfd?.rate:currency===p.mainCurrency?1:window.BudgetFX?.quote(currency,p.mainCurrency);
   // A closing position belongs to the end date, even when a different start date was published.
   const closes=new Set((feed?.currency===p.mainCurrency&&Array.isArray(feed.periods)?feed.periods:[])
     .filter(r=>r?.to===to&&numeric(r.closing)).map(r=>cents(r.closing)));
-  if(closes.size===1)return {value:[...closes][0],source:key,balanceSource:'Dated closing balance',reason:'Performance unavailable for selected period'};
-  if(closes.size>1)return {value:null,source:key,reason:'Conflicting published closing balances'};
+  if(!rawCfd&&closes.size===1)return {value:[...closes][0],source:key,balanceSource:'Dated closing balance',reason:'Performance unavailable for selected period'};
+  if(!rawCfd&&closes.size>1)return {value:null,source:key,reason:'Conflicting published closing balances'};
   const stamp=new Date(s?.updatedAt??read?.updated);
   const stampValid=Number.isFinite(stamp.getTime());
   const summaryDay=stampValid?[stamp.getFullYear(),String(stamp.getMonth()+1).padStart(2,'0'),String(stamp.getDate()).padStart(2,'0')].join('-'):'';
   const recent=summaryDay===today();
   const lastQuote=summaryDay&&summaryDay<to&&numeric(s?.current_value)&&s?.valuationComplete!==false&&['TWD','USD','SZL'].includes(currency)?
     {date:summaryDay,amount:s.current_value,currency}:null;
-  return {value:to===today()&&recent&&s?.valuationComplete!==false&&numeric(s?.current_value)&&rate>0?cents(s.current_value*rate):null,
+  const onDay=summaryDay===to&&(key==='cfd'||to===today()&&recent);
+  if(key==='cfd'&&currency==='USD'&&onDay&&numeric(s?.current_value)&&!datedCfd)queueStatementRate(to);
+  const value=onDay&&s?.valuationComplete!==false&&numeric(s?.current_value)&&rate>0?cents(s.current_value*rate):null;
+  const conversion=numeric(value)&&datedCfd?cfdConversionText(s.current_value,datedCfd,value):null;
+  return {value,conversion,
     lastQuote,balanceSource:'Current module summary',reason:read?.error||(!read?'Module data not loaded':'Dated performance unavailable'),source:key};
 }
 function matching(key,p,asOf){
@@ -1855,7 +1911,7 @@ function makeStatements(p,from,to){
     const principalBefore=confirmed.filter(x=>x.date<from).reduce((n,x)=>n+signedPrincipal(x),0);
     const principalPeriod=confirmed.filter(x=>x.date>=from).reduce((n,x)=>n+signedPrincipal(x),0);
     if(m.automatic){
-      const a=m.automatic,ref={module:key,date:to,description:m.balanceSource||label,details:a.period?.sources};
+      const a=m.automatic,ref={module:key,date:to,description:m.conversion||m.balanceSource||label,details:a.period?.sources};
       if(numeric(m.value)){
         if(key==='etf'&&numeric(a.period?.holdingsValue)&&numeric(a.period.reserveCash)&&Math.abs(a.period.holdingsValue+a.period.reserveCash-m.value)<0.011){
           post('asset','ETF holdings',cents(m.value-a.period.reserveCash),ref,'noncurrentAsset');
@@ -2058,7 +2114,11 @@ function presentStatements(box,p,from,to,ledger,warnings,modules={}){
       else if(positions.some(r=>r.refs.some(e=>e.ref.module===key)&&r.name!=='Funding awaiting module reconciliation'))
         basis=m.period?'included above':m.balanceSource+' included above';
       else basis='reference only · funding needs reconciliation';
-      position.push(note(moduleNames[key]+' — net balance · '+basis,numeric(m.value)?show(m.value):'Unavailable'));
+      const balance=numeric(m.value)?(key==='cfd'?money(m.value,p.mainCurrency):show(m.value)):'Unavailable';
+      position.push(note(moduleNames[key]+' — net balance · '+basis,balance));
+      if(key==='cfd'&&m.conversion)position.push(note('CFD conversion on the balance sheet date',m.conversion));
+      else if(key==='cfd'&&numeric(m.value))position.push(note('Published reporting currency',p.mainCurrency+' · already reported by the module'));
+
     }
   }
   position.push(subtotal('Total assets',total(positions.filter(r=>r.group==='asset'))));
