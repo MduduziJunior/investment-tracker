@@ -335,7 +335,7 @@ function money(n,currency){const p=currentProfile();const cur=currency||p?.mainC
 function pct(n){return Number(n||0).toFixed(1)+"%"}
 function openApp(){$("app").classList.remove("hidden");document.querySelectorAll(".section").forEach(section=>section.classList.remove("active"));$("dashboard").classList.add("active");renderTabs();document.querySelectorAll("#tabs button").forEach(button=>button.classList.toggle("active",button.dataset.tab==="dashboard"));setDefaultDates();loadSettingsIntoForm();renderAll()}
 function renderTabs(){$("tabs").innerHTML=tabs.map(([id,label])=>`<button data-tab="${id}" onclick="showTab('${id}')">${label}</button>`).join("");const btn=document.querySelector('button[data-tab="dashboard"]');if(btn)btn.classList.add("active")}
-function showTab(id){document.querySelectorAll(".section").forEach(s=>s.classList.remove("active"));$(id).classList.add("active");document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("active",b.dataset.tab===id));renderAll()}
+function showTab(id){document.querySelectorAll(".section").forEach(s=>s.classList.remove("active"));$(id).classList.add("active");document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("active",b.dataset.tab===id));renderAll();if(id==="statements"&&budgetUser)refreshInvestmentTracker()}
 function setDefaultDates(){if(!$("debtDate").value)$("debtDate").value=today();["transactionDate","receivableDate","assetDate","projectDate","netWorthDate","transferDate"].forEach(id=>$(id)&&($(id).value=today()));["transactionMonth","receivableMonth","budgetMonth","projectMonth","transferMonth","templateGenerateMonth","closeMonthInput"].forEach(id=>$(id)&&($(id).value=thisMonth()))}
 function renderProjectOptions(){const p=currentProfile();const select=$("transactionProjectId");if(!select)return;const current=select.value;const projects=(p?.projects||[]).filter(x=>!["completed","cancelled"].includes(x.status));select.innerHTML='<option value="">No project selected</option>'+projects.map(x=>`<option value="${escapeHtml(x.id)}">${escapeHtml(x.name)} (${escapeHtml(x.status||"active")})</option>`).join("");if(current&&projects.some(x=>x.id===current))select.value=current}
 function selectedTransactionProject(){const p=currentProfile();const id=$("transactionProjectId")?.value||"";return (p?.projects||[]).find(x=>x.id===id)||null}
@@ -1316,7 +1316,7 @@ window.BudgetFX = (() => {
    All period amounts use booked/report-date rates supplied by the publisher. */
 const moduleNames = {etf:'ETF Portfolio', cfd:'CFD Journal', cash_savings:'Cash Savings'};
 const modulePages = {etf:'etf-portfolio', cfd:'cfd-journal', cash_savings:'cash-savings'};
-let moduleReads = {}, readSequence = 0;
+let moduleReads = {}, readSequence = 0, readsOwner = null;
 const funds = p => Array.isArray(p?.moduleFunding) ? p.moduleFunding : [];
 const numeric = n => typeof n === 'number' && Number.isFinite(n);
 const cents = n => Math.round((n + Number.EPSILON)*100)/100;
@@ -1390,23 +1390,336 @@ function renderFunding(){
     }));box.append(line);
   }
 }
+// Read-only statement projection. Source postings keep their own transaction dates,
+// currencies and execution costs. Daily rates are shared with the account register.
+const statementFxQueue = new Set();
+let statementFxRunning = false;
+function queueStatementRate(date) {
+  if (!validDate(date) || date > today() || retryAfter.get(date) > Date.now()) return;
+  statementFxQueue.add(date);
+  if (statementFxRunning) return;
+  statementFxRunning = true;
+  setTimeout(async () => {
+    try {
+      while (statementFxQueue.size) {
+        const batch = [...statementFxQueue].slice(0,4);
+        batch.forEach(day=>statementFxQueue.delete(day));
+        await Promise.all(batch.map(day=>fetchBankRates(day)));
+      }
+    } finally {
+      statementFxRunning = false;
+      if (budgetUser && window.AurumCloud?.auth.getUser()?.id === budgetUser.id && !leaving) renderFinanceFixtures();
+    }
+  },0);
+}
+
+function automaticPeriod(key, raw, p, from, to) {
+  const present = Array.isArray;
+  if (!raw || (key==='etf' && !present(raw.transactions)) ||
+      (key==='cfd' && !(present(raw.trades)&&present(raw.funding))) ||
+      (key==='cash_savings' && !present(raw.records))) return null;
+  const prior = new Date(Date.parse(from)-86400000).toISOString().slice(0,10);
+  const base = p.mainCurrency, zero = {TWD:0,USD:0,SZL:0};
+  const begin = {...zero}, end = {...zero}, needs = new Map(), messages = new Set();
+  const entries = [], sources = [], flows = {deposits:0,withdrawals:0};
+  let cashMovementBase=0, openingPosition=0, closingPosition=0, openingMark=0, closingMark=0;
+  let openingCashKnown=true, closingCashKnown=true, flowsKnown=true;
+  const settings = (key==='etf'?raw.budgetReportSettings:key==='cfd'?raw.statementSettings:raw.cashReport)||{};
+  const observations=p.statementObservations||{};
+  const positive=n=>numeric(n)&&n>0;
+  const number=n=>n==null||n===''||!Number.isFinite(Number(n))?null:Number(n);
+  function need(kind,date,field,label) {
+    const id=JSON.stringify([key,kind,date,field]);
+    const saved=observations[id];
+    if(kind==='date'?validDate(saved)&&saved.slice(0,7)===date:kind==='mark'?numeric(saved):positive(saved))return saved;
+    needs.set(id,{id,kind,date,field,label});return null;
+  }
+  function rate(currency,date) {
+    if(currency===base)return 1;
+    const pair=settings.quotes?.[date];
+    const stored=key==='cash_savings'&&positive(pair?.[base])&&positive(pair?.[currency])?pair[base]/pair[currency]:
+      settings.rates?.[base]?.[date];
+    if(positive(stored))return stored;
+    const manualId=JSON.stringify([key,'rate',date,currency+'/'+base]);
+    if(positive(observations[manualId]))return observations[manualId];
+    const daily=cachedBankRates(date);
+    if(positive(daily?.[base])&&positive(daily?.[currency]))return daily[base]/daily[currency];
+    const manual=need('rate',date,currency+'/'+base,base+' per '+currency+' on '+date);
+    if(positive(manual))return manual;
+    // The live reference is usable only when its published UTC date is the booked day.
+    try {
+      const cached=JSON.parse(localStorage.getItem('pilotprofit_fx_usd_v1'));
+      if(cached?.result==='success'&&cached.base_code==='USD'&&numeric(cached.time_last_update_unix)&&
+        new Date(cached.time_last_update_unix*1000).toISOString().slice(0,10)===date&&validBankRates(cached.rates)){
+        needs.delete(manualId);
+        return cached.rates[base]/cached.rates[currency];
+      }
+    } catch {}
+    queueStatementRate(date);return null;
+  }
+  function convert(n,currency,date,booked) {
+    if(!numeric(n))return null;
+    if(numeric(booked))return booked;
+    if(Math.abs(n)<1e-10)return 0;
+    const r=rate(currency,date);return r===null?null:n*r;
+  }
+  function amountOf(r) {
+    const b=r.budgetLink;
+    return b?.base===base && r.budgetOwner===budgetUser.id && positive(b.rate)&&positive(b.amount)?b.amount*b.rate:null;
+  }
+  function explain(r,date,description) {
+    const source={date,reference:String(r.id||''),description};
+    sources.push(source);return source;
+  }
+  function earn(r,date,name,amount,kind) {
+    if(date<from||date>to||!numeric(amount)||amount===0)return;
+    entries.push({name,kind,amount:cents(amount),source:explain(r,date,name)});
+  }
+  function move(r,date,currency,n,booked,flow) {
+    if(!validDate(date)||!Object.hasOwn(end,currency)||!numeric(n))throw Error('Check movement date, currency and amount · '+r.id);
+    if(date>to)return;
+    end[currency]+=n;
+    if(date<from){begin[currency]+=n;return;}
+    const v=convert(n,currency,date,booked);
+    if(v===null){cashMovementBase=null;if(flow)flowsKnown=false;return;}
+    if(cashMovementBase!==null)cashMovementBase+=v;
+    if(flow){flows[flow]+=Math.abs(v);explain(r,date,flow+' · '+n+' '+currency);}
+  }
+  function cleanRows(arr) {
+    const ids=new Set();
+    for(const r of arr){
+      if(!r?.id || ids.has(r.id))throw Error('Missing or duplicate source ID in '+moduleNames[key]);
+      ids.add(r.id);
+    }
+    return arr;
+  }
+  function cashValue(units,day) {
+    let sum=0;
+    for(const c of Object.keys(units)){
+      const v=convert(units[c],c,day);if(v===null)return null;sum+=v;
+    }
+    return sum;
+  }
+  function savedEquity(date,currency){
+    const value=settings.equity?.[date];
+    return numeric(value)?convert(value,currency,date):null;
+  }
+  let reserve=null, holdings=null;
+  if(key==='cfd'){
+    const trades=cleanRows(raw.trades);
+    const active=[];
+    for(const r of cleanRows(raw.funding)){
+      if(!['deposit','withdrawal'].includes(String(r.type).toLowerCase())||!positive(number(r.amount))||(r.currency&&r.currency!=='USD'))throw Error('Check broker funding · '+r.id);
+      const deposit=String(r.type).toLowerCase()==='deposit', sign=deposit?1:-1;
+      const basis=amountOf(r)??(base==='TWD'&&positive(r.twdAtTransaction)?r.twdAtTransaction:null);
+      move(r,r.date,'USD',sign*Number(r.amount),basis===null?null:sign*basis,deposit?'deposits':'withdrawals');
+    }
+    function event(r,day,name,usd,fee=false){
+      if(!numeric(usd))throw Error('Check '+name+' amount · '+r.id);
+      if(!usd||day>to)return;
+      move(r,day,'USD',usd,null);
+      if(day>=from)earn(r,day,name,convert(usd,'USD',day),fee?'fee':'realized');
+    }
+    for(const t of trades){
+      if(t.status==='DRAFT')continue;
+      const e=t.entry||{},r=t.result||{};
+      if(!validDate(e.date)||!['OPEN','CLOSED'].includes(t.status)){
+        messages.add('Confirm trade status and entry date · '+t.id);
+        openingCashKnown=false;closingCashKnown=false;continue;
+      }
+      active.push(t);
+      if(e.date>to)continue;
+      event(t,e.date,'Entry commission and spread',-(Number(e.entryCommission||0)+Number(e.spreadCost||0)),true);
+      let size=number(e.positionSize);
+      for(const a of t.management||[]){
+        if(a.positionAfter!=null)size=number(a.positionAfter);
+        event(t,a.date,'Partial close',Number(a.partialRealizedPnl||0));
+      }
+      if(t.status==='CLOSED'){
+        if(!validDate(r.exitDate)){
+          messages.add('Confirm closing date · '+t.id);
+          if(e.date<from)openingCashKnown=false;
+          closingCashKnown=false;continue;
+        }
+        if(r.exitDate<=to){
+          const qty=number(r.finalClosedSize)??size, ep=number(e.actualEntry)>0?Number(e.actualEntry):number(e.plannedEntry);
+          let gross=number(r.finalLegGrossPnl);
+          if(gross===null&&qty===0)gross=0;
+          if(gross===null&&qty>0&&ep>0&&number(r.finalExitPrice)>0&&number(e.valuePerUnit)>0&&['BUY','SELL'].includes(e.direction))
+            gross=(r.finalExitPrice-ep)*qty*e.valuePerUnit*(e.direction==='BUY'?1:-1);
+          if(gross===null){messages.add('Confirm final gross P/L · '+t.id);closingCashKnown=false;if(r.exitDate<from)openingCashKnown=false;}
+          else event(t,r.exitDate,'Closed trade',gross);
+          event(t,r.exitDate,'Exit commission, financing and other costs',-(Number(r.exitCommission||0)+Number(r.swapFinancing||0)+Number(r.otherCosts||0)),true);
+        }
+      }
+    }
+    function mark(day) {
+      const open=active.filter(t=>t.entry.date<=day&&(t.status!=='CLOSED'||!validDate(t.result?.exitDate)||t.result.exitDate>day));
+      if(!open.length)return 0;
+      let usd=number(settings.marks?.[day]);
+      if(usd===null&&numeric(settings.equity?.[day])&&(day===prior?openingCashKnown:closingCashKnown))
+        usd=settings.equity[day]-(day===prior?begin:end).USD;
+      if(usd===null)usd=need('mark',day,'USD','Combined open CFD P/L in USD on '+day);
+      return convert(usd,'USD',day);
+    }
+    openingPosition=openingMark=mark(prior);closingPosition=closingMark=mark(to);
+  }else if(key==='etf'){
+    const lots=new Map();
+    const sorted=[...cleanRows(raw.transactions)].sort((a,b)=>String(a.date).localeCompare(String(b.date))||Number(a.createdAt||0)-Number(b.createdAt||0)||String(a.id).localeCompare(String(b.id)));
+    function unitCost(lot){
+      const gross=convert(lot.gross,'TWD',lot.date,lot.booked);
+      return gross===null?null:gross/lot.originalQty;
+    }
+    function valuation(day){
+      let value=0,cost=0;
+      for(const [ticker,book] of lots){
+        const live=book.filter(l=>l.qty>1e-9),qty=live.reduce((n,l)=>n+l.qty,0);
+        if(!qty)continue;
+        let price=settings.prices?.[day]?.[ticker];
+        if(!positive(price)){
+          const quotes=[raw.quotes?.[ticker],raw.manualQuotes?.[ticker],...(raw.priceHistory||[]).filter(h=>h.date===day).map(h=>h.prices?.[ticker])];
+          price=quotes.find(q=>positive(q?.price)&&(q.marketDate||q.updated?.slice(0,10))===day&&
+            (['online','manual'].includes(q.priceAuthority)||/manual|TWSE|TPEX|official daily close|market feed/i.test(q.source||''))&&!/execution|fallback/i.test(q.source||''))?.price;
+        }
+        if(!positive(price))price=need('price',day,ticker,ticker+' closing market price in TWD on '+day);
+        const amount=positive(price)?convert(qty*price,'TWD',day):null;
+        value=value===null||amount===null?null:value+amount;
+        for(const lot of live){
+          const unit=unitCost(lot);
+          cost=cost===null||unit===null?null:cost+lot.qty*unit;
+        }
+      }
+      return {value,mark:value===null||cost===null?null:value-cost};
+    }
+    function process(r){
+      const day=r.date,fees=number(r.fees??0),account='TWD';
+      if(!validDate(day)||fees===null||fees<0||r.currency&&r.currency!=='TWD')throw Error('Check ETF record · '+r.id);
+      if(['deposit','withdrawal','dividend','fee'].includes(r.kind)){
+        if(!positive(number(r.amount)))throw Error('Check ETF cash amount · '+r.id);
+        const sign=['deposit','dividend'].includes(r.kind)?1:-1,amt=Number(r.amount)*sign;
+        const flow=r.kind==='deposit'?'deposits':r.kind==='withdrawal'?'withdrawals':null;
+        const booked=amountOf(r);
+        move(r,day,account,amt,flow&&booked!==null?sign*booked:null,flow);
+        if(!flow&&day>=from)earn(r,day,r.kind==='fee'?'Module fees':'Dividends',convert(amt,account,day),r.kind==='fee'?'fee':'realized');
+        return;
+      }
+      const qty=number(r.qty),price=number(r.price),buy=r.kind==='buy';
+      if(!['buy','sell'].includes(r.kind)||!positive(qty)||!positive(price)||!r.ticker)throw Error('Check ETF execution · '+r.id);
+      const native=qty*price+(buy?fees:-fees),external=r.cashRoute==='external';
+      const booked=external?amountOf(r):null,amount=day>=from?convert(native,account,day,booked):null;
+      if(external)move(r,day,account,buy?native:-native,amount===null?null:(buy?amount:-amount),buy?'deposits':'withdrawals');
+      move(r,day,account,buy?-native:native,amount===null?null:(buy?-amount:amount));
+      if(!lots.has(r.ticker))lots.set(r.ticker,[]);
+      const book=lots.get(r.ticker);
+      if(buy){book.push({qty,originalQty:qty,gross:native,booked,date:day,id:r.id});return;}
+      let left=qty,basis=0;const consumed=[];
+      for(const lot of book){
+        if(left<=1e-9)break;
+        const n=Math.min(left,lot.qty);if(!n)continue;
+        if(day>=from){const unit=unitCost(lot);basis=basis===null||unit===null?null:basis+n*unit;}
+        consumed.push(lot.id);lot.qty-=n;left-=n;
+      }
+      if(left>1e-8)throw Error('Sale exceeds recorded ETF lots · '+r.id);
+      earn(r,day,'Realized sale · FIFO lots '+consumed.join(', '),amount===null||basis===null?null:amount-basis,'realized');
+    }
+    for(const r of sorted)if(!validDate(r.date))throw Error('Missing ETF transaction date · '+r.id);
+    sorted.filter(r=>r.date<from).forEach(process);
+    const opening=valuation(prior);openingPosition=opening.value;openingMark=opening.mark;
+    sorted.filter(r=>r.date>=from&&r.date<=to).forEach(process);
+    const closing=valuation(to);closingPosition=holdings=closing.value;closingMark=closing.mark;reserve=cashValue(end,to);
+  }else{
+    for(const r of cleanRows(raw.records)){
+      if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(r.month))throw Error('Confirm savings month · '+r.id);
+      if(r.month>to.slice(0,7))continue;
+      const monthStart=r.month+'-01';
+      const monthEnd=new Date(Date.UTC(Number(r.month.slice(0,4)),Number(r.month.slice(5)),0)).toISOString().slice(0,10);
+      let day=r.budgetOwner===budgetUser.id&&r.budgetLink?.date===r.date?r.date:null;
+      if(r.interestCredit||validDate(r.date)&&r.date!==monthStart)day=r.date;
+      if(!validDate(day)){
+        const confirmed=observations[JSON.stringify([key,'date',r.month,r.id])];
+        if(validDate(confirmed)&&confirmed.slice(0,7)===r.month)day=confirmed;
+        else if(monthEnd<from)day=monthEnd;
+        else if(from<=monthStart&&to>=monthEnd&&(r.sourceCurrency===base||base==='TWD'&&positive(r.twdAtTransaction)))day=monthEnd;
+        else day=need('date',r.month,r.id,'Actual posting date for Savings '+r.type+' '+r.heldAmount+' '+r.heldCurrency+' · '+r.id);
+      }
+      if(!validDate(day)){closingCashKnown=false;if(monthStart<from)openingCashKnown=false;continue;}
+      if(day>to)continue;
+      if(!['deposit','withdrawal'].includes(r.type)||!positive(number(r.heldAmount??r.amount)))throw Error('Check savings posting · '+r.id);
+      const c=r.heldCurrency||r.currency,sign=r.type==='withdrawal'?-1:1,n=sign*Number(r.heldAmount??r.amount);
+      let basis=amountOf(r);
+      if(basis===null&&r.sourceCurrency===base&&positive(number(r.sourceAmount)))basis=Number(r.sourceAmount);
+      if(basis===null&&r.sourceCurrency!==base&&positive(r.fxRateTwdAtTransaction)&&positive(number(r.sourceAmount))&&!positive(r.twdAtTransaction)&&day>=from)basis=convert(Number(r.sourceAmount)*r.fxRateTwdAtTransaction,'TWD',day);
+      if(basis===null&&positive(r.twdAtTransaction)&&day>=from)basis=convert(r.twdAtTransaction,'TWD',day);
+      if(basis===null&&positive(number(r.sourceAmount))&&day>=from)basis=convert(Number(r.sourceAmount),r.sourceCurrency,day);
+      move(r,day,c,n,basis===null?null:sign*basis,r.interestCredit?null:sign>0?'deposits':'withdrawals');
+      if(r.interestCredit&&day>=from)earn(r,day,'Savings interest',convert(n,c,day,basis),'realized');
+    }
+  }
+  const cashOpen=openingCashKnown?cashValue(begin,prior):null,cashClose=closingCashKnown?cashValue(end,to):null;
+  const open=cashOpen===null||openingPosition===null?null:cashOpen+openingPosition;
+  const close=cashClose===null||closingPosition===null?null:cashClose+closingPosition;
+  const native=key==='cfd'?'USD':'TWD';
+  const opening=key==='cash_savings'?open:savedEquity(prior,native)??open;
+  const closing=key==='cash_savings'?close:savedEquity(to,native)??close;
+  const fx=cashOpen===null||cashClose===null||cashMovementBase===null?null:cashClose-cashOpen-cashMovementBase;
+  const unrealized=openingMark===null||closingMark===null?null:closingMark-openingMark;
+  const realized=entries.reduce((n,e)=>n+(e.kind==='realized'||e.amount>0?e.amount:0),0);
+  const fees=entries.reduce((n,e)=>n+(e.kind==='fee'&&e.amount<0?-e.amount:0),0);
+  const round=n=>n===null?null:cents(n);
+  const period={from,to,opening:round(opening),closing:round(closing),fx:round(fx),unrealized:round(unrealized),
+    realized:cents(realized),fees:cents(fees),deposits:cents(flows.deposits),withdrawals:cents(flows.withdrawals),sources};
+  if(key==='etf'){period.reserveCash=round(reserve);period.holdingsValue=round(holdings);}
+  if(key==='cash_savings')period.interest=period.realized;
+  const complete=!needs.size&&!messages.size&&flowsKnown&&[opening,closing,fx,unrealized].every(numeric);
+  return {period:complete?period:null,value:period.closing,opening:period.opening,entries,fx:period.fx,unrealized:period.unrealized,
+    needs:[...needs.values()],messages:[...messages],delta:complete?cents(closing-opening-flows.deposits+flows.withdrawals-realized+fees-unrealized-fx):null};
+}
+
+function reportObservation(p, request) {
+  checkOwner();
+  if (!budgetWritable(p,budgetUser.id)) return;
+  const raw=prompt(request.label+(request.kind==='date'?' (YYYY-MM-DD)':''),String(p.statementObservations?.[request.id]??''));
+  if(raw===null||!raw.trim())return;
+  const value=request.kind==='date'?raw.trim():Number(raw);
+  if(request.kind==='date'?(!validDate(value)||value.slice(0,7)!==request.date||value>today()):
+      (!numeric(value)||(['price','rate'].includes(request.kind)&&value<=0)))return alert('Check the date or amount.');
+  checkOwner();
+  p.statementObservations={...p.statementObservations,[request.id]:value};
+  markLocalSave();
+}
+
 async function refreshInvestmentTracker(){
   if(!budgetUser||!currentProfile())return;
-  const seq=++readSequence,owner=budgetUser.id;moduleReads={};renderStatementsFixture();
-  await window.BudgetFX.refresh();
+  const seq=++readSequence,owner=budgetUser.id;
+  if(readsOwner!==owner){moduleReads={};readsOwner=owner;renderStatementsFixture();}
   await Promise.all(Object.keys(moduleNames).map(async key=>{
     let item;
     try{
       const env=await AurumCloud.module.load(key);checkOwner();
       if(env?.source!=='cloud'||!env.state||env.dirty)throw Error('Current cloud data unavailable');
       const state=env.state,feed=state.budgetReporting;
-      if([state.ownerUserId,state.raw?.ownerUserId,feed?.ownerId].some(id=>id&&id!==owner))throw Error('User mismatch');
-      item={summary:state.publishedSummary||state.raw?.summary,updated:state.updatedAt??env.updatedAt,feed:feed?.version===1&&feed.ownerId===owner?feed:null};
+      if([state.ownerId,state.ownerUserId,state.raw?.ownerUserId,feed?.ownerId,state.raw?.statementSettings?.ownerId,state.raw?.cashReport?.ownerId,state.raw?.budgetReportSettings?.ownerId].some(id=>id&&id!==owner))throw Error('User mismatch');
+      item={raw:state.raw,summary:state.publishedSummary||state.raw?.summary,updated:state.updatedAt??env.updatedAt,feed:feed?.version===1&&feed.ownerId===owner?feed:null};
     }catch(e){item={error:e.message};}
     if(seq===readSequence&&budgetUser?.id===owner&&window.AurumCloud.auth.getUser()?.id===owner){moduleReads[key]=item;renderFinanceFixtures();}
   }));
 }
 function inspectModule(key,p,from,to){
+  const read=moduleReads[key],published=publishedPeriod(key,p,from,to);
+  if(!read?.raw || (published.period && (key!=='etf'||p.mainCurrency==='TWD') &&
+    (key==='cfd'?numeric(published.period.tradeLosses):key==='etf'?numeric(published.period.saleLosses):numeric(published.period.interest))))return published;
+  let calculated;
+  try{calculated=automaticPeriod(key,read.raw,p,from,to);}
+  catch(error){return {...published,reason:error.message};}
+  if(!calculated)return published;
+  if(published.period&&!calculated.period&&key!=='etf')return published;
+  const reason=[...calculated.messages,...calculated.needs.map(r=>r.label)].join(' · ');
+  const useClosing=numeric(calculated.value);
+  return {...published,period:calculated.period,automatic:calculated,delta:calculated.delta,
+    value:useClosing?calculated.value:published.value,balanceSource:useClosing?'Dated ledger balance':key==='cfd'&&published.balanceSource==='Current module summary'?'Broker cash summary (open P/L unavailable)':published.balanceSource,
+    reason:reason||'Incomplete dated valuation',source:key};
+}
+function publishedPeriod(key,p,from,to){
   const read=moduleReads[key],feed=read?.feed;
   const periods=feed?.currency===p.mainCurrency&&Array.isArray(feed.periods)?feed.periods.filter(r=>r.from===from&&r.to===to):[];
   const period=periods.length===1?periods[0]:null;
@@ -1517,7 +1830,7 @@ function makeStatements(p,from,to){
   for(const [key,label] of Object.entries(moduleNames)){
     const m=inspectModule(key,p,from,to);m.issues=matching(key,p,to);modules[key]=m;
     if(m.issues.length)warnings.add(label+' · '+m.issues.join(', '));
-    if(m.period&&[m.period.opening,m.period.closing,m.period.realized,m.period.unrealized,m.period.fx,m.period.fees,m.period.deposits,m.period.withdrawals].some(n=>n!==0)&&!m.period.sources?.length)warnings.add(label+' · source records unavailable');
+    if(m.period&&!m.automatic&&[m.period.opening,m.period.closing,m.period.realized,m.period.unrealized,m.period.fx,m.period.fees,m.period.deposits,m.period.withdrawals].some(n=>n!==0)&&!m.period.sources?.length)warnings.add(label+' · source records unavailable');
     if(!m.period)warnings.add(label+' · '+m.reason);
     if(m.delta)warnings.add(label+' · closing balance differs by '+m.delta);
     if(key==='cash_savings'&&p.savingsMirrorAccount&&incl(p,key)){
@@ -1533,6 +1846,34 @@ function makeStatements(p,from,to){
     }
     const included=incl(p,key);
     if(!included){warnings.add(label+' excluded in Portfolio asset matching');continue;}
+    const remoteFunding=moduleReads[key]?.feed?.funding;
+    const confirmed=funds(p).filter(row=>{
+      if(row.module!==key||row.date>to||!Array.isArray(remoteFunding))return false;
+      const hits=remoteFunding.filter(r=>r?.id===row.id);
+      return hits.length===1&&['accountId','kind','date','base','currency','amount','rate','fee'].every(k=>row[k]===hits[0][k]);
+    });
+    const principalBefore=confirmed.filter(x=>x.date<from).reduce((n,x)=>n+signedPrincipal(x),0);
+    const principalPeriod=confirmed.filter(x=>x.date>=from).reduce((n,x)=>n+signedPrincipal(x),0);
+    if(m.automatic){
+      const a=m.automatic,ref={module:key,date:to,description:m.balanceSource||label,details:a.period?.sources};
+      if(numeric(m.value)){
+        if(key==='etf'&&numeric(a.period?.holdingsValue)&&numeric(a.period.reserveCash)&&Math.abs(a.period.holdingsValue+a.period.reserveCash-m.value)<0.011){
+          post('asset','ETF holdings',cents(m.value-a.period.reserveCash),ref,'noncurrentAsset');
+          post('asset','ETF reserve cash',a.period.reserveCash,ref,'currentAsset');
+        }else post('asset',label,m.value,ref,key==='etf'?'unclassified':'currentAsset');
+        for(const [id,linked] of Object.entries(p.assetModuleMatches||{}))if(linked===key)matched.add(id);
+        post('asset','Funding awaiting module reconciliation',-(principalBefore+principalPeriod),ref);
+      }
+      if(numeric(a.opening))post('equity',label+' · opening carrying value',-a.opening+principalBefore,ref);
+      function entry(name,value,evidence,kind){
+        if(!numeric(value)||!value)return;
+        post(value>0?'income':'expense',label+' · '+name,-value,evidence,kind||(value>0?'other':'loss'));
+      }
+      for(const e of a.entries)entry(e.name,e.amount,{...e.source,module:key});
+      entry('Unrealized valuation change',a.unrealized,ref,'valuation');
+      entry('Currency movement',a.fx,ref,'valuation');
+      continue;
+    }
     if(!m.period){
       // Replace matched cash in transit only when we know how this module was funded.
       // A closing snapshot alone says nothing about earnings or opening equity.
@@ -1559,9 +1900,9 @@ function makeStatements(p,from,to){
     if(m.period){
       const r=m.period;
       post('equity',label+' · opening carrying value',-r.opening,ref);
-      const prior=funds(p).filter(x=>x.module===key&&x.date<from).reduce((n,x)=>n+signedPrincipal(x),0);
+      const prior=principalBefore;
       if(prior){post('equity',label+' · opening carrying value',prior,ref);post('asset','Funding awaiting module reconciliation',-prior,ref);}
-      post('asset','Funding awaiting module reconciliation',r.withdrawals-r.deposits,ref);
+      post('asset','Funding awaiting module reconciliation',-principalPeriod,ref);
       function performance(name,value,kind){
         if(value)post(value>0?'income':'expense',label+' · '+name,-value,ref,kind||(value>0?'other':'loss'));
       }
@@ -1585,7 +1926,8 @@ function makeStatements(p,from,to){
   for(const [collection,key] of [[p.assets,'asset'],[p.netWorthItems,'register']]){
     for(const a of collection){
       if(matched.has(key+':'+a.id)||!dated(a))continue;
-      if(to<today()&&(!a.updatedAt||a.updatedAt.slice(0,10)>to)){warnings.add('Historical valuation unavailable · '+a.name);continue;}
+      const recordedCost=key==='asset'&&numeric(a.costMain)?a.costMain:null;
+      if(recordedCost===null&&to<today()&&(!a.updatedAt||a.updatedAt.slice(0,10)>to)){warnings.add('Historical valuation unavailable · '+a.name);continue;}
       if(key==='asset'&&a.status!=='active')continue;
       const liability=a.type==='liability';
       const kind=liability?(/long.term|non.current/i.test(a.category||'')?'noncurrentLiability':'currentLiability'):
@@ -1593,7 +1935,9 @@ function makeStatements(p,from,to){
       if(/^inventory$|^stock$/i.test(a.category||'')&&(p.inventoryCounts||[]).length){
         warnings.add('Inventory register excluded from totals because dated counts are in use · '+a.name);continue;
       }
-      initial(liability?'liability':'asset',a.name,(liability?-1:1)*(key==='asset'?a.currentMain:a.mainValue),a,kind);
+      const value=recordedCost??(key==='asset'?a.currentMain:a.mainValue);
+      initial(liability?'liability':'asset',a.name,(liability?-1:1)*value,
+        recordedCost===null?a:{...a,description:'Recorded acquisition cost',name:a.name+' · acquisition cost'},kind);
     }
   }
   for(const d of p.debts){
@@ -1682,7 +2026,7 @@ function presentStatements(box,p,from,to,ledger,warnings,modules={}){
   for(const [key,m] of Object.entries(modules)){
     if(!incl(p,key)||!m.period||group('loss').some(r=>r.refs.some(e=>e.ref.module===key)))continue;
     if(key==='cash_savings'&&p.savingsMirrorAccount)continue;
-    const known=key==='cash_savings'?numeric(m.period.interest):key==='cfd'?numeric(m.period.tradeLosses):numeric(m.period.saleLosses);
+    const known=!!m.automatic||(key==='cash_savings'?numeric(m.period.interest):key==='cfd'?numeric(m.period.tradeLosses):numeric(m.period.saleLosses));
     income.push(note(moduleNames[key],known?'0.00':'Gross loss breakdown unavailable'));
   }
   if(declines.length)income.push(section('Valuation and currency losses'),...declines.map(r=>detail(r,-1)));
@@ -1730,7 +2074,7 @@ function presentStatements(box,p,from,to,ledger,warnings,modules={}){
   const dr=cents(ledger.reduce((n,r)=>n+Math.max(r.net,0),0)),cr=cents(ledger.reduce((n,r)=>n+Math.max(-r.net,0),0));
   if(cents(dr-cr))warnings.push('Trial balance difference '+show(cents(dr-cr)));
   const suffix=warnings.length?' (partial)':'',heads=['Account','Detail · '+p.mainCurrency,'Total · '+p.mainCurrency];
-  reportTable(box,'Income Statement',heads,income,['Net profit / (loss)'+suffix,'',show(op(earnings))],subtitle);
+  reportTable(box,'Income Statement',heads,income,['Net profit / (loss)'+(warnings.some(w=>!w.includes('Missing Budgeting side')&&!w.includes('Missing module side')&&!w.includes('Funding ledger unavailable')&&!w.startsWith('Confirm loan maturity')&&!w.startsWith('Trial balance difference')&&!w.startsWith('Net assets and closing capital differ'))?' (partial)':''),'',show(op(earnings))],subtitle);
   reportTable(box,'Balance Sheet',heads,position,['Closing capital'+suffix,'',show(capital)],'As at '+to);
   reportTable(box,'Trial Balance',['Account','Debit · '+p.mainCurrency,'Credit · '+p.mainCurrency],
     ledger.map(r=>({...r,name:r.displayName||r.name,values:[r.net>0?show(r.net):'',r.net<0?show(-r.net):'']})),['Totals'+suffix,show(dr),show(cr)],'As at '+to);
@@ -1813,11 +2157,30 @@ function renderStatementsFixture(){
   const card=el('div');card.className='card';card.append(el('h2','Module reconciliation'));
   for(const [key,m] of Object.entries(modules)){
     const line=el('p',moduleNames[key]+' · '+(m.period?'Opening '+display(m.period.opening)+' + deposits '+display(m.period.deposits)+' − withdrawals '+display(m.period.withdrawals)+' + realized '+display(m.period.realized)+' + unrealized '+display(m.period.unrealized)+' + currency movement '+display(m.period.fx)+' − module fees '+display(m.period.fees)+' → reported closing '+display(m.value)+' · difference '+display(m.delta):m.reason+(numeric(m.value)?' · current summary '+display(m.value):''))+' · '+(m.issues.join(', ')||'Funding references matched'));
-    if(!m.period&&incl(p,key)){
+    if(m.automatic&&incl(p,key)){
+      for(const request of m.automatic.needs){
+        if(request.kind==='rate'&&!(retryAfter.get(request.date)>Date.now()))continue;
+        line.append(' ',button('Enter '+request.label,()=>reportObservation(p,request)));
+      }
+    }else if(!m.period&&incl(p,key)){
       const link=el('a','Open '+moduleNames[key]);link.href='../'+modulePages[key]+'/index.html';
-      line.append(' ',link,' to prepare '+from.value+' through '+to.value+'. After cloud sync, choose Load module figures.');
+      line.append(' ',link,' to review the source records.');
     }
     card.append(line);
+  }
+  const stored=Object.entries(p.statementObservations||{});
+  if(stored.length){
+    const details=el('details');details.append(el('summary','Saved statement observations'));
+    for(const [id,value] of stored){
+      let fields;try{fields=JSON.parse(id);}catch{continue;}
+      if(!Array.isArray(fields)||fields.length!==4)continue;
+      const [key,kind,date,field]=fields;
+      if(!Object.hasOwn(moduleNames,key)||!['rate','date','mark','price'].includes(kind))continue;
+      const label=moduleNames[key]+' · '+kind+' · '+field+' · '+date;
+      const row=el('p',label+' · '+value+' ');row.append(button('Edit',()=>reportObservation(p,{id,kind,date,field,label})));
+      details.append(row);
+    }
+    card.append(details);
   }
   box.append(card);
 }
