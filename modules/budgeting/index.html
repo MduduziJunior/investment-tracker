@@ -1537,7 +1537,7 @@ function automaticPeriod(key, raw, p, from, to) {
     const value=settings.equity?.[date];
     return numeric(value)?convert(value,currency,date):null;
   }
-  let reserve=null, holdings=null, closingUsd=null;
+  let reserve=null, holdings=null, closingUsd=null, tradingComplete=true;
   if(key==='cfd'){
     const trades=cleanRows(raw.trades);
     const active=[];
@@ -1558,14 +1558,14 @@ function automaticPeriod(key, raw, p, from, to) {
         if(q){
           const amount=usd*q.rate;
           earn(r,day,name,amount,fee?'fee':'realized',name+' · '+cfdConversionText(usd,q,amount));
-        }
+        }else tradingComplete=false;
       }
     }
     for(const t of trades){
       if(t.status==='DRAFT')continue;
       const e=t.entry||{},r=t.result||{};
       if(!validDate(e.date)||!['OPEN','CLOSED'].includes(t.status)){
-        messages.add('Confirm trade status and entry date · '+t.id);
+        messages.add('Confirm trade status and entry date · '+t.id);tradingComplete=false;
         openingCashKnown=false;closingCashKnown=false;continue;
       }
       active.push(t);
@@ -1578,7 +1578,7 @@ function automaticPeriod(key, raw, p, from, to) {
       }
       if(t.status==='CLOSED'){
         if(!validDate(r.exitDate)){
-          messages.add('Confirm closing date · '+t.id);
+          messages.add('Confirm closing date · '+t.id);tradingComplete=false;
           if(e.date<from)openingCashKnown=false;
           closingCashKnown=false;continue;
         }
@@ -1588,7 +1588,7 @@ function automaticPeriod(key, raw, p, from, to) {
           if(gross===null&&qty===0)gross=0;
           if(gross===null&&qty>0&&ep>0&&number(r.finalExitPrice)>0&&number(e.valuePerUnit)>0&&['BUY','SELL'].includes(e.direction))
             gross=(r.finalExitPrice-ep)*qty*e.valuePerUnit*(e.direction==='BUY'?1:-1);
-          if(gross===null){messages.add('Confirm final gross P/L · '+t.id);closingCashKnown=false;if(r.exitDate<from)openingCashKnown=false;}
+          if(gross===null){if(r.exitDate>=from)tradingComplete=false;messages.add('Confirm final gross P/L · '+t.id);closingCashKnown=false;if(r.exitDate<from)openingCashKnown=false;}
           else event(t,r.exitDate,'Closed trade',gross);
           event(t,r.exitDate,'Exit commission, financing and other costs',-(Number(r.exitCommission||0)+Number(r.swapFinancing||0)+Number(r.otherCosts||0)),true);
         }
@@ -1719,7 +1719,11 @@ function automaticPeriod(key, raw, p, from, to) {
   const complete=!needs.size&&!messages.size&&flowsKnown&&[opening,closing,fx,unrealized].every(numeric);
   const closingQuote=key==='cfd'&&numeric(closingUsd)?cfdQuoteOn(p,settings,to):null;
   const conversion=closingQuote&&numeric(period.closing)?cfdConversionText(closingUsd,closingQuote,period.closing):null;
-  return {conversion,period:complete?period:null,value:period.closing,opening:period.opening,entries,fx:period.fx,unrealized:period.unrealized,
+  const fxDescription=key==='cfd'&&numeric(fx)
+    ? 'USD cash translation · closing cash '+money(cashClose,base)+' less opening cash '+money(cashOpen,base)+
+      ' less signed movements at booked rates '+money(cashMovementBase,base)
+    : null;
+  return {conversion,fxDescription,tradingComplete,period:complete?period:null,value:period.closing,opening:period.opening,entries,fx:period.fx,unrealized:period.unrealized,
     needs:[...needs.values()],messages:[...messages],delta:complete?cents(closing-opening-flows.deposits+flows.withdrawals-realized+fees-unrealized-fx):null};
 }
 
@@ -1927,7 +1931,7 @@ function makeStatements(p,from,to){
       }
       for(const e of a.entries)entry(e.name,e.amount,{...e.source,module:key});
       entry('Unrealized valuation change',a.unrealized,ref,'valuation');
-      entry('Currency movement',a.fx,ref,'valuation');
+      entry('Currency movement',a.fx,a.fxDescription?{module:key,date:to,description:a.fxDescription}:ref,'valuation');
       continue;
     }
     if(!m.period){
@@ -1974,7 +1978,10 @@ function makeStatements(p,from,to){
       }else if(r.realized)warnings.add(label+' · detailed earnings breakdown unavailable');
       performance('Other realized result',cents(r.realized-detailed));
       performance('Unrealized valuation change',r.unrealized,'valuation');
-      performance('Currency movement',r.fx,'valuation');
+      if(key==='cfd'&&r.fx){
+        post(r.fx>0?'income':'expense',label+' · Currency movement',-r.fx,
+          {module:key,date:to,description:'Published currency movement for '+from+' to '+to},'valuation');
+      }else performance('Currency movement',r.fx,'valuation');
       performance('Module fees',-r.fees,'loss');
     }
   }
@@ -2037,7 +2044,7 @@ function presentStatements(box,p,from,to,ledger,warnings,modules={}){
   const nextYear=cut.toISOString().slice(0,10);
   function section(name){return {name,style:'statement-heading',values:['','']};}
   function subtotal(name,value){return {name,style:'subtotal',values:['',show(value)]};}
-  function detail(r,sign){return {...r,name:r.displayName||r.name,values:[show(cents(r.net*sign)),'']};}
+  function detail(r,sign){return {...r,detailSign:sign,name:r.displayName||r.name,values:[show(cents(r.net*sign)),'']};}
   function block(list,name,records,sign,force=false){
     if(!records.length&&!force)return;
     list.push(section(name),...records.map(r=>detail(r,sign)),subtotal('Total '+name.toLowerCase(),cents(total(records)*sign)));
@@ -2067,6 +2074,19 @@ function presentStatements(box,p,from,to,ledger,warnings,modules={}){
   const note=(name,text)=>({name,style:'statement-note',values:[text,'']});
   const gains=marks.filter(r=>r.net<0),declines=marks.filter(r=>r.net>0);
   const other=[...group('other'),...gains],expenses=[...group('expense'),...group('loss'),...declines];
+  // This is a disclosure of the existing postings. Profit, expenses and capital
+  // continue to use the ledger once, regardless of how many lines are expanded.
+  const cfd=modules.cfd;
+  if(cfd&&incl(p,'cfd')){
+    const trades=earnings.filter(row=>classify(row)!=='valuation'&&row.refs.some(item=>item.ref.module==='cfd'));
+    const known=cfd.automatic?cfd.automatic.tradingComplete:!!cfd.period;
+    income.push(section('CFD trading result for the period'));
+    if(known||trades.length){
+      income.push({name:'Realized trading profit / (loss) after fees'+(known?'':' (partial)'),
+        detailSign:-1,refs:trades.flatMap(row=>row.refs).sort((a,b)=>String(a.ref.date).localeCompare(String(b.ref.date))),
+        values:[show(op(trades)),'']});
+    }else income.push(note('Realized trading profit / (loss) after fees','Unavailable for this period'));
+  }
   block(income,'Personal income',group('personal'),-1,true);
   income.push(section('Other income'),...group('other').map(r=>detail(r,-1)));
   if(gains.length)income.push(section('Valuation and currency gains'),...gains.map(r=>detail(r,-1)));
@@ -2154,7 +2174,7 @@ function reportTable(box,title,heads,rows,totals,period){
     if(r.refs?.length){
       const detail=el('details');detail.append(el('summary',r.name));cell.append(detail);
       for(const {ref,amount} of r.refs){
-        const line=el('p',[ref.date,ref.name||ref.description||ref.category,ref.reference||ref.id,money(amount)].filter(Boolean).join(' · '));
+        const line=el('p',[ref.date,ref.name||ref.description||ref.category,ref.reference||ref.id,money(cents(amount*(r.detailSign??1)))].filter(Boolean).join(' · '));
         if(ref.module&&Object.hasOwn(modulePages,ref.module)){
           const a=el('a',moduleNames[ref.module]);a.href='../'+modulePages[ref.module]+'/index.html';line.append(' ',a);
           for(const s of Array.isArray(ref.details)?ref.details:[])line.append(el('span',' · '+[s.date,s.reference,s.description].filter(Boolean).join(' ')));
